@@ -52,7 +52,7 @@ def generate_daily_schedule(tasks: List[Task], availability: List[Availability])
 You are an AI assistant that creates optimal daily schedules for students.
 
 You will receive:
-1. A list of tasks in JSON format with: id, title, description, dueDate (ISO 8601), priority (higher number = more important), subjectArea, and estimatedTime (hours)
+1. A list of tasks in JSON format with: id, title, description, dueDate (ISO 8601), priority (LOW, MEDIUM, HIGH), subjectArea, and estimatedTime (hours)
 2. A list of availability slots with: startTime and endTime (ISO 8601 format)
 
 Create a schedule for TODAY ONLY that fits within the given availability slots. Tasks with higher priority should be scheduled first. Break down larger tasks into smaller sessions if needed.
@@ -121,7 +121,7 @@ def generate_schedule():
                 "title": "Study Math",
                 "description": "Algebra problems",
                 "dueDate": "2025-07-10T23:59:00",
-                "priority": 3,
+                "priority": "MEDIUM",
                 "subjectArea": "Mathematics",
                 "estimatedTime": 2
             }
@@ -136,7 +136,6 @@ def generate_schedule():
     """
     try:
         data = request.get_json()
-        
         if not data:
             return jsonify({"error": "No JSON data provided"}), 400
         
@@ -180,7 +179,7 @@ def generate_schedule():
             }
             for session in sessions
         ]
-        
+        print(f"Generated schedule: {result}")
         return jsonify(result)
         
     except Exception as e:

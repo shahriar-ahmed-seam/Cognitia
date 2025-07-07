@@ -10,7 +10,7 @@ test_payload = {
             "title": "Complete Security Assignment",
             "description": "Complete the security assignment on side channel attacks",
             "dueDate": "2025-07-10T23:59:00",
-            "priority": 3,
+            "priority": "MEDIUM",
             "subjectArea": "Computer Security",
             "estimatedTime": 4
         },
@@ -19,7 +19,7 @@ test_payload = {
             "title": "Study for CT",
             "description": "Study for the Fault Tolerant Systems CT",
             "dueDate": "2025-07-06T09:00:00",
-            "priority": 5,
+            "priority": "MEDIUM",
             "subjectArea": "Systems Engineering",
             "estimatedTime": 3
         },
@@ -28,7 +28,7 @@ test_payload = {
             "title": "Math Problem Set",
             "description": "Complete calculus problem set 5",
             "dueDate": "2025-07-08T23:59:00",
-            "priority": 2,
+            "priority": "MEDIUM",
             "subjectArea": "Mathematics",
             "estimatedTime": 2
         }
