@@ -53,7 +53,7 @@ You are an AI assistant that creates optimal daily schedules for students.
 
 You will receive:
 1. A list of tasks in JSON format with: id, title, description, dueDate (ISO 8601), priority (LOW, MEDIUM, HIGH), subjectArea, and estimatedTime (hours)
-2. A list of availability slots with: startTime and endTime (ISO 8601 format)
+2. A list of availability slots with: startTime and endTime (ISO 8601 format) and duration (in minutes)
 
 Create a schedule for TODAY ONLY that fits within the given availability slots. Tasks with higher priority should be scheduled first. Break down larger tasks into smaller sessions if needed.
 
@@ -64,7 +64,7 @@ Constraints:
 - Prioritize high-priority tasks
 - Include specific goals for each session
 
-Return ONLY a JSON list with no extra text. Each session should have: {{startTime:, endTime:, taskId:, goal:}}.
+Return ONLY a JSON list with no extra text. Each session should have: {{startTime:, endTime:, taskId:, goal:,duration:}}.
 
 Tasks:
 {[task.__dict__ for task in tasks]}
