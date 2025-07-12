@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,15 +9,34 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Eye, EyeOff, Mail, Lock, User, Star, Rocket, ArrowLeft, Sparkles, CheckCircle } from "lucide-react"
+import {
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  User,
+  Star,
+  Rocket,
+  ArrowLeft,
+  Sparkles,
+  CheckCircle,
+  Shield,
+  RefreshCw,
+} from "lucide-react"
 import Link from "next/link"
 
+type RegistrationStep = "form" | "otp" | "success"
+
 export default function RegisterPage() {
+  const [currentStep, setCurrentStep] = useState<RegistrationStep>("form")
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [isVisible, setIsVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
-  const [showSuccess, setShowSuccess] = useState(false)
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false)
+  const [otpCode, setOtpCode] = useState(["", "", "", "", "", ""])
+  const [otpTimer, setOtpTimer] = useState(60)
+  const [canResendOtp, setCanResendOtp] = useState(false)
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -26,12 +45,23 @@ export default function RegisterPage() {
     agreeToTerms: false,
   })
   const router = useRouter()
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   useEffect(() => {
     // Staggered entrance animation
     const timer = setTimeout(() => setIsVisible(true), 100)
     return () => clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    // OTP timer countdown
+    if (currentStep === "otp" && otpTimer > 0) {
+      const timer = setTimeout(() => setOtpTimer(otpTimer - 1), 1000)
+      return () => clearTimeout(timer)
+    } else if (otpTimer === 0) {
+      setCanResendOtp(true)
+    }
+  }, [currentStep, otpTimer])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,16 +72,62 @@ export default function RegisterPage() {
 
     setIsLoading(true)
 
-    // Simulate API call
+    // Simulate API call to create account and send OTP
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     setIsLoading(false)
-    setShowSuccess(true)
+    setCurrentStep("otp")
+    setOtpTimer(60)
+    setCanResendOtp(false)
+  }
+
+  const handleOtpChange = (index: number, value: string) => {
+    if (value.length > 1) return // Prevent multiple characters
+
+    const newOtpCode = [...otpCode]
+    newOtpCode[index] = value
+    setOtpCode(newOtpCode)
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpInputRefs.current[index + 1]?.focus()
+    }
+  }
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === "Backspace" && !otpCode[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus()
+    }
+  }
+
+  const handleOtpVerify = async () => {
+    const otp = otpCode.join("")
+    if (otp.length !== 6) {
+      alert("Please enter the complete OTP")
+      return
+    }
+
+    setIsVerifyingOtp(true)
+
+    // Simulate OTP verification
+    await new Promise((resolve) => setTimeout(resolve, 2000))
+
+    setIsVerifyingOtp(false)
+    setCurrentStep("success")
 
     // Navigate after success animation
     setTimeout(() => {
       router.push("/dashboard")
     }, 1500)
+  }
+
+  const handleResendOtp = async () => {
+    setCanResendOtp(false)
+    setOtpTimer(60)
+    setOtpCode(["", "", "", "", "", ""])
+
+    // Simulate resend OTP API call
+    await new Promise((resolve) => setTimeout(resolve, 1000))
   }
 
   const handleGoogleSignup = () => {
@@ -66,6 +142,12 @@ export default function RegisterPage() {
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
   return (
@@ -192,17 +274,19 @@ export default function RegisterPage() {
         <Card
           className={`w-full max-w-md bg-white/10 backdrop-blur-xl border-white/20 shadow-2xl transform transition-all duration-1000 ${
             isVisible ? "translate-y-0 opacity-100 scale-100" : "translate-y-10 opacity-0 scale-95"
-          } ${showSuccess ? "animate-success-pulse" : ""}`}
+          } ${currentStep === "success" ? "animate-success-pulse" : ""}`}
         >
           <CardHeader className="space-y-1 text-center">
             <div className="flex items-center justify-center mb-4">
               <div
                 className={`p-3 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full shadow-lg transition-all duration-700 ${
                   isVisible ? "animate-icon-bounce" : ""
-                } ${showSuccess ? "animate-success-spin" : ""}`}
+                } ${currentStep === "success" ? "animate-success-spin" : ""}`}
               >
-                {showSuccess ? (
+                {currentStep === "success" ? (
                   <CheckCircle className="h-8 w-8 text-white animate-check-draw" />
+                ) : currentStep === "otp" ? (
+                  <Shield className="h-8 w-8 text-white" />
                 ) : (
                   <Rocket className="h-8 w-8 text-white" />
                 )}
@@ -213,21 +297,27 @@ export default function RegisterPage() {
                 isVisible ? "animate-slide-in-from-top" : ""
               }`}
             >
-              {showSuccess ? "Welcome Aboard!" : "Join Cognitia"}
+              {currentStep === "success"
+                ? "Welcome Aboard!"
+                : currentStep === "otp"
+                  ? "Verify Your Email"
+                  : "Join Cognitia"}
             </CardTitle>
             <CardDescription
               className={`text-emerald-200 transition-all duration-700 delay-200 ${
                 isVisible ? "animate-slide-in-from-top" : ""
               }`}
             >
-              {showSuccess
+              {currentStep === "success"
                 ? "Your account has been created successfully!"
-                : "Create your account and start your learning journey"}
+                : currentStep === "otp"
+                  ? `We've sent a 6-digit code to ${formData.email}`
+                  : "Create your account and start your learning journey"}
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-4">
-            {!showSuccess ? (
+            {currentStep === "form" && (
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* Name Field */}
                 <div
@@ -395,18 +485,7 @@ export default function RegisterPage() {
                     </>
                   )}
                 </Button>
-              </form>
-            ) : (
-              <div className="text-center space-y-4 animate-fade-in">
-                <div className="animate-bounce">
-                  <Sparkles className="h-16 w-16 text-emerald-400 mx-auto animate-pulse" />
-                </div>
-                <p className="text-white/90">Redirecting to your dashboard...</p>
-              </div>
-            )}
 
-            {!showSuccess && (
-              <>
                 {/* Separator */}
                 <div
                   className={`relative transition-all duration-700 delay-900 ${
@@ -487,7 +566,98 @@ export default function RegisterPage() {
                     Sign in
                   </Link>
                 </div>
-              </>
+              </form>
+            )}
+
+            {currentStep === "otp" && (
+              <div className="space-y-6 animate-fade-in">
+                {/* OTP Input */}
+                <div className="space-y-4">
+                  <div className="flex justify-center space-x-3">
+                    {otpCode.map((digit, index) => (
+                      <Input
+                        key={index}
+                        ref={(el) => (otpInputRefs.current[index] = el)}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                        className="w-12 h-12 text-center text-xl font-bold bg-white/10 border-white/20 text-white focus:border-emerald-400 focus:ring-emerald-400/50 transition-all duration-300 hover:bg-white/15 focus:bg-white/15 focus:scale-110"
+                      />
+                    ))}
+                  </div>
+
+                  {/* Timer */}
+                  <div className="text-center">
+                    <p className="text-emerald-200 text-sm">
+                      {canResendOtp ? (
+                        "Didn't receive the code?"
+                      ) : (
+                        <>
+                          Code expires in <span className="font-mono font-bold">{formatTime(otpTimer)}</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Verify Button */}
+                <Button
+                  onClick={handleOtpVerify}
+                  disabled={isVerifyingOtp || otpCode.join("").length !== 6}
+                  className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group relative overflow-hidden"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  {isVerifyingOtp ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Verifying...
+                    </>
+                  ) : (
+                    <>
+                      <Shield className="mr-2 h-4 w-4" />
+                      Verify Code
+                    </>
+                  )}
+                </Button>
+
+                {/* Resend Button */}
+                <div className="text-center">
+                  <Button
+                    variant="ghost"
+                    onClick={handleResendOtp}
+                    disabled={!canResendOtp}
+                    className="text-emerald-300 hover:text-white hover:bg-white/10 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed group"
+                  >
+                    <RefreshCw className="mr-2 h-4 w-4 group-hover:animate-spin" />
+                    Resend Code
+                  </Button>
+                </div>
+
+                {/* Back to Form */}
+                <div className="text-center">
+                  <Button
+                    variant="ghost"
+                    onClick={() => setCurrentStep("form")}
+                    className="text-emerald-300 hover:text-white hover:bg-white/10 transition-all duration-300 group"
+                  >
+                    <ArrowLeft className="mr-2 h-4 w-4 group-hover:-translate-x-1 transition-transform duration-300" />
+                    Back to Form
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {currentStep === "success" && (
+              <div className="text-center space-y-4 animate-fade-in">
+                <div className="animate-bounce">
+                  <Sparkles className="h-16 w-16 text-emerald-400 mx-auto animate-pulse" />
+                </div>
+                <p className="text-white/90">Your email has been verified successfully!</p>
+                <p className="text-emerald-200 text-sm">Redirecting to your dashboard...</p>
+              </div>
             )}
           </CardContent>
         </Card>
