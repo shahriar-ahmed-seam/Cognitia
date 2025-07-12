@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { getSavedItems } from "@/lib/saved-items-data"
+import { getSavedQuestions, getSavedNotes } from "@/lib/saved-items-data"
 import { Bookmark, Search, Filter, Calendar, FileText, MessageSquare, Trophy, Trash2, ExternalLink } from "lucide-react"
 
 export default function SavedItemsPage() {
@@ -16,7 +16,11 @@ export default function SavedItemsPage() {
   const [sortBy, setSortBy] = useState("date-desc")
   const [selectedItems, setSelectedItems] = useState<string[]>([])
 
-  const savedItems = getSavedItems()
+  const userId = "user_1" // TODO: Replace with actual user id from context/auth
+  const savedItems = [
+    ...getSavedQuestions(userId),
+    ...getSavedNotes(userId)
+  ]
 
   // Filter and sort items
   const filteredItems = savedItems

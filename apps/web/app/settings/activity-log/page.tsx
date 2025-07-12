@@ -9,13 +9,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { getActivityLog } from "@/lib/settings-data"
 import { Activity, Search, Filter, Calendar, MapPin, Monitor, Smartphone, Download, Settings } from "lucide-react"
 
+// Add type for activity log items
+interface ActivityLogItem {
+  id: string
+  type: string
+  description: string
+  timestamp: Date
+  ipAddress?: string
+  device?: string
+  location?: string
+  details?: string
+  status: string
+  riskLevel?: string
+}
+
 export default function ActivityLogPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filterType, setFilterType] = useState("all")
   const [filterDate, setFilterDate] = useState("all")
   const [sortBy, setSortBy] = useState("date-desc")
 
-  const activityLog = getActivityLog()
+  const activityLog: ActivityLogItem[] = getActivityLog().entries.map((item: any) => ({
+    ...item,
+    timestamp: item.timestamp instanceof Date ? item.timestamp : new Date(item.timestamp),
+  }))
 
   // Filter and sort activities
   const filteredActivities = activityLog
@@ -263,12 +280,12 @@ export default function ActivityLogPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
-                        <h3 className="font-medium text-slate-900">{activity.description}</h3>
+                        <h3 className="font-medium text-slate-900">{activity.description || "No description"}</h3>
 
                         <div className="flex items-center gap-4 mt-2 text-sm text-slate-500">
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            <span>{activity.timestamp.toLocaleString()}</span>
+                            <span>{activity.timestamp ? activity.timestamp.toLocaleString() : ""}</span>
                           </div>
 
                           {activity.ipAddress && (
@@ -293,7 +310,7 @@ export default function ActivityLogPage() {
 
                       <div className="flex items-center gap-2">
                         <Badge className={getStatusColor(activity.status)} variant="secondary">
-                          {activity.status.charAt(0).toUpperCase() + activity.status.slice(1)}
+                          {activity.status ? activity.status.charAt(0).toUpperCase() + activity.status.slice(1) : "Unknown"}
                         </Badge>
 
                         {activity.riskLevel && activity.riskLevel !== "low" && (
