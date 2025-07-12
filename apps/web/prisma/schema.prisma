@@ -1,0 +1,1278 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ================================
+// USER MANAGEMENT
+// ================================
+
+enum UserRole {
+  STUDENT
+  TEACHER
+  ADMIN
+}
+
+enum EducationLevel {
+  HIGH_SCHOOL
+  BACHELORS
+  MASTERS
+  PHD
+  OTHER
+}
+
+enum SkillLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+model User {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  username          String    @unique
+  name              String
+  avatar            String?
+  bio               String?
+  role              UserRole  @default(STUDENT)
+  passwordHash      String
+  emailVerified     Boolean   @default(false)
+  phoneNumber       String?
+  phoneVerified     Boolean   @default(false)
+  twoFactorEnabled  Boolean   @default(false)
+  lastPasswordChange DateTime @default(now())
+  
+  // Profile Information
+  coverImage        String?
+  university        String?
+  department        String?
+  year              String?
+  location          String?
+  website           String?
+  dateOfBirth       DateTime?
+  timezone          String    @default("UTC")
+  
+  // Social
+  interests         String[]
+  
+  // Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  lastActive        DateTime  @default(now())
+  
+  // Relations
+  questions         Question[]
+  answers           Answer[]
+  questionVotes     QuestionVote[]
+  answerVotes       AnswerVote[]
+  
+  // Notes
+  notesGroups       NotesGroup[]
+  notes             Note[]
+  noteVersions      NoteVersion[]
+  
+  // Study Plans
+  tasks             Task[]
+  dailyPlans        DailyPlan[]
+  sessions          Session[]
+  sessionFeedbacks  SessionFeedback[]
+  
+  // Contests
+  contestsCreated   Contest[]
+  contestRegistrations ContestRegistration[]
+  contestSubmissions ContestSubmission[]
+  contestResults    ContestResult[]
+  
+  // Model Tests
+  testAttempts      TestAttempt[]
+  customTests       ModelTest[]
+  
+  // Profile Details
+  education         Education[]
+  experience        Experience[]
+  skills            Skill[]
+  certifications    Certification[]
+  achievements      Achievement[]
+  activities        Activity[]
+  socialLinks       SocialLink[]
+  
+  // Notifications
+  notifications     Notification[]
+  
+  // Settings
+  userSettings      UserSettings?
+  
+  // Activity & Support
+  activityLogs      ActivityLog[]
+  supportTickets    SupportTicket[]
+  supportMessages   SupportMessage[]
+  
+  // Social Features
+  followers         Follow[] @relation("UserFollowers")
+  following         Follow[] @relation("UserFollowing")
+  
+  // Saved Items
+  savedItems        SavedItem[]
+  
+  // Connected Accounts
+  connectedAccounts ConnectedAccount[]
+  
+  // Chat System
+  chatRooms         ChatRoom[]
+  chatMessages      ChatMessage[]
+  chatParticipants  ChatParticipant[]
+  
+  // AI Features
+  aiConversations   AIConversation[]
+  aiMessages        AIMessage[]
+  
+  @@index([email])
+  @@index([username])
+  @@index([role])
+  @@index([lastActive])
+  @@map("users")
+}
+
+model ConnectedAccount {
+  id            String   @id @default(cuid())
+  userId        String
+  provider      String   // google, github, facebook
+  providerAccountId String
+  email         String?
+  username      String?
+  name          String?
+  connected     Boolean  @default(true)
+  lastUsed      DateTime @default(now())
+  createdAt     DateTime @default(now())
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([provider, providerAccountId])
+  @@map("connected_accounts")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+  
+  follower    User     @relation("UserFollowers", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("UserFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+  
+  @@unique([followerId, followingId])
+  @@map("follows")
+}
+
+// ================================
+// PROFILE DETAILS
+// ================================
+
+model Education {
+  id          String         @id @default(cuid())
+  userId      String
+  institution String
+  degree      String
+  field       String
+  level       EducationLevel
+  startDate   DateTime
+  endDate     DateTime?
+  current     Boolean        @default(false)
+  description String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("education")
+}
+
+model Experience {
+  id          String    @id @default(cuid())
+  userId      String
+  company     String
+  position    String
+  location    String?
+  startDate   DateTime
+  endDate     DateTime?
+  current     Boolean   @default(false)
+  description String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("experience")
+}
+
+model Skill {
+  id           String     @id @default(cuid())
+  userId       String
+  name         String
+  level        SkillLevel
+  category     String
+  endorsements Int        @default(0)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("skills")
+}
+
+model Certification {
+  id             String    @id @default(cuid())
+  userId         String
+  name           String
+  organization   String
+  issueDate      DateTime
+  expiryDate     DateTime?
+  credentialId   String?
+  credentialUrl  String?
+  valid          Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("certifications")
+}
+
+model Achievement {
+  id          String    @id @default(cuid())
+  userId      String
+  title       String
+  description String
+  category    String
+  icon        String
+  progress    Int       @default(0)
+  maxProgress Int
+  completed   Boolean   @default(false)
+  dateEarned  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("achievements")
+}
+
+model SocialLink {
+  id        String   @id @default(cuid())
+  userId    String
+  platform  String
+  url       String
+  username  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("social_links")
+}
+
+// ================================
+// Q&A SYSTEM
+// ================================
+
+model Question {
+  id          String         @id @default(cuid())
+  title       String
+  body        String
+  authorId    String
+  tags        String[]
+  views       Int            @default(0)
+  isResolved  Boolean        @default(false)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  author      User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  answers     Answer[]
+  votes       QuestionVote[]
+  savedItems  SavedItem[]
+  activities  Activity[]
+  
+  @@index([authorId])
+  @@index([createdAt])
+  @@index([tags])
+  @@index([isResolved])
+  @@map("questions")
+}
+
+model Answer {
+  id         String       @id @default(cuid())
+  questionId String
+  authorId   String
+  content    String
+  isAccepted Boolean      @default(false)
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  
+  question   Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  author     User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  votes      AnswerVote[]
+  activities Activity[]
+  
+  @@index([questionId])
+  @@index([authorId])
+  @@map("answers")
+}
+
+model QuestionVote {
+  id         String   @id @default(cuid())
+  questionId String
+  userId     String
+  voteValue  Int      // 1 for upvote, -1 for downvote
+  votedAt    DateTime @default(now())
+  
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([questionId, userId])
+  @@map("question_votes")
+}
+
+model AnswerVote {
+  id       String   @id @default(cuid())
+  answerId String
+  userId   String
+  voteValue Int     // 1 for upvote, -1 for downvote
+  votedAt  DateTime @default(now())
+  
+  answer   Answer   @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([answerId, userId])
+  @@map("answer_votes")
+}
+
+// ================================
+// NOTES SYSTEM
+// ================================
+
+enum NoteVisibility {
+  PRIVATE
+  PUBLIC
+  SHARED
+}
+
+model NotesGroup {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  color       String   @default("#3b82f6")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  notes       Note[]
+  
+  @@map("notes_groups")
+}
+
+model Note {
+  id            String         @id @default(cuid())
+  authorId      String
+  notesGroupId  String
+  title         String
+  visibility    NoteVisibility @default(PRIVATE)
+  rating        Float?
+  ratingCount   Int            @default(0)
+  viewCount     Int            @default(0)
+  likeCount     Int            @default(0)
+  dislikeCount  Int            @default(0)
+  thumbnail     String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  author        User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  notesGroup    NotesGroup     @relation(fields: [notesGroupId], references: [id], onDelete: Cascade)
+  versions      NoteVersion[]
+  files         NoteFile[]
+  savedItems    SavedItem[]
+  activities    Activity[]
+  
+  @@index([authorId])
+  @@index([visibility])
+  @@index([createdAt])
+  @@map("notes")
+}
+
+model NoteVersion {
+  id            String   @id @default(cuid())
+  noteId        String
+  authorId      String
+  content       String
+  versionNumber Int
+  createdAt     DateTime @default(now())
+  
+  note          Note     @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  author        User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  
+  @@index([noteId])
+  @@map("note_versions")
+}
+
+enum FileType {
+  FILE
+  DIRECTORY
+}
+
+model NoteFile {
+  id        String     @id @default(cuid())
+  noteId    String
+  name      String
+  type      FileType
+  content   String?
+  size      Int        @default(0)
+  parentId  String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  
+  note      Note       @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  parent    NoteFile?  @relation("FileHierarchy", fields: [parentId], references: [id])
+  children  NoteFile[] @relation("FileHierarchy")
+  
+  @@map("note_files")
+}
+
+// ================================
+// STUDY PLANS
+// ================================
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model Task {
+  id          String       @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  dueDate     DateTime
+  status      TaskStatus   @default(NOT_STARTED)
+  priority    TaskPriority @default(MEDIUM)
+  tags        String[]
+  estimatedTime Int?       // in minutes
+  actualTime    Int?       // in minutes
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions    Session[]
+  activities  Activity[]
+  
+  @@index([userId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("tasks")
+}
+
+model DailyPlan {
+  id        String    @id @default(cuid())
+  userId    String
+  planDate  DateTime
+  goals     String[]
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessions  Session[]
+  
+  @@unique([userId, planDate])
+  @@map("daily_plans")
+}
+
+model Session {
+  id          String            @id @default(cuid())
+  userId      String
+  taskId      String?
+  planId      String?
+  startTime   DateTime
+  endTime     DateTime
+  goal        String?
+  notes       String?
+  duration    Int               // in minutes
+  productivity Int?             // 1-5 scale
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task        Task?             @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  plan        DailyPlan?        @relation(fields: [planId], references: [id], onDelete: SetNull)
+  feedback    SessionFeedback?
+  
+  @@map("sessions")
+}
+
+model SessionFeedback {
+  id                String   @id @default(cuid())
+  sessionId         String   @unique
+  userId            String
+  satisfactionScore Int      // 1-5 scale
+  difficultyScore   Int      // 1-5 scale
+  focusScore        Int      // 1-5 scale
+  notes             String?
+  improvements      String[]
+  feedbackAt        DateTime @default(now())
+  
+  session           Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("session_feedback")
+}
+
+// ================================
+// CONTESTS
+// ================================
+
+enum ContestDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
+enum ContestStatus {
+  UPCOMING
+  ONGOING
+  FINISHED
+}
+
+enum ContestType {
+  PROGRAMMING
+  QUIZ
+  MATH
+  SCIENCE
+  GENERAL
+}
+
+model Contest {
+  id            String              @id @default(cuid())
+  title         String
+  description   String
+  organizerId   String
+  startTime     DateTime
+  endTime       DateTime
+  status        ContestStatus
+  type          ContestType         @default(PROGRAMMING)
+  difficulty    ContestDifficulty
+  participants  Int                 @default(0)
+  maxParticipants Int?
+  topics        String[]
+  isVirtual     Boolean             @default(false)
+  eligibility   String?
+  prizes        String[]
+  rules         String?
+  thumbnail     String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  
+  organizer     User                @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  problems      ContestProblem[]
+  registrations ContestRegistration[]
+  submissions   ContestSubmission[]
+  results       ContestResult[]
+  activities    Activity[]
+  
+  @@index([status])
+  @@index([startTime])
+  @@index([type])
+  @@map("contests")
+}
+
+model ContestProblem {
+  id           String            @id @default(cuid())
+  contestId    String
+  title        String
+  description  String
+  difficulty   ContestDifficulty
+  points       Int
+  timeLimit    Int               // in seconds
+  memoryLimit  Int               // in MB
+  sampleInput  String
+  sampleOutput String
+  constraints  String
+  explanation  String?
+  hints        String[]
+  tags         String[]
+  order        Int               @default(0)
+  createdAt    DateTime          @default(now())
+  
+  contest      Contest           @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  submissions  ContestSubmission[]
+  
+  @@map("contest_problems")
+}
+
+model ContestRegistration {
+  id               String   @id @default(cuid())
+  contestId        String
+  userId           String
+  isVirtual        Boolean  @default(false)
+  teamName         String?
+  registrationTime DateTime @default(now())
+  
+  contest          Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([contestId, userId])
+  @@map("contest_registrations")
+}
+
+enum SubmissionStatus {
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  RUNTIME_ERROR
+  COMPILATION_ERROR
+  PENDING
+  PARTIAL
+}
+
+model ContestSubmission {
+  id             String           @id @default(cuid())
+  contestId      String
+  problemId      String
+  userId         String
+  code           String
+  language       String
+  status         SubmissionStatus
+  score          Int              @default(0)
+  executionTime  Int?             // in ms
+  memoryUsed     Int?             // in KB
+  verdict        String?
+  testCasesPassed Int             @default(0)
+  totalTestCases  Int             @default(0)
+  submissionTime DateTime         @default(now())
+  
+  contest        Contest          @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  problem        ContestProblem   @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([contestId, userId])
+  @@map("contest_submissions")
+}
+
+model ContestResult {
+  id              String   @id @default(cuid())
+  contestId       String
+  userId          String
+  rank            Int
+  score           Int
+  solvedProblems  Int
+  totalProblems   Int
+  submissions     Json     // Array of submission details
+  penalty         Int      @default(0)
+  lastSubmission  DateTime?
+  createdAt       DateTime @default(now())
+  
+  contest         Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([contestId, userId])
+  @@map("contest_results")
+}
+
+// ================================
+// MODEL TESTS
+// ================================
+
+enum TestDifficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
+enum TestStatus {
+  COMPLETED
+  IN_PROGRESS
+  ABANDONED
+}
+
+enum TestType {
+  PRACTICE
+  MOCK
+  ASSESSMENT
+  CUSTOM
+}
+
+model ModelTest {
+  id           String         @id @default(cuid())
+  title        String
+  description  String
+  creatorId    String?
+  timeLimit    Int            // in minutes
+  subjects     String[]
+  topics       String[]
+  difficulty   TestDifficulty
+  type         TestType       @default(PRACTICE)
+  isCustom     Boolean        @default(false)
+  isPublic     Boolean        @default(false)
+  passingScore Int
+  totalPoints  Int
+  instructions String?
+  thumbnail    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  
+  creator      User?          @relation(fields: [creatorId], references: [id], onDelete: SetNull)
+  questions    TestQuestion[]
+  attempts     TestAttempt[]
+  
+  @@index([difficulty])
+  @@index([type])
+  @@index([isPublic])
+  @@map("model_tests")
+}
+
+model TestQuestion {
+  id            String         @id @default(cuid())
+  testId        String
+  question      String
+  options       String[]
+  correctAnswer Int
+  subject       String
+  topic         String
+  difficulty    TestDifficulty
+  points        Int
+  explanation   String?
+  order         Int            @default(0)
+  createdAt     DateTime       @default(now())
+  
+  test          ModelTest      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  
+  @@map("test_questions")
+}
+
+model TestAttempt {
+  id              String     @id @default(cuid())
+  userId          String
+  testId          String
+  status          TestStatus
+  startTime       DateTime
+  endTime         DateTime?
+  timeSpent       Int?       // in seconds
+  score           Int?
+  percentage      Float?
+  correctAnswers  Int?
+  totalQuestions  Int
+  answers         Json       // Record<questionId, answerIndex>
+  review          String?
+  createdAt       DateTime   @default(now())
+  
+  user            User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  test            ModelTest  @relation(fields: [testId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([testId])
+  @@map("test_attempts")
+}
+
+// ================================
+// CHAT SYSTEM
+// ================================
+
+enum ChatRoomType {
+  DIRECT
+  GROUP
+  STUDY_GROUP
+  CONTEST_DISCUSSION
+}
+
+model ChatRoom {
+  id          String         @id @default(cuid())
+  name        String?
+  type        ChatRoomType
+  description String?
+  avatar      String?
+  isPrivate   Boolean        @default(false)
+  createdBy   String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  creator     User           @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  participants ChatParticipant[]
+  messages    ChatMessage[]
+  
+  @@map("chat_rooms")
+}
+
+model ChatParticipant {
+  id         String    @id @default(cuid())
+  roomId     String
+  userId     String
+  joinedAt   DateTime  @default(now())
+  leftAt     DateTime?
+  role       String    @default("member") // member, admin, moderator
+  isActive   Boolean   @default(true)
+  
+  room       ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([roomId, userId])
+  @@map("chat_participants")
+}
+
+model ChatMessage {
+  id          String    @id @default(cuid())
+  roomId      String
+  senderId    String
+  content     String
+  messageType String    @default("text") // text, image, file, system
+  attachments String[]
+  replyToId   String?
+  isEdited    Boolean   @default(false)
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  
+  room        ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender      User      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  replyTo     ChatMessage? @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies     ChatMessage[] @relation("MessageReplies")
+  
+  @@index([roomId])
+  @@index([senderId])
+  @@map("chat_messages")
+}
+
+// ================================
+// AI FEATURES
+// ================================
+
+enum AIConversationType {
+  STUDY_HELP
+  QUESTION_GENERATION
+  NOTE_SUMMARY
+  CONTEST_PREPARATION
+  GENERAL
+}
+
+model AIConversation {
+  id          String              @id @default(cuid())
+  userId      String
+  title       String
+  type        AIConversationType
+  context     Json?               // Additional context for the conversation
+  isActive    Boolean             @default(true)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    AIMessage[]
+  
+  @@index([userId])
+  @@map("ai_conversations")
+}
+
+enum AIMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model AIMessage {
+  id             String           @id @default(cuid())
+  conversationId String
+  userId         String
+  role           AIMessageRole
+  content        String
+  metadata       Json?            // Token count, model used, etc.
+  createdAt      DateTime         @default(now())
+  
+  conversation   AIConversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([conversationId])
+  @@map("ai_messages")
+}
+
+// ================================
+// NOTIFICATIONS
+// ================================
+
+enum NotificationType {
+  ANSWER
+  COMMENT
+  ACCEPTANCE
+  MENTION
+  CONTEST
+  TASK_REMINDER
+  SYSTEM
+  CHAT_MESSAGE
+  FOLLOW
+  ACHIEVEMENT
+}
+
+model Notification {
+  id            String           @id @default(cuid())
+  userId        String
+  type          NotificationType
+  title         String
+  message       String
+  relatedId     String?          // ID of related entity (question, answer, etc.)
+  relatedType   String?          // Type of related entity
+  actorId       String?          // User who triggered the notification
+  isRead        Boolean          @default(false)
+  actionUrl     String?          // URL to navigate when clicked
+  createdAt     DateTime         @default(now())
+  
+  user          User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ================================
+// SETTINGS
+// ================================
+
+model UserSettings {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  
+  // Notification Settings
+  emailNotifications    Boolean  @default(true)
+  pushNotifications     Boolean  @default(true)
+  questionAnswers       Boolean  @default(true)
+  questionComments      Boolean  @default(true)
+  contestUpdates        Boolean  @default(true)
+  taskReminders         Boolean  @default(true)
+  weeklyDigest          Boolean  @default(true)
+  marketingEmails       Boolean  @default(false)
+  chatNotifications     Boolean  @default(true)
+  achievementNotifications Boolean @default(true)
+  
+  // Quiet Hours
+  quietHoursEnabled     Boolean  @default(false)
+  quietHoursStart       String?  // "22:00"
+  quietHoursEnd         String?  // "08:00"
+  
+  // Appearance Settings
+  theme                 String   @default("system") // light, dark, system
+  colorScheme           String   @default("blue")
+  fontSize              String   @default("medium") // small, medium, large
+  compactMode           Boolean  @default(false)
+  animationsEnabled     Boolean  @default(true)
+  sidebarCollapsed      Boolean  @default(false)
+  
+  // Privacy Settings
+  profileVisibility     String   @default("public") // public, private, friends
+  showEmail             Boolean  @default(false)
+  showPhone             Boolean  @default(false)
+  showActivity          Boolean  @default(true)
+  allowMessages         Boolean  @default(true)
+  showOnlineStatus      Boolean  @default(true)
+  
+  // Language & Region
+  language              String   @default("en")
+  timezone              String   @default("UTC")
+  dateFormat            String   @default("MM/DD/YYYY")
+  timeFormat            String   @default("12h") // 12h, 24h
+  
+  // Study Settings
+  defaultStudyDuration  Int      @default(60) // in minutes
+  breakReminders        Boolean  @default(true)
+  focusMode             Boolean  @default(false)
+  studyGoalDaily        Int      @default(120) // in minutes
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_settings")
+}
+
+// ================================
+// ACTIVITY & SUPPORT
+// ================================
+
+enum ActivityType {
+  LOGIN
+  NOTE_CREATE
+  NOTE_EDIT
+  QUESTION_POST
+  ANSWER_POST
+  PROFILE_UPDATE
+  SETTINGS_CHANGE
+  CONTEST_PARTICIPATION
+  TASK_COMPLETE
+  TEST_COMPLETE
+  CHAT_MESSAGE
+  ACHIEVEMENT_EARNED
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  userId      String
+  type        ActivityType
+  title       String
+  description String?
+  relatedId   String?
+  relatedType String?
+  metadata    Json?
+  isPublic    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question    Question?    @relation(fields: [relatedId], references: [id], onDelete: SetNull)
+  answer      Answer?      @relation(fields: [relatedId], references: [id], onDelete: SetNull)
+  note        Note?        @relation(fields: [relatedId], references: [id], onDelete: SetNull)
+  task        Task?        @relation(fields: [relatedId], references: [id], onDelete: SetNull)
+  contest     Contest?     @relation(fields: [relatedId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([createdAt])
+  @@index([type])
+  @@map("activities")
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String
+  description String
+  ipAddress   String
+  device      String
+  browser     String?
+  location    String?
+  timestamp   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([timestamp])
+  @@map("activity_logs")
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketCategory {
+  TECHNICAL
+  ACCOUNT
+  BILLING
+  FEATURE_REQUEST
+  BUG_REPORT
+  GENERAL
+}
+
+model SupportTicket {
+  id          String         @id @default(cuid())
+  userId      String
+  subject     String
+  description String
+  category    TicketCategory @default(GENERAL)
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  assignedTo  String?
+  tags        String[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages    SupportMessage[]
+  
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@map("support_tickets")
+}
+
+enum MessageSender {
+  USER
+  SUPPORT
+}
+
+model SupportMessage {
+  id          String        @id @default(cuid())
+  ticketId    String
+  userId      String
+  sender      MessageSender
+  content     String
+  attachments String[]
+  isInternal  Boolean       @default(false)
+  timestamp   DateTime      @default(now())
+  
+  ticket      SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("support_messages")
+}
+
+// ================================
+// SAVED ITEMS
+// ================================
+
+enum SavedItemType {
+  QUESTION
+  NOTE
+  CONTEST
+  TEST
+}
+
+model SavedItem {
+  id       String        @id @default(cuid())
+  userId   String
+  itemId   String
+  itemType SavedItemType
+  tags     String[]
+  notes    String?
+  savedAt  DateTime      @default(now())
+  
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  question Question?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  note     Note?         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, itemId, itemType])
+  @@map("saved_items")
+}
+
+// ================================
+// ANALYTICS & REPORTING
+// ================================
+
+model UserAnalytics {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  totalStudyTime        Int      @default(0) // in minutes
+  totalQuestions        Int      @default(0)
+  totalAnswers          Int      @default(0)
+  totalNotes            Int      @default(0)
+  totalContests         Int      @default(0)
+  totalTests            Int      @default(0)
+  averageTestScore      Float?
+  bestTestScore         Int?
+  currentStreak         Int      @default(0)
+  longestStreak         Int      @default(0)
+  lastActiveDate        DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_analytics")
+}
+
+model DailyStats {
+  id            String   @id @default(cuid())
+  userId        String
+  date          DateTime
+  studyTime     Int      @default(0) // in minutes
+  questionsAsked Int     @default(0)
+  answersGiven  Int      @default(0)
+  notesCreated  Int      @default(0)
+  testsCompleted Int     @default(0)
+  createdAt     DateTime @default(now())
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date])
+  @@map("daily_stats")
+}
+
+// ================================
+// SYSTEM TABLES
+// ================================
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+  
+  @@map("system_config")
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  action      String
+  resource    String
+  resourceId  String?
+  oldValues   Json?
+  newValues   Json?
+  ipAddress   String?
+  userAgent   String?
+  timestamp   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([timestamp])
+  @@index([action])
+  @@map("audit_logs")
+}
+
+// Add the missing relation
+model UserAnalytics {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  totalStudyTime        Int      @default(0) // in minutes
+  totalQuestions        Int      @default(0)
+  totalAnswers          Int      @default(0)
+  totalNotes            Int      @default(0)
+  totalContests         Int      @default(0)
+  totalTests            Int      @default(0)
+  averageTestScore      Float?
+  bestTestScore         Int?
+  currentStreak         Int      @default(0)
+  longestStreak         Int      @default(0)
+  lastActiveDate        DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_analytics")
+}
+
+model DailyStats {
+  id            String   @id @default(cuid())
+  userId        String
+  date          DateTime
+  studyTime     Int      @default(0) // in minutes
+  questionsAsked Int     @default(0)
+  answersGiven  Int      @default(0)
+  notesCreated  Int      @default(0)
+  testsCompleted Int     @default(0)
+  createdAt     DateTime @default(now())
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, date])
+  @@map("daily_stats")
+}
