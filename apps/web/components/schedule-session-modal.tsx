@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -19,20 +19,60 @@ import { CalendarIcon, Clock, Target, FileText } from "lucide-react"
 import { formatDate, type Task } from "@/lib/study-plan-data"
 import { cn } from "@/lib/utils"
 import { TimePicker } from "./time-picker"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface ScheduleSessionModalProps {
   isOpen: boolean
   onClose: () => void
   onSave: (sessionData: any) => void
   task?: Task
+  tasks?: Task[] // <-- add this line
 }
 
-export function ScheduleSessionModal({ isOpen, onClose, onSave, task }: ScheduleSessionModalProps) {
+export function ScheduleSessionModal({ isOpen, onClose, onSave, task: initialTask, tasks: propTasks = [] }: ScheduleSessionModalProps) {
   const [date, setDate] = useState<Date | undefined>(new Date())
   const [startTime, setStartTime] = useState<string>("09:00")
   const [endTime, setEndTime] = useState<string>("10:00")
   const [goal, setGoal] = useState<string>("")
   const [notes, setNotes] = useState<string>("")
+  const [selectedTaskId, setSelectedTaskId] = useState<string | undefined>(initialTask?.id)
+  const [tasks, setTasks] = useState<Task[]>(propTasks)
+
+  // Fetch tasks from ExpressJS backend (PostgreSQL)
+  useEffect(() => {
+    if (propTasks.length === 0 && isOpen) {
+      const fetchTasks = async () => {
+        try {
+          const token = localStorage.getItem("token")
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          })
+          if (response.ok) {
+            const data = await response.json()
+            setTasks(
+              data.tasks.map((task: any) => ({
+                ...task,
+                dueDate: task.dueDate ? new Date(task.dueDate) : null,
+                createdAt: new Date(task.createdAt),
+                completedAt: task.completedAt ? new Date(task.completedAt) : null,
+              }))
+            )
+          }
+        } catch (e) {
+          // handle error
+        }
+      }
+      fetchTasks()
+    }
+  }, [isOpen, propTasks])
+
+  const pendingTasks = tasks.filter((t) => t.status !== "COMPLETED")
+
+  // Update selected task when dropdown changes
+  const selectedTask = pendingTasks.find((t) => t.id === selectedTaskId) || initialTask
 
   const handleSave = () => {
     if (!date) return
@@ -51,7 +91,7 @@ export function ScheduleSessionModal({ isOpen, onClose, onSave, task }: Schedule
 
     const payload = {
       id: Math.random().toString(36).slice(2, 11),
-      ...(task ? { taskId: task.id } : {}),
+      ...(selectedTask ? { taskId: selectedTask.id } : {}),
       startTime: startDateTime,
       endTime: endDateTime,
       duration: durationMin,
@@ -77,9 +117,31 @@ export function ScheduleSessionModal({ isOpen, onClose, onSave, task }: Schedule
             Schedule Study Session
           </DialogTitle>
           <DialogDescription className="text-center text-slate-600">
-            {task ? `Plan a study session for: ${task.title}` : "Plan a standalone study session"}
+            {tasks ? `Plan a study session for: ${tasks.title}` : "Plan a standalone study session"}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Task selection dropdown */}
+        {pendingTasks.length > 0 && (
+          <div className="mb-4">
+            <Label className="font-medium text-slate-700 mb-1 block">Select Task</Label>
+            <Select
+              value={selectedTaskId}
+              onValueChange={setSelectedTaskId}
+            >
+              <SelectTrigger className="w-full bg-white border-blue-200 rounded-xl">
+                <SelectValue placeholder="Choose a pending task" />
+              </SelectTrigger>
+              <SelectContent>
+                {pendingTasks.map((t) => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.title}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* FORM */}
         <div className="grid gap-6 py-4">

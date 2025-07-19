@@ -402,10 +402,9 @@ export default function DashboardPage() {
                   </Link>
                 </div>
               </CardHeader>
-              {/* <CardContent>
+              <CardContent>
                 <div className="space-y-4">
-                  {dashboardData.recentActivity
-                    .filter((item) => item.type === "question")
+                  {dashboardData.feed
                     .map((question, index) => (
                       <Link key={question.id} href={`/qa/${question.id}`}>
                         <div
@@ -418,14 +417,14 @@ export default function DashboardPage() {
                           <div className="flex items-center gap-4 text-sm text-gray-600">
                             <span className="flex items-center gap-1">
                               <Calendar className="h-3 w-3" />
-                              {question.date}
+                              {question.createdAt}
                             </span>
                           </div>
                         </div>
                       </Link>
                     ))}
                 </div>
-              </CardContent> */}
+              </CardContent>
             </Card>
           </div>
 
@@ -462,7 +461,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
 
-            {/* Upcoming Tasks */}
+            {/* Upcoming Tasks
             <Card className="bg-gradient-to-br from-white to-orange-50/50 border border-orange-100 shadow-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-500 animate-slide-in-right delay-200">
               <CardHeader>
                 <CardTitle className="flex items-center gap-3 text-xl text-gray-900">
@@ -493,7 +492,7 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </Card> */}
 
             {/* Recent Notes */}
             <Card className="bg-gradient-to-br from-white to-pink-50/50 border border-pink-100 shadow-xl hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-500 animate-slide-in-right delay-300">

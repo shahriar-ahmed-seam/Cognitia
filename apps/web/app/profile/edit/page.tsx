@@ -10,524 +10,518 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { CURRENT_USER_PROFILE, updateUserProfile } from "@/lib/profile-data"
-import { ArrowLeft, Camera, Edit, Plus, X, User, Settings, Shield, Bell } from "lucide-react"
-import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
+import { ArrowLeft, Camera, Save, User, Loader2, X } from "lucide-react"
+import { toast } from "sonner"
+
+interface UserProfile {
+  id: string
+  username: string
+  email: string
+  firstName: string
+  lastName: string
+  bio?: string
+  avatar?: string
+  location?: string
+  institution?: string
+  dateOfBirth?: string
+  phoneNumber?: string
+  website?: string
+  socialLinks?: {
+    twitter?: string
+    linkedin?: string
+    github?: string
+  }
+  interests?: string[]
+  academicLevel?: string
+  fieldOfStudy?: string
+  joinedAt: string
+}
 
 export default function EditProfilePage() {
   const router = useRouter()
-  const [user, setUser] = useState(CURRENT_USER_PROFILE)
-  const [isLoading, setIsLoading] = useState(false)
-
-  // Form state
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    title: "",
-    bio: "",
-    institution: "",
-    location: "",
-    website: "",
-    linkedin: "",
-    github: "",
-    twitter: "",
-  })
-
-  const [skills, setSkills] = useState(CURRENT_USER_PROFILE.skills || [])
-  const [interests, setInterests] = useState<string[]>([])
-  const [newSkill, setNewSkill] = useState("")
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [newInterest, setNewInterest] = useState("")
 
+  const [formData, setFormData] = useState({
+    firstName: "",
+    lastName: "",
+    bio: "",
+    location: "",
+    institution: "",
+    dateOfBirth: "",
+    phoneNumber: "",
+    website: "",
+    socialLinks: {
+      twitter: "",
+      linkedin: "",
+      github: "",
+    },
+    interests: [] as string[],
+    academicLevel: "",
+    fieldOfStudy: "",
+  })
+
   useEffect(() => {
-    if (!user) {
-      router.push("/login")
-      return
+    fetchProfile()
+  }, [])
+
+  const fetchProfile = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch profile")
+      }
+
+      const data = await response.json()
+      setProfile(data)
+
+      // Populate form data
+      setFormData({
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
+        bio: data.bio || "",
+        location: data.location || "",
+        institution: data.institution || "",
+        dateOfBirth: data.dateOfBirth ? data.dateOfBirth.split("T")[0] : "",
+        phoneNumber: data.phoneNumber || "",
+        website: data.website || "",
+        socialLinks: {
+          twitter: data.socialLinks?.twitter || "",
+          linkedin: data.socialLinks?.linkedin || "",
+          github: data.socialLinks?.github || "",
+        },
+        interests: data.interests || [],
+        academicLevel: data.academicLevel || "",
+        fieldOfStudy: data.fieldOfStudy || "",
+      })
+    } catch (error) {
+      console.error("Error fetching profile:", error)
+      toast.error("Failed to load profile")
+      router.push("/profile")
+    } finally {
+      setLoading(false)
     }
-
-    // Initialize form data
-    setFormData({
-      name: user.name || "",
-      email: user.email || "",
-      title: "", // No title field in UserProfile
-      bio: user.bio || "",
-      institution: user.university || "",
-      location: user.location || "",
-      website: user.website || user.socialLinks.website || "",
-      linkedin: user.socialLinks.linkedin || "",
-      github: user.socialLinks.github || "",
-      twitter: user.socialLinks.twitter || "",
-    })
-    setSkills(user.skills || [])
-    setInterests(user.interests || [])
-  }, [user, router])
-
-  if (!user) {
-    return null
   }
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
-  }
+  const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        // 5MB limit
+        toast.error("File size must be less than 5MB")
+        return
+      }
 
-  const handleAddSkill = () => {
-    if (newSkill.trim() && !skills.some(skill => skill.name === newSkill.trim())) {
-      setSkills([
-        ...skills,
-        { id: Math.random().toString(36).substring(2, 15), name: newSkill.trim(), level: "beginner", endorsements: 0 }
-      ])
-      setNewSkill("")
+      setAvatarFile(file)
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        setAvatarPreview(e.target?.result as string)
+      }
+      reader.readAsDataURL(file)
     }
-  }
-
-  const handleRemoveSkill = (skillToRemove: string) => {
-    setSkills(skills.filter((skill) => skill.name !== skillToRemove))
   }
 
   const handleAddInterest = () => {
-    if (newInterest.trim() && !interests.includes(newInterest.trim())) {
-      setInterests([...interests, newInterest.trim()])
+    if (newInterest.trim() && !formData.interests.includes(newInterest.trim())) {
+      setFormData((prev) => ({
+        ...prev,
+        interests: [...prev.interests, newInterest.trim()],
+      }))
       setNewInterest("")
     }
   }
 
-  const handleRemoveInterest = (interestToRemove: string) => {
-    setInterests(interests.filter((interest) => interest !== interestToRemove))
+  const handleRemoveInterest = (interest: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      interests: prev.interests.filter((i) => i !== interest),
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setIsLoading(true)
+    setSaving(true)
 
     try {
-      const updatedUser = await updateUserProfile({
-        userId: user.userId,
-        ...formData,
-        skills,
-        interests,
+      const token = localStorage.getItem("token")
+
+      // Upload avatar if changed
+      let avatarUrl = profile?.avatar
+      if (avatarFile) {
+        const avatarFormData = new FormData()
+        avatarFormData.append("avatar", avatarFile)
+
+        const avatarResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/avatar`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          body: avatarFormData,
+        })
+
+        if (avatarResponse.ok) {
+          const avatarData = await avatarResponse.json()
+          avatarUrl = avatarData.avatarUrl
+        }
+      }
+
+      // Update profile
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/profile`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          ...formData,
+          avatar: avatarUrl,
+        }),
       })
 
-      setUser(updatedUser)
-      router.push(`/profile/${user.userId}`)
+      if (!response.ok) {
+        throw new Error("Failed to update profile")
+      }
+
+      toast.success("Profile updated successfully!")
+      router.push("/profile")
     } catch (error) {
       console.error("Error updating profile:", error)
-      // Handle error (show toast, etc.)
+      toast.error("Failed to update profile")
     } finally {
-      setIsLoading(false)
+      setSaving(false)
     }
   }
 
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p>Loading profile...</p>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (!profile) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Profile not found</h1>
+            <Button onClick={() => router.push("/profile")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Profile
+            </Button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Floating Orbs */}
-        {Array.from({ length: 20 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className={`absolute rounded-full bg-gradient-to-br ${
-              i % 3 === 0
-                ? "from-blue-400/20 to-indigo-400/20"
-                : i % 3 === 1
-                  ? "from-indigo-400/20 to-purple-400/20"
-                  : "from-purple-400/20 to-pink-400/20"
-            } blur-xl animate-float-enhanced`}
-            style={{
-              width: `${Math.random() * 200 + 100}px`,
-              height: `${Math.random() * 200 + 100}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${Math.random() * 10 + 15}s`,
-            }}
-          />
-        ))}
-
-        {/* Particles */}
-        {Array.from({ length: 40 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute w-2 h-2 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full animate-particle-float opacity-60"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 15}s`,
-              animationDuration: `${Math.random() * 8 + 12}s`,
-            }}
-          />
-        ))}
-
-        {/* Aurora Effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-400/5 via-indigo-400/5 to-purple-400/5 animate-aurora" />
-
-        {/* Gradient Flow */}
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-blue-400/5 to-transparent animate-gradient-flow" />
-      </div>
-
+    <>
       <Navbar />
-
-      <div className="container mx-auto py-8 relative z-10">
-        <div className="mb-6 animate-slide-in-from-top">
-          <Button
-            variant="ghost"
-            onClick={() => router.back()}
-            className="mb-4 bg-white/70 backdrop-blur-sm border border-blue-200 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 transform hover:scale-105"
-          >
+      <div className="container mx-auto py-8">
+        <div className="mb-6">
+          <Button variant="ghost" onClick={() => router.push("/profile")} className="mb-4">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Profile
           </Button>
-
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 bg-clip-text text-transparent flex items-center gap-3">
-            <Edit className="h-10 w-10 text-blue-600 animate-pulse" />
+          <h1 className="text-3xl font-bold flex items-center gap-3">
+            <User className="h-8 w-8 text-blue-500" />
             Edit Profile
           </h1>
-          <p className="text-slate-600 mt-2 text-lg">Update your personal information and preferences</p>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="md:col-span-1 space-y-6">
-              <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500 animate-slide-in-from-left rounded-2xl">
-                <CardHeader className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-t-2xl border-b border-blue-200/50">
-                  <CardTitle className="flex items-center gap-2 text-slate-900">
-                    <Camera className="h-5 w-5 text-blue-600" />
-                    Profile Picture
-                  </CardTitle>
-                  <CardDescription>Update your profile photo</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  <div className="flex justify-center">
-                    <div className="relative">
-                      <Avatar className="h-24 w-24 ring-4 ring-blue-200 hover:ring-blue-400 transition-all duration-300">
-                        <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                        <AvatarFallback className="text-2xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white">
-                          {user.name.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="absolute -bottom-2 -right-2 rounded-full h-8 w-8 p-0 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 shadow-lg hover:shadow-xl transform hover:scale-110 transition-all duration-300"
-                      >
-                        <Camera className="h-4 w-4" />
-                      </Button>
+        <form onSubmit={handleSubmit} className="max-w-4xl mx-auto space-y-8">
+          {/* Avatar Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Picture</CardTitle>
+              <CardDescription>Upload a new profile picture</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-6">
+                <Avatar className="h-24 w-24">
+                  <AvatarImage src={avatarPreview || profile.avatar || "/placeholder.svg"} alt={profile.username} />
+                  <AvatarFallback className="text-2xl">{profile.username.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <div>
+                  <Label htmlFor="avatar" className="cursor-pointer">
+                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
+                      <Camera className="h-4 w-4" />
+                      Change Picture
                     </div>
-                  </div>
-                  <p className="text-sm text-slate-500 text-center">Click the camera icon to upload a new photo</p>
-                </CardContent>
-              </Card>
+                  </Label>
+                  <Input id="avatar" type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
+                  <p className="text-sm text-slate-500 mt-2">JPG, PNG or GIF. Max size 5MB.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-              <Card
-                className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500 animate-slide-in-from-left rounded-2xl"
-                style={{ animationDelay: "200ms" }}
-              >
-                <CardHeader className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-t-2xl border-b border-indigo-200/50">
-                  <CardTitle className="flex items-center gap-2 text-slate-900">
-                    <Settings className="h-5 w-5 text-indigo-600" />
-                    Account Settings
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/70 border-blue-200 text-blue-700 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 transform hover:scale-105 rounded-xl"
+          {/* Basic Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Basic Information</CardTitle>
+              <CardDescription>Your personal details</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">First Name</Label>
+                  <Input
+                    id="firstName"
+                    value={formData.firstName}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, firstName: e.target.value }))}
+                    placeholder="Enter your first name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">Last Name</Label>
+                  <Input
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, lastName: e.target.value }))}
+                    placeholder="Enter your last name"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="bio">Bio</Label>
+                <Textarea
+                  id="bio"
+                  value={formData.bio}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, bio: e.target.value }))}
+                  placeholder="Tell us about yourself..."
+                  rows={4}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                  <Input
+                    id="dateOfBirth"
+                    type="date"
+                    value={formData.dateOfBirth}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phoneNumber">Phone Number</Label>
+                  <Input
+                    id="phoneNumber"
+                    value={formData.phoneNumber}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, phoneNumber: e.target.value }))}
+                    placeholder="Enter your phone number"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Location & Institution */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Location & Education</CardTitle>
+              <CardDescription>Where you're located and studying</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="location">Location</Label>
+                  <Input
+                    id="location"
+                    value={formData.location}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, location: e.target.value }))}
+                    placeholder="City, Country"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="institution">Institution</Label>
+                  <Input
+                    id="institution"
+                    value={formData.institution}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, institution: e.target.value }))}
+                    placeholder="University or School"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="academicLevel">Academic Level</Label>
+                  <Select
+                    value={formData.academicLevel}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, academicLevel: value }))}
                   >
-                    <Shield className="h-4 w-4 mr-2" />
-                    Change Password
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/70 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:border-indigo-300 transition-all duration-300 transform hover:scale-105 rounded-xl"
-                  >
-                    <Shield className="h-4 w-4 mr-2" />
-                    Privacy Settings
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="w-full bg-white/70 border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 transition-all duration-300 transform hover:scale-105 rounded-xl"
-                  >
-                    <Bell className="h-4 w-4 mr-2" />
-                    Notification Settings
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="high-school">High School</SelectItem>
+                      <SelectItem value="undergraduate">Undergraduate</SelectItem>
+                      <SelectItem value="graduate">Graduate</SelectItem>
+                      <SelectItem value="phd">PhD</SelectItem>
+                      <SelectItem value="professional">Professional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fieldOfStudy">Field of Study</Label>
+                  <Input
+                    id="fieldOfStudy"
+                    value={formData.fieldOfStudy}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, fieldOfStudy: e.target.value }))}
+                    placeholder="e.g., Computer Science"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            <div className="md:col-span-2 space-y-6">
-              <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500 animate-slide-in-from-right rounded-2xl">
-                <CardHeader className="bg-gradient-to-r from-blue-500/10 to-indigo-500/10 rounded-t-2xl border-b border-blue-200/50">
-                  <CardTitle className="flex items-center gap-2 text-slate-900">
-                    <User className="h-5 w-5 text-blue-600" />
-                    Basic Information
-                  </CardTitle>
-                  <CardDescription>Update your personal details</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name" className="text-sm font-medium text-slate-700">
-                        Full Name
-                      </Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => handleInputChange("name", e.target.value)}
-                        required
-                        className="rounded-xl border-blue-200 focus:border-blue-500 hover:border-blue-300 transition-all duration-200 bg-white/70"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-sm font-medium text-slate-700">
-                        Email
-                      </Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={formData.email}
-                        onChange={(e) => handleInputChange("email", e.target.value)}
-                        required
-                        className="rounded-xl border-blue-200 focus:border-blue-500 hover:border-blue-300 transition-all duration-200 bg-white/70"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="title" className="text-sm font-medium text-slate-700">
-                      Title/Position
-                    </Label>
-                    <Input
-                      id="title"
-                      placeholder="e.g., Computer Science Student, Software Engineer"
-                      value={formData.title}
-                      onChange={(e) => handleInputChange("title", e.target.value)}
-                      className="rounded-xl border-blue-200 focus:border-blue-500 hover:border-blue-300 transition-all duration-200 bg-white/70"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="bio" className="text-sm font-medium text-slate-700">
-                      Bio
-                    </Label>
-                    <Textarea
-                      id="bio"
-                      placeholder="Tell us about yourself..."
-                      className="min-h-24 rounded-xl border-blue-200 focus:border-blue-500 hover:border-blue-300 transition-all duration-200 bg-white/70"
-                      value={formData.bio}
-                      onChange={(e) => handleInputChange("bio", e.target.value)}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="institution" className="text-sm font-medium text-slate-700">
-                        Institution
-                      </Label>
-                      <Input
-                        id="institution"
-                        placeholder="University or Company"
-                        value={formData.institution}
-                        onChange={(e) => handleInputChange("institution", e.target.value)}
-                        className="rounded-xl border-blue-200 focus:border-blue-500 hover:border-blue-300 transition-all duration-200 bg-white/70"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="location" className="text-sm font-medium text-slate-700">
-                        Location
-                      </Label>
-                      <Input
-                        id="location"
-                        placeholder="City, Country"
-                        value={formData.location}
-                        onChange={(e) => handleInputChange("location", e.target.value)}
-                        className="rounded-xl border-blue-200 focus:border-blue-500 hover:border-blue-300 transition-all duration-200 bg-white/70"
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card
-                className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500 animate-slide-in-from-right rounded-2xl"
-                style={{ animationDelay: "200ms" }}
-              >
-                <CardHeader className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-t-2xl border-b border-indigo-200/50">
-                  <CardTitle className="text-slate-900">Social Links</CardTitle>
-                  <CardDescription>Connect your social media profiles</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4 p-6">
-                  <div className="space-y-2">
-                    <Label htmlFor="website" className="text-sm font-medium text-slate-700">
-                      Website
-                    </Label>
-                    <Input
-                      id="website"
-                      type="url"
-                      placeholder="https://yourwebsite.com"
-                      value={formData.website}
-                      onChange={(e) => handleInputChange("website", e.target.value)}
-                      className="rounded-xl border-indigo-200 focus:border-indigo-500 hover:border-indigo-300 transition-all duration-200 bg-white/70"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="linkedin" className="text-sm font-medium text-slate-700">
-                        LinkedIn
-                      </Label>
-                      <Input
-                        id="linkedin"
-                        placeholder="linkedin.com/in/username"
-                        value={formData.linkedin}
-                        onChange={(e) => handleInputChange("linkedin", e.target.value)}
-                        className="rounded-xl border-indigo-200 focus:border-indigo-500 hover:border-indigo-300 transition-all duration-200 bg-white/70"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="github" className="text-sm font-medium text-slate-700">
-                        GitHub
-                      </Label>
-                      <Input
-                        id="github"
-                        placeholder="github.com/username"
-                        value={formData.github}
-                        onChange={(e) => handleInputChange("github", e.target.value)}
-                        className="rounded-xl border-indigo-200 focus:border-indigo-500 hover:border-indigo-300 transition-all duration-200 bg-white/70"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="twitter" className="text-sm font-medium text-slate-700">
-                        Twitter
-                      </Label>
-                      <Input
-                        id="twitter"
-                        placeholder="twitter.com/username"
-                        value={formData.twitter}
-                        onChange={(e) => handleInputChange("twitter", e.target.value)}
-                        className="rounded-xl border-indigo-200 focus:border-indigo-500 hover:border-indigo-300 transition-all duration-200 bg-white/70"
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card
-                className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl hover:shadow-2xl transition-all duration-500 animate-slide-in-from-right rounded-2xl"
-                style={{ animationDelay: "400ms" }}
-              >
-                <CardHeader className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-t-2xl border-b border-purple-200/50">
-                  <CardTitle className="text-slate-900">Skills & Interests</CardTitle>
-                  <CardDescription>Add your skills and areas of interest</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 p-6">
-                  <div className="space-y-4">
-                    <div>
-                      <Label htmlFor="skills" className="text-sm font-medium text-slate-700">
-                        Skills
-                      </Label>
-                      <div className="flex gap-2 mt-2">
-                        <Input
-                          id="skills"
-                          placeholder="Add a skill"
-                          value={newSkill}
-                          onChange={(e) => setNewSkill(e.target.value)}
-                          onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), handleAddSkill())}
-                          className="rounded-xl border-purple-200 focus:border-purple-500 hover:border-purple-300 transition-all duration-200 bg-white/70"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleAddSkill}
-                          className="rounded-xl border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 transition-all duration-300 transform hover:scale-105 bg-transparent"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {skills.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {skills.map((skill) => (
-                            <Badge
-                              key={skill.id}
-                              variant="secondary"
-                              className="flex items-center gap-1 bg-purple-100 text-purple-800 border-purple-200 rounded-full hover:bg-purple-200 transition-all duration-200"
-                            >
-                              {skill.name}
-                              <X
-                                className="h-3 w-3 cursor-pointer hover:text-red-500 transition-colors duration-200"
-                                onClick={() => handleRemoveSkill(skill.name)}
-                              />
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <Separator className="bg-gradient-to-r from-purple-200 to-pink-200" />
-
-                    <div>
-                      <Label htmlFor="interests" className="text-sm font-medium text-slate-700">
-                        Interests
-                      </Label>
-                      <div className="flex gap-2 mt-2">
-                        <Input
-                          id="interests"
-                          placeholder="Add an interest"
-                          value={newInterest}
-                          onChange={(e) => setNewInterest(e.target.value)}
-                          onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), handleAddInterest())}
-                          className="rounded-xl border-pink-200 focus:border-pink-500 hover:border-pink-300 transition-all duration-200 bg-white/70"
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={handleAddInterest}
-                          className="rounded-xl border-pink-200 text-pink-700 hover:bg-pink-50 hover:border-pink-300 transition-all duration-300 transform hover:scale-105 bg-transparent"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      {interests.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-3">
-                          {interests.map((interest) => (
-                            <Badge
-                              key={interest}
-                              variant="outline"
-                              className="flex items-center gap-1 bg-pink-50 text-pink-800 border-pink-200 rounded-full hover:bg-pink-100 transition-all duration-200"
-                            >
-                              {interest}
-                              <X
-                                className="h-3 w-3 cursor-pointer hover:text-red-500 transition-colors duration-200"
-                                onClick={() => handleRemoveInterest(interest)}
-                              />
-                            </Badge>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <div className="flex justify-end gap-4 animate-slide-in-up" style={{ animationDelay: "600ms" }}>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => router.back()}
-                  className="rounded-xl border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transition-all duration-300 transform hover:scale-105 bg-white/70"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isLoading}
-                  className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white rounded-xl shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                >
-                  {isLoading ? "Saving..." : "Save Changes"}
+          {/* Interests */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Interests</CardTitle>
+              <CardDescription>Topics you're interested in</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex gap-2">
+                <Input
+                  value={newInterest}
+                  onChange={(e) => setNewInterest(e.target.value)}
+                  placeholder="Add an interest..."
+                  onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), handleAddInterest())}
+                />
+                <Button type="button" onClick={handleAddInterest}>
+                  Add
                 </Button>
               </div>
-            </div>
+
+              {formData.interests.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {formData.interests.map((interest) => (
+                    <Badge key={interest} variant="secondary" className="flex items-center gap-1">
+                      {interest}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-red-500"
+                        onClick={() => handleRemoveInterest(interest)}
+                      />
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Social Links */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Social Links</CardTitle>
+              <CardDescription>Connect your social media profiles</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="website">Website</Label>
+                <Input
+                  id="website"
+                  value={formData.website}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, website: e.target.value }))}
+                  placeholder="https://yourwebsite.com"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="twitter">Twitter</Label>
+                  <Input
+                    id="twitter"
+                    value={formData.socialLinks.twitter}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        socialLinks: { ...prev.socialLinks, twitter: e.target.value },
+                      }))
+                    }
+                    placeholder="@username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="linkedin">LinkedIn</Label>
+                  <Input
+                    id="linkedin"
+                    value={formData.socialLinks.linkedin}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        socialLinks: { ...prev.socialLinks, linkedin: e.target.value },
+                      }))
+                    }
+                    placeholder="linkedin.com/in/username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="github">GitHub</Label>
+                  <Input
+                    id="github"
+                    value={formData.socialLinks.github}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        socialLinks: { ...prev.socialLinks, github: e.target.value },
+                      }))
+                    }
+                    placeholder="github.com/username"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Save Button */}
+          <div className="flex justify-end gap-4">
+            <Button type="button" variant="outline" onClick={() => router.push("/profile")}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </>
+              )}
+            </Button>
           </div>
         </form>
       </div>
-    </div>
+    </>
   )
 }

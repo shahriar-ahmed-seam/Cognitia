@@ -19,13 +19,14 @@ interface Task {
   title: string
   description: string
   subjectArea: string
-  priority: "low" | "medium" | "high"
+  priority: "LOW" | "MEDIUM" | "HIGH"
   completed: boolean
   dueDate: Date | null
   estimatedTime: number
   createdAt: Date
   completedAt: Date | null
   tags: string[]
+  status: "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED"
 }
 
 interface StudySession {
@@ -72,20 +73,20 @@ export default function StudyPlanPage() {
         return
       }
 
-      const [tasksResponse, sessionsResponse, planResponse] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks`, {
+      const [tasksResponse, todaySessionsResponse, statsResponse] = await Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
         }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/sessions`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/today`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
         }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/stats`, {
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/stats`, {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
@@ -93,13 +94,13 @@ export default function StudyPlanPage() {
         }),
       ])
 
-      if (!tasksResponse.ok || !sessionsResponse.ok || !planResponse.ok) {
+      if (!tasksResponse.ok || !todaySessionsResponse.ok || !statsResponse.ok) {
         throw new Error("Failed to fetch study plan data")
       }
 
       const tasksData = await tasksResponse.json()
-      const sessionsData = await sessionsResponse.json()
-      const planData = await planResponse.json()
+      const todaySessionsData = await todaySessionsResponse.json()
+      const statsData = await statsResponse.json()
 
       setTasks(
         tasksData.tasks.map((task: any) => ({
@@ -109,8 +110,28 @@ export default function StudyPlanPage() {
           completedAt: task.completedAt ? new Date(task.completedAt) : null,
         }))
       )
-      setUpcomingSessions(sessionsData.sessions)
-      setStudyPlan(planData.stats)
+      // Map backend session fields to frontend fields
+      setUpcomingSessions(
+        (todaySessionsData.sessions || []).map((session: any) => ({
+          id: session.id,
+          taskId: session.taskId,
+          title: session.goal || "Study Session",
+          date: session.startTime ? new Date(session.startTime).toLocaleDateString() : "",
+          time: session.startTime ? new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
+          duration: session.startTime && session.endTime
+            ? (new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / (1000 * 60)
+            : 0,
+          status: session.completed ? "completed" : "scheduled",
+          notes: session.notes,
+        }))
+      )
+      setStudyPlan({
+        weeklyGoal: 20, // This should come from user settings
+        thisWeekHours: statsData.completedTasks * 2, // Assuming 2 hours per task, adjust as needed
+        totalStudyTime: statsData.completedTasks * 2,
+        currentStreak: statsData.streak,
+        averageSessionTime: 120, // This should come from user settings
+      })
     } catch (error) {
       console.error("Error fetching study plan data:", error)
       toast({
@@ -133,17 +154,21 @@ export default function StudyPlanPage() {
     setIsTaskDetailsModalOpen(true)
   }
 
+  // Update the task creation endpoint
   const handleCreateTask = async (taskData: any) => {
     try {
       const token = localStorage.getItem("token")
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(taskData),
+        body: JSON.stringify({
+          ...taskData,
+          status: "NOT_STARTED",
+        }),
       })
 
       if (!response.ok) {
@@ -180,21 +205,41 @@ export default function StudyPlanPage() {
     try {
       const token = localStorage.getItem("token")
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/sessions`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/sessions`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(sessionData),
+        body: JSON.stringify({
+          startTime: sessionData.startTime,
+          endTime: sessionData.endTime,
+          goal: sessionData.goal || undefined,
+          notes: sessionData.notes || undefined,
+          taskId: sessionData.taskId || undefined,
+        }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to schedule session")
+        const error = await response.json()
+        throw new Error(error.error || "Failed to schedule session")
       }
 
-      const newSession = await response.json()
-      setUpcomingSessions((prev) => [...prev, newSession.session])
+      const { session } = await response.json()
+      
+      // Format the session data to match the UI expectations
+      const formattedSession = {
+        id: session.id,
+        taskId: session.taskId,
+        title: session.goal || "Study Session",
+        date: new Date(session.startTime).toLocaleDateString(),
+        time: new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        duration: (new Date(session.endTime).getTime() - new Date(session.startTime).getTime()) / (1000 * 60), // duration in minutes
+        status: session.completed ? "completed" : "scheduled",
+        notes: session.notes,
+      }
+
+      setUpcomingSessions((prev) => [...prev, formattedSession])
       setIsScheduleSessionModalOpen(false)
 
       toast({
@@ -205,27 +250,30 @@ export default function StudyPlanPage() {
       console.error("Error scheduling session:", error)
       toast({
         title: "Error",
-        description: "Failed to schedule session. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to schedule session. Please try again.",
         variant: "destructive",
       })
     }
   }
 
+  // Update the toggle task completion endpoint
   const toggleTaskCompletion = async (taskId: string) => {
     try {
       const token = localStorage.getItem("token")
       const task = tasks.find((t) => t.id === taskId)
       if (!task) return
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks/${taskId}`, {
-        method: "PATCH",
+      const endpoint = task.completed 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${taskId}/status`
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${taskId}/complete`
+
+      const response = await fetch(endpoint, {
+        method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          completed: !task.completed,
-        }),
+        body: JSON.stringify(task.completed ? { status: "NOT_STARTED" } : {}),
       })
 
       if (!response.ok) {
@@ -258,12 +306,13 @@ export default function StudyPlanPage() {
     }
   }
 
+  // Update the task update endpoint
   const handleUpdateTask = async (taskId: string, taskData: any) => {
     try {
       const token = localStorage.getItem("token")
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks/${taskId}`, {
-        method: "PATCH",
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${taskId}`, {
+        method: "PUT",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -308,7 +357,7 @@ export default function StudyPlanPage() {
     try {
       const token = localStorage.getItem("token")
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks/${taskId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/tasks/${taskId}`, {
         method: "DELETE",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -337,17 +386,18 @@ export default function StudyPlanPage() {
     }
   }
 
-  const completedTasks = tasks.filter((task) => task.completed).length
+  // Update completedTasks and progress calculations
+  const completedTasks = tasks.filter((task) => task.status === "COMPLETED").length
   const totalTasks = tasks.length
   const progressPercentage = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case "high":
+      case "HIGH":
         return "bg-gradient-to-r from-red-100 to-pink-100 text-red-700 border-red-200"
-      case "medium":
+      case "MEDIUM":
         return "bg-gradient-to-r from-yellow-100 to-orange-100 text-orange-700 border-orange-200"
-      case "low":
+      case "LOW":
         return "bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border-green-200"
       default:
         return "bg-gradient-to-r from-gray-100 to-slate-100 text-gray-700 border-gray-200"
@@ -620,7 +670,7 @@ export default function StudyPlanPage() {
                                 }}
                                 className="text-violet-500 hover:text-violet-700 transition-colors duration-300"
                               >
-                                {task.completed ? (
+                                {task.status === "COMPLETED" ? (
                                   <CheckCircle className="h-5 w-5 text-green-500 animate-pulse" />
                                 ) : (
                                   <Circle className="h-5 w-5" />
@@ -629,7 +679,7 @@ export default function StudyPlanPage() {
                               <div>
                                 <h3
                                   className={`font-medium ${
-                                    task.completed
+                                    task.status === "COMPLETED"
                                       ? "text-slate-500 line-through"
                                       : "text-slate-900 hover:text-violet-600"
                                   } transition-colors duration-300`}
@@ -657,7 +707,7 @@ export default function StudyPlanPage() {
 
                     <TabsContent value="pending" className="space-y-3">
                       {tasks
-                        .filter((task) => !task.completed)
+                        .filter((task) => task.status !== "COMPLETED")
                         .map((task, index) => (
                           <div
                             key={task.id}
@@ -685,7 +735,7 @@ export default function StudyPlanPage() {
 
                     <TabsContent value="completed" className="space-y-3">
                       {tasks
-                        .filter((task) => task.completed)
+                        .filter((task) => task.status === "COMPLETED")
                         .map((task, index) => (
                           <div
                             key={task.id}
@@ -727,7 +777,15 @@ export default function StudyPlanPage() {
                       <p className="text-slate-500 text-sm">No sessions scheduled</p>
                     </div>
                   ) : (
-                    upcomingSessions.slice(0, 4).map((session, index) => (
+                    upcomingSessions
+                    .filter(
+                      (session) => {
+                        const task = tasks.find((t) => t.id === session.taskId)
+                        return task && task.status !== "COMPLETED"
+                      }
+                    )
+                    .slice(0, 4)
+                    .map((session, index) => (
                       <div
                         key={session.id}
                         className="p-4 bg-gradient-to-r from-white to-indigo-50/30 rounded-lg border border-indigo-100 hover:border-indigo-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 animate-slide-in-up"

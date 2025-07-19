@@ -15,7 +15,7 @@ import { Navbar } from "@/components/navbar"
 import { useToast } from "@/hooks/use-toast"
 
 interface Question {
-  id: string
+  id: string // This will be a UUID string
   title: string
   content: string
   subject: string
@@ -36,7 +36,7 @@ interface Question {
 }
 
 interface Answer {
-  id: string
+  id: string // This will be a UUID string
   content: string
   author: {
     id: string
@@ -47,6 +47,12 @@ interface Answer {
   upvotes: number
   downvotes: number
   isAccepted: boolean
+}
+
+// Update Study Session interface to use UUID
+interface StudySession {
+  id: string // This will be a UUID string
+  taskId: string // This will be a UUID string
 }
 
 export default function QAPage() {
@@ -67,17 +73,24 @@ export default function QAPage() {
     try {
       setLoading(true)
       const token = localStorage.getItem("token")
+
       // Map frontend state to backend query params
       const params = new URLSearchParams({
         search: searchQuery,
         tags: selectedSubject !== "all" ? selectedSubject : "",
-        sortBy: sortBy === "recent" ? "created_at" : sortBy === "popular" ? "views" : sortBy === "answered" ? "answer_count" : "created_at",
+        sortBy: sortBy === "recent" ? "createdAt" : sortBy === "popular" ? "views" : sortBy === "answered" ? "answerCount" : "createdAt",
         sortOrder: "DESC",
-        status: filterBy === "all" ? "all" : filterBy === "featured" ? "all" : filterBy === "my-questions" ? "all" : filterBy === "following" ? "all" : filterBy === "answered" ? "resolved" : filterBy === "unanswered" ? "unresolved" : "all",
+        status: filterBy === "answered" ? "resolved" : filterBy === "unanswered" ? "unresolved" : "all",
         page: "1",
         limit: "20",
       })
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/qa/questions?${params}`, {
+
+      // Determine which endpoint to use based on active tab
+      const endpoint = filterBy === "my-questions" 
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/qa/my-questions` 
+        : `${process.env.NEXT_PUBLIC_API_URL}/api/qa/questions`
+
+      const response = await fetch(`${endpoint}?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -159,6 +172,11 @@ export default function QAPage() {
 
   // Handle vote
   const handleVote = async (questionId: string, voteType: "upvote" | "downvote") => {
+    if (!isValidUUID(questionId)) {
+      console.error("Invalid question ID format")
+      return
+    }
+
     try {
       const token = localStorage.getItem("token")
 
@@ -224,6 +242,26 @@ export default function QAPage() {
     }))
     setOrbs(orbData)
   }, [])
+
+  // Add this helper function near the top of the component
+  const getCurrentUserId = () => {
+    try {
+      const token = localStorage.getItem("token")
+      if (!token) return null
+      // Assuming JWT token payload contains user ID in a 'sub' field
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      return payload.sub || null
+    } catch (error) {
+      console.error("Error getting user ID:", error)
+      return null
+    }
+  }
+
+  // Add a type guard to validate UUID format
+  const isValidUUID = (id: string) => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
@@ -369,7 +407,11 @@ export default function QAPage() {
           {/* ...You can add stats cards here if you have stats data... */}
         </div>
 
-        <Tabs defaultValue="all" className="space-y-6">
+        <Tabs 
+          defaultValue="all" 
+          className="space-y-6"
+          onValueChange={(value) => setFilterBy(value)} // Add this line
+        >
           <TabsList className="bg-white/70 backdrop-blur-sm border border-blue-200 shadow-lg">
             <TabsTrigger
               value="all"
@@ -391,6 +433,13 @@ export default function QAPage() {
             >
               <TrendingUp className="h-4 w-4 mr-2 animate-pulse" />
               Trending
+            </TabsTrigger>
+            <TabsTrigger
+              value="my-questions"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-red-500 data-[state=active]:to-red-600 data-[state=active]:text-white"
+            >
+              <Brain className="h-4 w-4 mr-2 animate-pulse" />
+              My Questions
             </TabsTrigger>
           </TabsList>
 
@@ -574,6 +623,95 @@ export default function QAPage() {
                   </CardContent>
                 </Card>
               ))}
+          </TabsContent>
+
+          <TabsContent value="my-questions" className="space-y-6">
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            ) : questions.length > 0 ? (
+              <div className="space-y-6">
+                {questions.map((question, index) => (
+                  <Card
+                    key={question.id}
+                    className="overflow-hidden cursor-pointer bg-white/70 backdrop-blur-sm border border-blue-200 shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-500 animate-slide-in-up"
+                    style={{ animationDelay: `${index * 100}ms` }}
+                    onClick={() => router.push(`/question/${question.id}`)}
+                  >
+                    <CardContent className="p-6">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Brain className="h-4 w-4 text-blue-500 animate-pulse" />
+                          <Badge className="bg-gradient-to-r from-blue-100 to-indigo-100 text-blue-700 border-blue-200">
+                            My Question
+                          </Badge>
+                          {question.isAnswered && (
+                            <Badge className="bg-gradient-to-r from-green-100 to-emerald-100 text-green-700 border-green-200">
+                              <CheckCircle2 className="mr-1 h-3 w-3" />
+                              Resolved
+                            </Badge>
+                          )}
+                        </div>
+                        <span className="text-sm text-slate-500">
+                          {formatRelativeTime(question.createdAt)}
+                        </span>
+                      </div>
+                      <h3 className="text-xl font-bold mb-2 text-slate-900 hover:text-blue-600 transition-colors duration-300">
+                        {question.title}
+                      </h3>
+                      <p className="text-slate-700 mb-4 line-clamp-2">{question.content}</p>
+                      <div className="flex items-center justify-between">
+                        <div className="flex flex-wrap gap-2">
+                          {question.tags.map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant="outline"
+                              className="bg-blue-50 border-blue-200 text-blue-700"
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-4 text-sm text-slate-500">
+                          <span className="flex items-center gap-1">
+                            <MessageSquare className="h-3 w-3" />
+                            {question.answerCount} answers
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <ThumbsUp className="h-3 w-3" />
+                            {question.upvotes}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            {question.views}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-lg">
+                  <Brain className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+                  <h3 className="text-xl font-semibold text-slate-700 mb-2">
+                    No questions yet
+                  </h3>
+                  <p className="text-slate-500 mb-6">
+                    You haven't asked any questions yet. Start engaging with the community!
+                  </p>
+                  <Button
+                    onClick={() => setIsQuestionModalOpen(true)}
+                    className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Ask Your First Question
+                  </Button>
+                </div>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
 

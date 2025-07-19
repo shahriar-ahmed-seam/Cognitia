@@ -393,7 +393,7 @@ export default function NotesPage() {
       const formData = new FormData()
       formData.append("title", noteData.title)
       formData.append("notesGroupId", noteData.notesGroupId)
-      formData.append("visibility", noteData.visibility)
+      formData.append("visibility", noteData.visibility.toUpperCase())
       
       // Handle tags array properly - send each tag as a separate form field
       noteData.tags.forEach((tag, index) => {
