@@ -24,6 +24,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import Link from "next/link"
+import { useToast } from "@/components/ui/use-toast"
 
 type RegistrationStep = "form" | "otp" | "success"
 
@@ -46,6 +47,7 @@ export default function RegisterPage() {
   })
   const router = useRouter()
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([])
+  const { toast } = useToast()
 
   useEffect(() => {
     // Staggered entrance animation
@@ -66,19 +68,56 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords don't match!")
+      toast({
+        title: "Password mismatch",
+        description: "Passwords don't match!",
+        variant: "destructive",
+      })
       return
     }
 
     setIsLoading(true)
 
-    // Simulate API call to create account and send OTP
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+        }),
+      })
 
-    setIsLoading(false)
-    setCurrentStep("otp")
-    setOtpTimer(60)
-    setCanResendOtp(false)
+      const data = await response.json()
+
+      if (response.ok) {
+        toast({
+          title: "Registration successful",
+          description: "Please check your email for the verification code.",
+        })
+        setCurrentStep("otp")
+        setOtpTimer(60)
+        setCanResendOtp(false)
+      } else {
+        toast({
+          title: "Registration failed",
+          description: data.message || "Something went wrong",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Registration error:", error)
+      toast({
+        title: "Registration failed",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleOtpChange = (index: number, value: string) => {
@@ -103,22 +142,63 @@ export default function RegisterPage() {
   const handleOtpVerify = async () => {
     const otp = otpCode.join("")
     if (otp.length !== 6) {
-      alert("Please enter the complete OTP")
+      toast({
+        title: "Invalid OTP",
+        description: "Please enter the complete OTP",
+        variant: "destructive",
+      })
       return
     }
 
     setIsVerifyingOtp(true)
 
-    // Simulate OTP verification
-    await new Promise((resolve) => setTimeout(resolve, 2000))
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email,
+          otp: otp,
+        }),
+      })
 
-    setIsVerifyingOtp(false)
-    setCurrentStep("success")
+      const data = await response.json()
 
-    // Navigate after success animation
-    setTimeout(() => {
-      router.push("/dashboard")
-    }, 1500)
+      if (response.ok) {
+        // Store token in localStorage
+        localStorage.setItem("token", data.token)
+        localStorage.setItem("user", JSON.stringify(data.user))
+
+        setCurrentStep("success")
+
+        toast({
+          title: "Email verified",
+          description: "Your account has been created successfully!",
+        })
+
+        // Navigate after success animation
+        setTimeout(() => {
+          router.push("/dashboard")
+        }, 1500)
+      } else {
+        toast({
+          title: "Verification failed",
+          description: data.message || "Invalid OTP",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("OTP verification error:", error)
+      toast({
+        title: "Verification failed",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsVerifyingOtp(false)
+    }
   }
 
   const handleResendOtp = async () => {
@@ -126,18 +206,45 @@ export default function RegisterPage() {
     setOtpTimer(60)
     setOtpCode(["", "", "", "", "", ""])
 
-    // Simulate resend OTP API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/resend-otp`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "OTP sent",
+          description: "A new verification code has been sent to your email.",
+        })
+      } else {
+        toast({
+          title: "Failed to resend OTP",
+          description: "Please try again later.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Resend OTP error:", error)
+      toast({
+        title: "Failed to resend OTP",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleGoogleSignup = () => {
-    console.log("Google signup initiated")
-    router.push("/dashboard")
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`
   }
 
   const handleFacebookSignup = () => {
-    console.log("Facebook signup initiated")
-    router.push("/dashboard")
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/facebook`
   }
 
   const handleInputChange = (field: string, value: string | boolean) => {

@@ -1,38 +1,108 @@
 "use client"
 
+import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ContestCard } from "@/components/contest-card"
 import { ContestFilters } from "@/components/contest-filters"
-import { CONTESTS, type ContestStatus } from "@/lib/contest-data"
-import { PlusCircle, Trophy, Zap, Target, Award } from "lucide-react"
-import { useState, useMemo, useEffect } from "react"
+import { PlusCircle, Trophy, Zap, Target, Award, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
+import { useToast } from "@/hooks/use-toast"
+
+interface Contest {
+  id: string
+  title: string
+  description: string
+  difficulty: "easy" | "medium" | "hard" | "expert"
+  status: "upcoming" | "ongoing" | "finished"
+  startTime: string
+  endTime: string
+  participants: number
+  topics: string[]
+  maxParticipants?: number
+  prizes: string[]
+  createdBy: {
+    id: string
+    name: string
+    avatar?: string
+  }
+  createdAt: string
+}
 
 export default function ContestsPage() {
-  const [status, setStatus] = useState<ContestStatus | "all">("all")
+  const router = useRouter()
+  const { toast } = useToast()
+
+  const [contests, setContests] = useState<Contest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState<"upcoming" | "ongoing" | "finished" | "all">("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
-  const [mounted, setMounted] = useState(false)
+
+  // Fetch contests from API
+  const fetchContests = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("token")
+
+      const params = new URLSearchParams({
+        search: searchQuery,
+        status: status === "all" ? "" : status,
+        topics: selectedTopics.join(","),
+        page: "1",
+        limit: "20",
+      })
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch contests")
+      }
+
+      const data = await response.json()
+      setContests(data.contests || [])
+    } catch (error) {
+      console.error("Error fetching contests:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load contests. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    setMounted(true)
-  }, [])
+    const token = localStorage.getItem("token")
+    if (!token) {
+      router.push("/login")
+      return
+    }
+
+    fetchContests()
+  }, [router, status, searchQuery, selectedTopics])
 
   // Extract all unique topics from contests
   const availableTopics = useMemo(() => {
     const topics = new Set<string>()
-    CONTESTS.forEach((contest) => {
+    contests.forEach((contest) => {
       contest.topics.forEach((topic) => {
         topics.add(topic)
       })
     })
     return Array.from(topics).sort()
-  }, [])
+  }, [contests])
 
   // Filter contests based on selected filters
   const filteredContests = useMemo(() => {
-    return CONTESTS.filter((contest) => {
+    return contests.filter((contest) => {
       // Filter by status
       if (status !== "all" && contest.status !== status) {
         return false
@@ -54,11 +124,7 @@ export default function ContestsPage() {
 
       return true
     })
-  }, [status, searchQuery, selectedTopics])
-
-  if (!mounted) {
-    return null
-  }
+  }, [contests, status, searchQuery, selectedTopics])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50 to-red-50 relative overflow-hidden">
@@ -98,68 +164,9 @@ export default function ContestsPage() {
           />
         ))}
 
-        {/* Enhanced Constellation */}
-        <svg className="absolute inset-0 w-full h-full opacity-30">
-          {Array.from({ length: 45 }).map((_, i) => (
-            <circle
-              key={`star-${i}`}
-              cx={`${Math.random() * 100}%`}
-              cy={`${Math.random() * 100}%`}
-              r={Math.random() * 2 + 0.5}
-              fill="white"
-              className="animate-twinkle-enhanced"
-              style={{
-                animationDelay: `${Math.random() * 5}s`,
-                animationDuration: `${3 + Math.random() * 3}s`,
-              }}
-            />
-          ))}
-          {Array.from({ length: 22 }).map((_, i) => (
-            <line
-              key={`line-${i}`}
-              x1={`${Math.random() * 100}%`}
-              y1={`${Math.random() * 100}%`}
-              x2={`${Math.random() * 100}%`}
-              y2={`${Math.random() * 100}%`}
-              stroke="url(#constellation-gradient)"
-              strokeWidth="0.4"
-              className="animate-constellation-enhanced"
-              style={{ animationDelay: `${i * 0.2}s` }}
-            />
-          ))}
-          <defs>
-            <linearGradient id="constellation-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#F59E0B" stopOpacity="0.6" />
-              <stop offset="50%" stopColor="#EF4444" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#EC4899" stopOpacity="0.6" />
-            </linearGradient>
-          </defs>
-        </svg>
-
-        {/* Live Morphing Shapes */}
-        <div className="absolute top-20 left-20 w-28 h-28 bg-gradient-to-br from-orange-400/20 to-red-400/20 animate-morph-enhanced blur-sm"></div>
-        <div className="absolute bottom-32 right-32 w-22 h-22 bg-gradient-to-br from-red-400/20 to-pink-400/20 animate-morph-enhanced-reverse blur-sm"></div>
-        <div className="absolute top-1/2 left-10 w-18 h-18 bg-gradient-to-br from-yellow-400/20 to-orange-400/20 animate-pulse-enhanced blur-sm"></div>
-
-        {/* Enhanced Geometric Elements */}
-        <div className="absolute top-40 right-20 w-12 h-12 border-2 border-orange-400/30 transform rotate-45 animate-rotate-enhanced"></div>
-        <div className="absolute bottom-40 left-40 w-8 h-8 bg-gradient-to-br from-red-400/30 to-pink-400/30 rounded-full animate-bounce-enhanced"></div>
-        <div className="absolute top-60 right-40 w-16 h-16 border border-yellow-400/25 rounded-full animate-scale-enhanced"></div>
-
-        {/* Enhanced Orbs */}
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-br from-orange-600/20 to-red-600/20 rounded-full blur-3xl animate-pulse-slow-enhanced"></div>
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-gradient-to-br from-yellow-600/15 to-orange-600/15 rounded-full blur-3xl animate-pulse-slow-enhanced delay-3000"></div>
-        <div className="absolute top-1/3 right-1/4 w-64 h-64 bg-gradient-to-br from-red-600/10 to-pink-600/10 rounded-full blur-2xl animate-pulse-slow-enhanced delay-6000"></div>
-
         {/* Enhanced Aurora Effects */}
         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/3 to-transparent animate-aurora-enhanced"></div>
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-red-500/3 to-transparent animate-aurora-vertical-enhanced delay-4000"></div>
-
-        {/* Enhanced Gradient Flow */}
-        <div className="absolute inset-0 opacity-20">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-orange-500/8 via-transparent to-red-500/8 animate-gradient-flow-enhanced"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tl from-yellow-500/8 via-transparent to-pink-500/8 animate-gradient-flow-reverse-enhanced"></div>
-        </div>
       </div>
 
       <Navbar />
@@ -186,28 +193,28 @@ export default function ContestsPage() {
           {[
             {
               title: "Active Contests",
-              value: CONTESTS.filter((c) => c.status === "ongoing").length,
+              value: contests.filter((c) => c.status === "ongoing").length,
               icon: Zap,
               gradient: "from-green-500 to-emerald-500",
               bgGradient: "from-green-50 to-emerald-50",
             },
             {
               title: "Upcoming",
-              value: CONTESTS.filter((c) => c.status === "upcoming").length,
+              value: contests.filter((c) => c.status === "upcoming").length,
               icon: Target,
               gradient: "from-blue-500 to-cyan-500",
               bgGradient: "from-blue-50 to-cyan-50",
             },
             {
               title: "Total Contests",
-              value: CONTESTS.length,
+              value: contests.length,
               icon: Trophy,
               gradient: "from-orange-500 to-red-500",
               bgGradient: "from-orange-50 to-red-50",
             },
             {
               title: "Participants",
-              value: CONTESTS.reduce((sum, c) => sum + c.participants, 0),
+              value: contests.reduce((sum, c) => sum + c.participants, 0),
               icon: Award,
               gradient: "from-purple-500 to-pink-500",
               bgGradient: "from-purple-50 to-pink-50",
@@ -244,7 +251,11 @@ export default function ContestsPage() {
             />
           </div>
           <div className="md:col-span-3">
-            {filteredContests.length === 0 ? (
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+              </div>
+            ) : filteredContests.length === 0 ? (
               <div className="text-center py-12 bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl border-2 border-dashed border-orange-300 animate-fade-in">
                 <Trophy className="h-16 w-16 text-orange-400 mx-auto mb-4 animate-bounce-enhanced" />
                 <h3 className="text-xl font-medium text-orange-900 mb-2">No contests found</h3>

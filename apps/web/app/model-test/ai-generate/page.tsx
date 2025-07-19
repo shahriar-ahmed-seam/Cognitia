@@ -26,12 +26,15 @@ import {
   FileText,
   Brain,
 } from "lucide-react"
+import { toast } from "sonner"
 
 export default function AIGenerateTestPage() {
   const router = useRouter()
   const [isGenerating, setIsGenerating] = useState(false)
   const [isGenerated, setIsGenerated] = useState(false)
   const [generationProgress, setGenerationProgress] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [generatedTestId, setGeneratedTestId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     youtubeUrl: "",
@@ -53,36 +56,118 @@ export default function AIGenerateTestPage() {
     }
   }
 
+  const extractYouTubeTranscript = async (url: string) => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/extract-transcript`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ youtubeUrl: url }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to extract transcript")
+      }
+
+      const data = await response.json()
+      return data.transcript
+    } catch (error) {
+      console.error("Error extracting transcript:", error)
+      throw error
+    }
+  }
+
   const handleGenerateTest = async () => {
+    if (!isFormValid) {
+      toast.error("Please fill in all required fields")
+      return
+    }
+
     setIsGenerating(true)
     setGenerationProgress(0)
 
-    // Simulate AI test generation with progress
-    const steps = [
-      { progress: 15, message: "Processing transcript..." },
-      { progress: 30, message: "Analyzing content with AI..." },
-      { progress: 50, message: "Extracting key concepts..." },
-      { progress: 70, message: "Generating questions..." },
-      { progress: 85, message: "Setting difficulty levels..." },
-      { progress: 100, message: "AI test created successfully!" },
-    ]
+    try {
+      let transcript = formData.transcript
 
-    for (const step of steps) {
-      await new Promise((resolve) => setTimeout(resolve, 1200))
-      setGenerationProgress(step.progress)
+      // Extract transcript from YouTube if URL is provided
+      if (formData.youtubeUrl && !transcript) {
+        setGenerationProgress(15)
+        transcript = await extractYouTubeTranscript(formData.youtubeUrl)
+      }
+
+      // Simulate AI test generation with progress
+      const steps = [
+        { progress: 30, message: "Analyzing content with AI..." },
+        { progress: 50, message: "Extracting key concepts..." },
+        { progress: 70, message: "Generating questions..." },
+        { progress: 85, message: "Setting difficulty levels..." },
+        { progress: 100, message: "AI test created successfully!" },
+      ]
+
+      for (const step of steps) {
+        await new Promise((resolve) => setTimeout(resolve, 1200))
+        setGenerationProgress(step.progress)
+      }
+
+      // Call API to generate test with AI
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/ai-generate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          transcript: transcript || formData.transcript,
+          numberOfQuestions: Number.parseInt(formData.numberOfQuestions),
+          duration: Number.parseInt(formData.duration),
+          difficulty: formData.difficulty,
+          source: formData.youtubeUrl ? "youtube" : "transcript",
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to generate AI test")
+      }
+
+      const result = await response.json()
+      setGeneratedTestId(result.testId)
+      setIsGenerated(true)
+      toast.success("AI test generated successfully!")
+    } catch (error) {
+      console.error("Error generating test:", error)
+      toast.error("Failed to generate AI test")
+    } finally {
+      setIsGenerating(false)
     }
-
-    setIsGenerating(false)
-    setIsGenerated(true)
   }
 
   const handleStartExam = () => {
-    // Navigate to the generated test
-    router.push("/model-test/ai-generated-test-id")
+    if (generatedTestId) {
+      router.push(`/model-test/${generatedTestId}`)
+    }
   }
 
-  const handleDoLater = () => {
-    // Save test and return to model test page
+  const handleDoLater = async () => {
+    if (generatedTestId) {
+      try {
+        const token = localStorage.getItem("token")
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/${generatedTestId}/save-draft`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        })
+        toast.success("Test saved for later!")
+      } catch (error) {
+        console.error("Error saving test:", error)
+        toast.error("Failed to save test")
+      }
+    }
     router.push("/model-test")
   }
 
@@ -94,78 +179,37 @@ export default function AIGenerateTestPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Floating Orbs */}
-        {Array.from({ length: 15 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className={`absolute rounded-full bg-gradient-to-br ${
-              i % 3 === 0
-                ? "from-purple-400/20 to-pink-400/20"
-                : i % 3 === 1
-                  ? "from-pink-400/20 to-rose-400/20"
-                  : "from-rose-400/20 to-orange-400/20"
-            } blur-xl animate-float-enhanced`}
-            style={{
-              width: `${Math.random() * 150 + 80}px`,
-              height: `${Math.random() * 150 + 80}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${Math.random() * 10 + 15}s`,
-            }}
-          />
-        ))}
-
-        {/* Particles */}
-        {Array.from({ length: 30 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute w-2 h-2 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full animate-particle-float opacity-60"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 15}s`,
-              animationDuration: `${Math.random() * 8 + 12}s`,
-            }}
-          />
-        ))}
-
-        {/* Aurora Effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-purple-400/5 via-pink-400/5 to-rose-400/5 animate-aurora" />
-      </div>
-
       <Navbar />
 
       <div className="container mx-auto py-8 relative z-10">
-        <div className="flex items-center gap-4 mb-8 animate-slide-in-from-top">
+        <div className="flex items-center gap-4 mb-8">
           <Button
             variant="outline"
             onClick={() => router.push("/model-test")}
-            className="bg-white/70 backdrop-blur-sm border-purple-200 hover:bg-purple-50 hover:border-purple-300 transition-all duration-300"
+            className="bg-white/70 backdrop-blur-sm border-purple-200 hover:bg-purple-50"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Tests
           </Button>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent flex items-center gap-3">
-            <Brain className="h-8 w-8 text-purple-600 animate-pulse" />
+            <Brain className="h-8 w-8 text-purple-600" />
             AI Generate Model Test
           </h1>
         </div>
 
         {!isGenerated ? (
           <div className="max-w-2xl mx-auto">
-            <Card className="bg-white/70 backdrop-blur-sm border border-white/20 shadow-xl animate-slide-in-up">
-              <CardHeader className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-b border-purple-200/50">
-                <CardTitle className="text-xl font-semibold text-slate-900 flex items-center gap-2">
+            <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl">
+              <CardHeader className="bg-gradient-to-r from-purple-500/10 to-pink-500/10">
+                <CardTitle className="text-xl font-semibold flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-purple-600" />
                   AI Test Configuration
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 {/* YouTube URL */}
-                <div className="space-y-2 animate-slide-in-from-left" style={{ animationDelay: "100ms" }}>
-                  <Label htmlFor="youtubeUrl" className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                <div className="space-y-2">
+                  <Label htmlFor="youtubeUrl" className="text-sm font-medium flex items-center gap-2">
                     <Youtube className="h-4 w-4 text-red-500" />
                     YouTube Video URL (Optional)
                   </Label>
@@ -174,7 +218,6 @@ export default function AIGenerateTestPage() {
                     placeholder="https://youtube.com/watch?v=..."
                     value={formData.youtubeUrl}
                     onChange={(e) => setFormData((prev) => ({ ...prev, youtubeUrl: e.target.value }))}
-                    className="bg-white/70 border-purple-200 focus:border-purple-500 hover:border-purple-300 transition-all duration-200"
                   />
                   <p className="text-xs text-slate-500">
                     Paste a YouTube URL and we'll extract the transcript automatically
@@ -182,10 +225,7 @@ export default function AIGenerateTestPage() {
                 </div>
 
                 {/* Divider */}
-                <div
-                  className="flex items-center gap-4 animate-slide-in-from-right"
-                  style={{ animationDelay: "150ms" }}
-                >
+                <div className="flex items-center gap-4">
                   <div className="flex-1 h-px bg-gradient-to-r from-transparent via-purple-300 to-transparent"></div>
                   <span className="text-sm text-slate-500 bg-white/70 px-3 py-1 rounded-full border border-purple-200">
                     OR
@@ -194,12 +234,12 @@ export default function AIGenerateTestPage() {
                 </div>
 
                 {/* Transcript Upload */}
-                <div className="space-y-3 animate-slide-in-from-left" style={{ animationDelay: "200ms" }}>
-                  <Label className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium flex items-center gap-2">
                     <FileText className="h-4 w-4 text-blue-500" />
                     Upload Transcript File
                   </Label>
-                  <div className="border-2 border-dashed border-purple-300 rounded-xl p-6 text-center hover:border-purple-400 transition-colors duration-300 bg-purple-50/50">
+                  <div className="border-2 border-dashed border-purple-300 rounded-xl p-6 text-center hover:border-purple-400 transition-colors bg-purple-50/50">
                     <Upload className="h-8 w-8 text-purple-400 mx-auto mb-2" />
                     <p className="text-sm text-slate-600 mb-2">Drop your transcript file here or click to browse</p>
                     <Input
@@ -211,7 +251,7 @@ export default function AIGenerateTestPage() {
                     />
                     <Label
                       htmlFor="transcript-upload"
-                      className="inline-flex items-center px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 cursor-pointer transition-colors duration-200"
+                      className="inline-flex items-center px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 cursor-pointer"
                     >
                       Choose File
                     </Label>
@@ -219,24 +259,22 @@ export default function AIGenerateTestPage() {
                 </div>
 
                 {/* Manual Transcript */}
-                <div className="space-y-2 animate-slide-in-from-right" style={{ animationDelay: "250ms" }}>
-                  <Label htmlFor="transcript" className="text-sm font-medium text-slate-700">
-                    Or Paste Transcript Manually
-                  </Label>
+                <div className="space-y-2">
+                  <Label htmlFor="transcript">Or Paste Transcript Manually</Label>
                   <Textarea
                     id="transcript"
                     placeholder="Paste your video transcript or educational content here..."
                     value={formData.transcript}
                     onChange={(e) => setFormData((prev) => ({ ...prev, transcript: e.target.value }))}
                     rows={6}
-                    className="bg-white/70 border-purple-200 focus:border-purple-500 hover:border-purple-300 transition-all duration-200 resize-none"
+                    className="resize-none"
                   />
                 </div>
 
                 {/* Test Configuration */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2 animate-slide-in-from-left" style={{ animationDelay: "300ms" }}>
-                    <Label htmlFor="questions" className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="questions" className="text-sm font-medium flex items-center gap-2">
                       <Target className="h-4 w-4 text-green-500" />
                       Questions
                     </Label>
@@ -244,7 +282,7 @@ export default function AIGenerateTestPage() {
                       value={formData.numberOfQuestions}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, numberOfQuestions: value }))}
                     >
-                      <SelectTrigger className="bg-white/70 border-purple-200 focus:border-purple-500 hover:border-purple-300">
+                      <SelectTrigger>
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
@@ -256,8 +294,8 @@ export default function AIGenerateTestPage() {
                     </Select>
                   </div>
 
-                  <div className="space-y-2 animate-slide-in-from-left" style={{ animationDelay: "350ms" }}>
-                    <Label htmlFor="duration" className="text-sm font-medium text-slate-700 flex items-center gap-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="duration" className="text-sm font-medium flex items-center gap-2">
                       <Clock className="h-4 w-4 text-blue-500" />
                       Duration
                     </Label>
@@ -265,7 +303,7 @@ export default function AIGenerateTestPage() {
                       value={formData.duration}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, duration: value }))}
                     >
-                      <SelectTrigger className="bg-white/70 border-purple-200 focus:border-purple-500 hover:border-purple-300">
+                      <SelectTrigger>
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
@@ -278,15 +316,13 @@ export default function AIGenerateTestPage() {
                     </Select>
                   </div>
 
-                  <div className="space-y-2 animate-slide-in-from-right" style={{ animationDelay: "400ms" }}>
-                    <Label htmlFor="difficulty" className="text-sm font-medium text-slate-700">
-                      Difficulty
-                    </Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="difficulty">Difficulty</Label>
                     <Select
                       value={formData.difficulty}
                       onValueChange={(value) => setFormData((prev) => ({ ...prev, difficulty: value }))}
                     >
-                      <SelectTrigger className="bg-white/70 border-purple-200 focus:border-purple-500 hover:border-purple-300">
+                      <SelectTrigger>
                         <SelectValue placeholder="Select" />
                       </SelectTrigger>
                       <SelectContent>
@@ -300,11 +336,11 @@ export default function AIGenerateTestPage() {
                 </div>
 
                 {/* Generate Button */}
-                <div className="pt-4 animate-slide-in-up" style={{ animationDelay: "500ms" }}>
+                <div className="pt-4">
                   <Button
                     onClick={handleGenerateTest}
                     disabled={!isFormValid || isGenerating}
-                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
                   >
                     {isGenerating ? (
                       <>
@@ -324,11 +360,11 @@ export default function AIGenerateTestPage() {
 
             {/* Generation Progress */}
             {isGenerating && (
-              <Card className="mt-6 bg-white/70 backdrop-blur-sm border border-white/20 shadow-xl animate-slide-in-up">
+              <Card className="mt-6 bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl">
                 <CardContent className="p-6">
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                      <h3 className="text-lg font-semibold flex items-center gap-2">
                         <Brain className="h-5 w-5 text-purple-600 animate-pulse" />
                         AI is Creating Your Test
                       </h3>
@@ -354,35 +390,35 @@ export default function AIGenerateTestPage() {
         ) : (
           /* Test Generated Successfully */
           <div className="max-w-2xl mx-auto">
-            <Card className="bg-white/70 backdrop-blur-sm border border-white/20 shadow-xl animate-slide-in-up">
-              <CardHeader className="bg-gradient-to-r from-green-500/10 to-emerald-500/10 border-b border-green-200/50">
-                <CardTitle className="text-xl font-semibold text-slate-900 flex items-center gap-2">
+            <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl">
+              <CardHeader className="bg-gradient-to-r from-green-500/10 to-emerald-500/10">
+                <CardTitle className="text-xl font-semibold flex items-center gap-2">
                   <CheckCircle className="h-5 w-5 text-green-600" />
                   AI Test Generated Successfully!
                 </CardTitle>
               </CardHeader>
               <CardContent className="p-6 space-y-6">
                 <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-xl border border-green-200">
-                  <h3 className="text-lg font-semibold text-slate-900 mb-4 flex items-center gap-2">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
                     <Brain className="h-5 w-5 text-purple-600" />
                     AI-Generated Test from Content
                   </h3>
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <Target className="h-4 w-4 text-green-500" />
-                      <span className="text-slate-600">Questions: {formData.numberOfQuestions}</span>
+                      <span>Questions: {formData.numberOfQuestions}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-blue-500" />
-                      <span className="text-slate-600">Duration: {formData.duration} minutes</span>
+                      <span>Duration: {formData.duration} minutes</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-purple-500" />
-                      <span className="text-slate-600">Difficulty: {formData.difficulty}</span>
+                      <span>Difficulty: {formData.difficulty}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <FileText className="h-4 w-4 text-orange-500" />
-                      <span className="text-slate-600">Source: {formData.youtubeUrl ? "YouTube" : "Transcript"}</span>
+                      <span>Source: {formData.youtubeUrl ? "YouTube" : "Transcript"}</span>
                     </div>
                   </div>
                   <div className="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
@@ -397,15 +433,26 @@ export default function AIGenerateTestPage() {
                 <div className="flex gap-4">
                   <Button
                     onClick={handleStartExam}
-                    className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                    disabled={loading}
+                    className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                   >
-                    <Play className="mr-2 h-5 w-5" />
-                    Start Exam
+                    {loading ? (
+                      <>
+                        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-2 h-5 w-5" />
+                        Start Exam
+                      </>
+                    )}
                   </Button>
                   <Button
                     onClick={handleDoLater}
+                    disabled={loading}
                     variant="outline"
-                    className="flex-1 border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 transform hover:scale-105 transition-all duration-300 bg-transparent"
+                    className="flex-1 bg-transparent"
                   >
                     <Save className="mr-2 h-5 w-5" />
                     Do Later

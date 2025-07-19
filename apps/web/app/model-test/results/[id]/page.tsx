@@ -8,44 +8,89 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Progress } from "@/components/ui/progress"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { getTestResults } from "@/lib/model-test-data"
-import { CheckCircle, FileText, Home, List, XCircle, Trophy } from "lucide-react"
+import { CheckCircle, FileText, Home, List, XCircle, Trophy, Loader2 } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
+import { toast } from "sonner"
+
+interface Question {
+  id: string
+  question: string
+  options: string[]
+  correctAnswer: number
+  subject: string
+  topic: string
+  points: number
+  explanation?: string
+}
+
+interface QuestionResult {
+  question: Question
+  userAnswer?: number
+  isCorrect: boolean
+}
+
+interface TestResult {
+  id: string
+  testId: string
+  userId: string
+  startTime: string
+  endTime: string
+  timeSpent: number
+  score: number
+  totalQuestions: number
+  correctAnswers: number
+  incorrectAnswers: number
+  unansweredQuestions: number
+  isPassed: boolean
+  test: {
+    id: string
+    title: string
+    description: string
+    totalPoints: number
+    passingScore: number
+    subjects: string[]
+  }
+  questionResults: QuestionResult[]
+}
 
 export default function TestResultsPage() {
   const params = useParams()
   const router = useRouter()
   const attemptId = params.id as string
 
-  const [results, setResults] = useState<ReturnType<typeof getTestResults> | null>(null)
+  const [results, setResults] = useState<TestResult | null>(null)
   const [activeTab, setActiveTab] = useState("summary")
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    fetchTestResults()
+  }, [attemptId])
+
+  const fetchTestResults = async () => {
     try {
-      const testResults = getTestResults(attemptId)
-      setResults(testResults)
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/results/${attemptId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch test results")
+      }
+
+      const data = await response.json()
+      setResults(data)
     } catch (error) {
       console.error("Error fetching test results:", error)
+      toast.error("Failed to load test results")
       router.push("/model-test")
+    } finally {
+      setLoading(false)
     }
-  }, [attemptId, router])
-
-  if (!results) {
-    return null
   }
 
-  const { attempt, test, questionResults, isPassed } = results
-
-  // Calculate statistics
-  const correctCount = questionResults.filter((r) => r.isCorrect).length
-  const incorrectCount = questionResults.filter((r) => !r.isCorrect && r.userAnswer !== undefined).length
-  const unansweredCount = questionResults.filter((r) => r.userAnswer === undefined).length
-  const scorePercentage = Math.round(((attempt.score || 0) / test.totalPoints) * 100)
-
-  // Format time spent
-  const formatTimeSpent = (seconds: number | undefined) => {
-    if (!seconds) return "N/A"
-
+  const formatTimeSpent = (seconds: number) => {
     const hours = Math.floor(seconds / 3600)
     const minutes = Math.floor((seconds % 3600) / 60)
     const remainingSeconds = seconds % 60
@@ -57,13 +102,48 @@ export default function TestResultsPage() {
     }
   }
 
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p>Loading test results...</p>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (!results) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Results not found</h1>
+            <Button onClick={() => router.push("/model-test")}>
+              <List className="h-4 w-4 mr-2" />
+              Back to Tests
+            </Button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  const scorePercentage = Math.round((results.score / results.test.totalPoints) * 100)
+
   return (
     <>
       <Navbar />
       <div className="container mx-auto py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Trophy className="h-8 w-8 text-yellow-500 animate-bounce" />
+            <Trophy className="h-8 w-8 text-yellow-500" />
             Test Results
           </h1>
           <div className="flex gap-4">
@@ -73,7 +153,7 @@ export default function TestResultsPage() {
             </Button>
             <Button onClick={() => router.push("/model-test/history")}>
               <Home className="h-4 w-4 mr-2" />
-              Dashboard
+              Test History
             </Button>
           </div>
         </div>
@@ -82,8 +162,8 @@ export default function TestResultsPage() {
           <div className="md:col-span-1">
             <Card>
               <CardHeader className="pb-2">
-                <CardTitle>{test.title}</CardTitle>
-                <CardDescription>{test.description}</CardDescription>
+                <CardTitle>{results.test.title}</CardTitle>
+                <CardDescription>{results.test.description}</CardDescription>
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="space-y-6">
@@ -91,12 +171,15 @@ export default function TestResultsPage() {
                     <div className="flex justify-between mb-2">
                       <span className="text-sm text-slate-500">Score</span>
                       <span className="font-bold text-lg">
-                        {attempt.score} / {test.totalPoints}
+                        {results.score} / {results.test.totalPoints}
                       </span>
                     </div>
-                    <Progress value={scorePercentage} className={`h-3 ${isPassed ? "bg-emerald-100" : "bg-red-100"}`} />
+                    <Progress
+                      value={scorePercentage}
+                      className={`h-3 ${results.isPassed ? "bg-emerald-100" : "bg-red-100"}`}
+                    />
                     <div className="flex justify-between mt-1">
-                      <span className="text-xs text-slate-500">Passing: {test.passingScore}</span>
+                      <span className="text-xs text-slate-500">Passing: {results.test.passingScore}</span>
                       <span className="text-xs text-slate-500">{scorePercentage}%</span>
                     </div>
                   </div>
@@ -104,12 +187,12 @@ export default function TestResultsPage() {
                   <div className="flex justify-center">
                     <Badge
                       className={`text-lg py-1 px-4 ${
-                        isPassed
+                        results.isPassed
                           ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
                           : "bg-red-100 text-red-800 hover:bg-red-100"
                       }`}
                     >
-                      {isPassed ? "PASSED" : "FAILED"}
+                      {results.isPassed ? "PASSED" : "FAILED"}
                     </Badge>
                   </div>
 
@@ -118,32 +201,32 @@ export default function TestResultsPage() {
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span>Date Taken:</span>
-                      <span>{attempt.startTime.toLocaleDateString()}</span>
+                      <span>{new Date(results.startTime).toLocaleDateString()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Time Spent:</span>
-                      <span>{formatTimeSpent(attempt.timeSpent)}</span>
+                      <span>{formatTimeSpent(results.timeSpent)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Questions:</span>
-                      <span>{test.questions.length}</span>
+                      <span>{results.totalQuestions}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Correct:</span>
-                      <span className="text-emerald-600">{correctCount}</span>
+                      <span className="text-emerald-600">{results.correctAnswers}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Incorrect:</span>
-                      <span className="text-red-600">{incorrectCount}</span>
+                      <span className="text-red-600">{results.incorrectAnswers}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>Unanswered:</span>
-                      <span className="text-amber-600">{unansweredCount}</span>
+                      <span className="text-amber-600">{results.unansweredQuestions}</span>
                     </div>
                   </div>
 
                   <div className="flex justify-center gap-2">
-                    {test.subjects.map((subject) => (
+                    {results.test.subjects.map((subject) => (
                       <Badge key={subject} variant="outline">
                         {subject}
                       </Badge>
@@ -152,7 +235,7 @@ export default function TestResultsPage() {
                 </div>
               </CardContent>
               <CardFooter>
-                <Button className="w-full" onClick={() => router.push(`/model-test/${test.id}`)}>
+                <Button className="w-full" onClick={() => router.push(`/model-test/${results.testId}`)}>
                   Retake Test
                 </Button>
               </CardFooter>
@@ -168,11 +251,11 @@ export default function TestResultsPage() {
                 <Tabs value={activeTab} onValueChange={setActiveTab}>
                   <TabsList className="grid grid-cols-2 mb-6">
                     <TabsTrigger value="summary">
-                      <FileText className="h-4 w-4 mr-2 animate-pulse" />
+                      <FileText className="h-4 w-4 mr-2" />
                       Summary
                     </TabsTrigger>
                     <TabsTrigger value="questions">
-                      <List className="h-4 w-4 mr-2 animate-pulse" />
+                      <List className="h-4 w-4 mr-2" />
                       All Questions
                     </TabsTrigger>
                   </TabsList>
@@ -181,118 +264,110 @@ export default function TestResultsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <Card>
                         <CardContent className="p-4 flex flex-col items-center justify-center">
-                          <div className="text-4xl font-bold text-emerald-600">{correctCount}</div>
+                          <div className="text-4xl font-bold text-emerald-600">{results.correctAnswers}</div>
                           <div className="text-sm text-slate-500 mt-1">Correct</div>
                         </CardContent>
                       </Card>
                       <Card>
                         <CardContent className="p-4 flex flex-col items-center justify-center">
-                          <div className="text-4xl font-bold text-red-600">{incorrectCount}</div>
+                          <div className="text-4xl font-bold text-red-600">{results.incorrectAnswers}</div>
                           <div className="text-sm text-slate-500 mt-1">Incorrect</div>
                         </CardContent>
                       </Card>
                       <Card>
                         <CardContent className="p-4 flex flex-col items-center justify-center">
-                          <div className="text-4xl font-bold text-amber-600">{unansweredCount}</div>
+                          <div className="text-4xl font-bold text-amber-600">{results.unansweredQuestions}</div>
                           <div className="text-sm text-slate-500 mt-1">Unanswered</div>
                         </CardContent>
                       </Card>
                     </div>
 
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg">Performance by Subject</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        {test.subjects.map((subject) => {
-                          const subjectQuestions = questionResults.filter((r) => r.question.subject === subject)
-                          const subjectCorrect = subjectQuestions.filter((r) => r.isCorrect).length
-                          const subjectPercentage = Math.round((subjectCorrect / subjectQuestions.length) * 100) || 0
+                    <div>
+                      <h3 className="text-lg font-semibold mb-4">Performance by Subject</h3>
+                      <div className="space-y-3">
+                        {results.test.subjects.map((subject) => {
+                          const subjectQuestions = results.questionResults.filter(
+                            (qr) => qr.question.subject === subject,
+                          )
+                          const correctCount = subjectQuestions.filter((qr) => qr.isCorrect).length
+                          const percentage = Math.round((correctCount / subjectQuestions.length) * 100)
 
                           return (
-                            <div key={subject} className="mb-4">
-                              <div className="flex justify-between mb-1">
-                                <span>{subject}</span>
+                            <div key={subject} className="space-y-2">
+                              <div className="flex justify-between">
+                                <span className="font-medium">{subject}</span>
                                 <span className="text-sm text-slate-500">
-                                  {subjectCorrect}/{subjectQuestions.length} ({subjectPercentage}%)
+                                  {correctCount}/{subjectQuestions.length} ({percentage}%)
                                 </span>
                               </div>
-                              <Progress value={subjectPercentage} className="h-2" />
+                              <Progress value={percentage} className="h-2" />
                             </div>
                           )
                         })}
-                      </CardContent>
-                    </Card>
+                      </div>
+                    </div>
                   </TabsContent>
 
-                  <TabsContent value="questions" className="space-y-4">
-                    {questionResults.map((result, index) => (
-                      <Card key={result.question.id}>
+                  <TabsContent value="questions" className="space-y-6">
+                    {results.questionResults.map((questionResult, index) => (
+                      <Card key={questionResult.question.id}>
                         <CardHeader className="pb-2">
                           <div className="flex justify-between items-start">
                             <CardTitle className="text-lg">Question {index + 1}</CardTitle>
                             <div className="flex items-center gap-2">
-                              {result.isCorrect ? (
-                                <CheckCircle className="h-5 w-5 text-emerald-600" />
-                              ) : result.userAnswer !== undefined ? (
-                                <XCircle className="h-5 w-5 text-red-600" />
+                              {questionResult.isCorrect ? (
+                                <CheckCircle className="h-5 w-5 text-emerald-500" />
                               ) : (
-                                <div className="h-5 w-5 rounded-full bg-amber-200" />
+                                <XCircle className="h-5 w-5 text-red-500" />
                               )}
-                              <Badge variant="outline">{result.question.points} pts</Badge>
+                              <Badge variant="outline">{questionResult.question.subject}</Badge>
                             </div>
                           </div>
-                          <div className="flex gap-2 text-sm text-slate-500">
-                            <span>{result.question.subject}</span>
-                            <span>•</span>
-                            <span>{result.question.topic}</span>
-                          </div>
+                          <CardDescription>
+                            Topic: {questionResult.question.topic} • Points: {questionResult.question.points}
+                          </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                          <div className="space-y-4">
-                            <div className="font-medium">{result.question.question}</div>
+                        <CardContent className="space-y-4">
+                          <div className="font-medium">{questionResult.question.question}</div>
 
-                            <div className="space-y-2">
-                              {result.question.options.map((option, optionIndex) => {
-                                const isCorrect = optionIndex === result.question.correctAnswer
-                                const isUserAnswer = optionIndex === result.userAnswer
-                                const isWrongAnswer = isUserAnswer && !isCorrect
+                          <div className="space-y-2">
+                            {questionResult.question.options.map((option, optionIndex) => {
+                              const isCorrect = optionIndex === questionResult.question.correctAnswer
+                              const isUserAnswer = optionIndex === questionResult.userAnswer
+                              const isUnanswered = questionResult.userAnswer === undefined
 
-                                return (
-                                  <div
-                                    key={optionIndex}
-                                    className={`p-3 rounded-md border ${
-                                      isCorrect
-                                        ? "bg-emerald-50 border-emerald-200"
-                                        : isWrongAnswer
-                                          ? "bg-red-50 border-red-200"
-                                          : "bg-gray-50 border-gray-200"
-                                    }`}
-                                  >
-                                    <div className="flex items-center justify-between">
-                                      <span>{option}</span>
-                                      <div className="flex items-center gap-2">
-                                        {isCorrect && <CheckCircle className="h-4 w-4 text-emerald-600" />}
-                                        {isWrongAnswer && <XCircle className="h-4 w-4 text-red-600" />}
-                                        {isUserAnswer && (
-                                          <Badge variant="outline" className="text-xs">
-                                            Your Answer
-                                          </Badge>
-                                        )}
-                                      </div>
-                                    </div>
+                              return (
+                                <div
+                                  key={optionIndex}
+                                  className={`p-3 rounded-lg border ${
+                                    isCorrect
+                                      ? "bg-emerald-50 border-emerald-200"
+                                      : isUserAnswer && !isCorrect
+                                        ? "bg-red-50 border-red-200"
+                                        : "bg-slate-50 border-slate-200"
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-medium">{String.fromCharCode(65 + optionIndex)}.</span>
+                                    <span>{option}</span>
+                                    {isCorrect && <CheckCircle className="h-4 w-4 text-emerald-500 ml-auto" />}
+                                    {isUserAnswer && !isCorrect && <XCircle className="h-4 w-4 text-red-500 ml-auto" />}
                                   </div>
-                                )
-                              })}
-                            </div>
-
-                            {result.question.explanation && (
-                              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                                <div className="text-sm font-medium text-blue-800 mb-1">Explanation:</div>
-                                <div className="text-sm text-blue-700">{result.question.explanation}</div>
-                              </div>
-                            )}
+                                </div>
+                              )
+                            })}
                           </div>
+
+                          {questionResult.userAnswer === undefined && (
+                            <div className="text-amber-600 text-sm font-medium">You did not answer this question.</div>
+                          )}
+
+                          {questionResult.question.explanation && (
+                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                              <h4 className="font-medium text-blue-900 mb-2">Explanation:</h4>
+                              <p className="text-blue-800 text-sm">{questionResult.question.explanation}</p>
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     ))}

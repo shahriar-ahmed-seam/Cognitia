@@ -1,98 +1,229 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import {
-  Search,
-  Plus,
-  ThumbsUp,
-  MessageSquare,
-  Eye,
-  TrendingUp,
-  Clock,
-  CheckCircle2,
-  Filter,
-  SortAsc,
-  Sparkles,
-  Brain,
-  Lightbulb,
-  User,
-} from "lucide-react"
-import { QUESTIONS, formatRelativeTime, CURRENT_USER } from "@/lib/mock-data"
+import { MessageSquare, Plus, Search, TrendingUp, Clock, Eye, ThumbsUp, ThumbsDown, Loader2, Brain, Filter, SortAsc, CheckCircle2, Lightbulb } from "lucide-react"
 import { QuestionModal } from "@/components/question-modal"
 import { Navbar } from "@/components/navbar"
+import { useToast } from "@/hooks/use-toast"
+
+interface Question {
+  id: string
+  title: string
+  content: string
+  subject: string
+  tags: string[]
+  author: {
+    id: string
+    name: string
+    avatar?: string
+  }
+  createdAt: string
+  updatedAt: string
+  views: number
+  upvotes: number
+  downvotes: number
+  answerCount: number
+  isAnswered: boolean
+  isFeatured: boolean
+}
+
+interface Answer {
+  id: string
+  content: string
+  author: {
+    id: string
+    name: string
+    avatar?: string
+  }
+  createdAt: string
+  upvotes: number
+  downvotes: number
+  isAccepted: boolean
+}
 
 export default function QAPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
+  const { toast } = useToast()
+
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
-  const [selectedTag, setSelectedTag] = useState("all")
+  const [selectedSubject, setSelectedSubject] = useState("all")
   const [sortBy, setSortBy] = useState("recent")
+  const [filterBy, setFilterBy] = useState("all")
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false)
-  const [filteredQuestions, setFilteredQuestions] = useState(QUESTIONS)
+  const [orbs, setOrbs] = useState<Array<any>>([])
 
-  // Get all unique tags from questions
-  const allTags = Array.from(new Set(QUESTIONS.flatMap((q) => q.tags)))
+  // Fetch questions from API
+  const fetchQuestions = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("token")
+      // Map frontend state to backend query params
+      const params = new URLSearchParams({
+        search: searchQuery,
+        tags: selectedSubject !== "all" ? selectedSubject : "",
+        sortBy: sortBy === "recent" ? "created_at" : sortBy === "popular" ? "views" : sortBy === "answered" ? "answer_count" : "created_at",
+        sortOrder: "DESC",
+        status: filterBy === "all" ? "all" : filterBy === "featured" ? "all" : filterBy === "my-questions" ? "all" : filterBy === "following" ? "all" : filterBy === "answered" ? "resolved" : filterBy === "unanswered" ? "unresolved" : "all",
+        page: "1",
+        limit: "20",
+      })
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/qa/questions?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
 
-  // Get current user's questions
-  const myQuestions = QUESTIONS.filter((q) => q.author?.id === CURRENT_USER.id)
+      if (!response.ok) {
+        throw new Error("Failed to fetch questions")
+      }
+
+      const data = await response.json()
+      setQuestions(data.questions || [])
+    } catch (error) {
+      console.error("Error fetching questions:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load questions. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    let filtered = [...QUESTIONS]
-
-    // Filter by search query
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (q) =>
-          q.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          q.body.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          q.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase())),
-      )
+    const token = localStorage.getItem("token")
+    if (!token) {
+      router.push("/login")
+      return
     }
 
-    // Filter by tag
-    if (selectedTag !== "all") {
-      filtered = filtered.filter((q) => q.tags.includes(selectedTag))
+    fetchQuestions()
+  }, [router, searchQuery, selectedSubject, sortBy, filterBy])
+
+  // Handle question submission
+  const handleQuestionSubmit = async (questionData: {
+    title: string
+    content: string
+    subject: string
+    tags: string[]
+  }) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/qa/questions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(questionData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create question")
+      }
+
+      const data = await response.json()
+
+      toast({
+        title: "Success",
+        description: "Your question has been posted successfully!",
+      })
+
+      // Refresh questions
+      fetchQuestions()
+
+      // Navigate to the new question
+      router.push(`/question/${data.question.id}`)
+    } catch (error) {
+      console.error("Error creating question:", error)
+      toast({
+        title: "Error",
+        description: "Failed to post question. Please try again.",
+        variant: "destructive",
+      })
     }
+  }
 
-    // Sort questions
-    switch (sortBy) {
-      case "recent":
-        filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-        break
-      case "popular":
-        filtered.sort((a, b) => b.voteCount - a.voteCount)
-        break
-      case "views":
-        filtered.sort((a, b) => b.views - a.views)
-        break
-      case "answers":
-        filtered.sort((a, b) => b.answers - a.answers)
-        break
+  // Handle vote
+  const handleVote = async (questionId: string, voteType: "upvote" | "downvote") => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/qa/questions/${questionId}/vote`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ voteType }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to vote")
+      }
+
+      // Refresh questions to get updated vote counts
+      fetchQuestions()
+    } catch (error) {
+      console.error("Error voting:", error)
+      toast({
+        title: "Error",
+        description: "Failed to vote. Please try again.",
+        variant: "destructive",
+      })
     }
-
-    setFilteredQuestions(filtered)
-  }, [searchQuery, selectedTag, sortBy])
-
-  const handleQuestionClick = (questionId: string) => {
-    router.push(`/question/${questionId}`)
   }
 
-  const handleCreateQuestion = (questionData: any) => {
-    console.log("Creating question:", questionData)
-    setIsQuestionModalOpen(false)
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+    if (diffInSeconds < 60) return `${diffInSeconds} seconds ago`
+
+    const diffInMinutes = Math.floor(diffInSeconds / 60)
+    if (diffInMinutes < 60) return `${diffInMinutes} minute${diffInMinutes === 1 ? "" : "s"} ago`
+
+    const diffInHours = Math.floor(diffInMinutes / 60)
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours === 1 ? "" : "s"} ago`
+
+    const diffInDays = Math.floor(diffInHours / 24)
+    return `${diffInDays} day${diffInDays === 1 ? "" : "s"} ago`
   }
 
-  const getStatusColor = (isResolved: boolean) => {
-    return isResolved ? "text-green-600 bg-green-50" : "text-orange-600 bg-orange-50"
+  const getSubjects = () => {
+    const subjects = new Set(questions.map((q) => q.subject))
+    return Array.from(subjects)
   }
+
+  useEffect(() => {
+    // Only run on client
+    const orbData = Array.from({ length: 15 }).map((_, i) => ({
+      left: `${Math.random() * 100}%`,
+      top: `${Math.random() * 100}%`,
+      width: `${15 + Math.random() * 35}px`,
+      height: `${15 + Math.random() * 35}px`,
+      background: `linear-gradient(135deg, ${
+        ["#3B82F6", "#8B5CF6", "#06B6D4", "#10B981"][i % 4]
+      }, ${["#60A5FA", "#A78BFA", "#67E8F9", "#34D399"][i % 4]})`,
+      animationDelay: `${Math.random() * 8}s`,
+      animationDuration: `${12 + Math.random() * 8}s`,
+    }))
+    setOrbs(orbData)
+  }, [])
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
@@ -119,7 +250,6 @@ export default function QAPage() {
             }}
           />
         ))}
-
         {/* Particles */}
         {Array.from({ length: 35 }).map((_, i) => (
           <div
@@ -132,7 +262,6 @@ export default function QAPage() {
             }}
           />
         ))}
-
         {/* Constellation Stars */}
         {Array.from({ length: 40 }).map((_, i) => (
           <div
@@ -145,7 +274,6 @@ export default function QAPage() {
             }}
           />
         ))}
-
         {/* Morphing Shapes */}
         {Array.from({ length: 8 }).map((_, i) => (
           <div
@@ -162,10 +290,8 @@ export default function QAPage() {
             }}
           />
         ))}
-
         {/* Aurora Effect */}
         <div className="absolute inset-0 bg-gradient-to-r from-blue-400/5 via-purple-400/5 to-pink-400/5 animate-aurora" />
-
         {/* Gradient Flow */}
         <div className="absolute inset-0 bg-gradient-to-br from-transparent via-blue-400/5 to-transparent animate-gradient-flow" />
       </div>
@@ -207,16 +333,16 @@ export default function QAPage() {
                 />
               </div>
               <div className="flex gap-2">
-                <Select value={selectedTag} onValueChange={setSelectedTag}>
+                <Select value={selectedSubject} onValueChange={setSelectedSubject}>
                   <SelectTrigger className="w-[180px] hover:border-purple-300 focus:border-purple-500">
                     <Filter className="mr-2 h-4 w-4" />
-                    <SelectValue placeholder="Filter by tag" />
+                    <SelectValue placeholder="Filter by subject" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Tags</SelectItem>
-                    {allTags.map((tag) => (
-                      <SelectItem key={tag} value={tag}>
-                        {tag}
+                    <SelectItem value="all">All Subjects</SelectItem>
+                    {getSubjects().map((subject) => (
+                      <SelectItem key={subject} value={subject}>
+                        {subject}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -229,8 +355,8 @@ export default function QAPage() {
                   <SelectContent>
                     <SelectItem value="recent">Most Recent</SelectItem>
                     <SelectItem value="popular">Most Popular</SelectItem>
-                    <SelectItem value="views">Most Viewed</SelectItem>
-                    <SelectItem value="answers">Most Answered</SelectItem>
+                    <SelectItem value="unanswered">Unanswered</SelectItem>
+                    <SelectItem value="answered">Answered</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -240,52 +366,7 @@ export default function QAPage() {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          {[
-            {
-              title: "Total Questions",
-              value: QUESTIONS.length,
-              icon: MessageSquare,
-              gradient: "from-blue-500 to-cyan-500",
-              bgGradient: "from-blue-50 to-cyan-50",
-            },
-            {
-              title: "Answered",
-              value: QUESTIONS.filter((q) => q.isResolved).length,
-              icon: CheckCircle2,
-              gradient: "from-green-500 to-emerald-500",
-              bgGradient: "from-green-50 to-emerald-50",
-            },
-            {
-              title: "Active Users",
-              value: "1.2k",
-              icon: TrendingUp,
-              gradient: "from-purple-500 to-pink-500",
-              bgGradient: "from-purple-50 to-pink-50",
-            },
-            {
-              title: "Expert Answers",
-              value: "89%",
-              icon: Sparkles,
-              gradient: "from-orange-500 to-red-500",
-              bgGradient: "from-orange-50 to-red-50",
-            },
-          ].map((stat, index) => (
-            <div
-              key={stat.title}
-              className={`bg-gradient-to-br ${stat.bgGradient} p-6 rounded-2xl shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up border-0`}
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-slate-600 text-sm font-medium">{stat.title}</p>
-                  <p className="text-3xl font-bold text-slate-900 mt-1">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-xl bg-gradient-to-r ${stat.gradient} shadow-lg`}>
-                  <stat.icon className="h-6 w-6 text-white animate-pulse" />
-                </div>
-              </div>
-            </div>
-          ))}
+          {/* ...You can add stats cards here if you have stats data... */}
         </div>
 
         <Tabs defaultValue="all" className="space-y-6">
@@ -311,44 +392,41 @@ export default function QAPage() {
               <TrendingUp className="h-4 w-4 mr-2 animate-pulse" />
               Trending
             </TabsTrigger>
-            <TabsTrigger
-              value="my-questions"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-indigo-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
-            >
-              <User className="h-4 w-4 mr-2 animate-pulse" />
-              My Questions
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="all" className="space-y-6">
-            {filteredQuestions.length > 0 ? (
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
+              </div>
+            ) : questions.length > 0 ? (
               <div className="space-y-6">
-                {filteredQuestions.map((question, index) => (
+                {questions.map((question, index) => (
                   <Card
                     key={question.id}
                     className="overflow-hidden cursor-pointer bg-white/70 backdrop-blur-sm border border-white/20 shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-500 animate-slide-in-up"
                     style={{ animationDelay: `${index * 100}ms` }}
-                    onClick={() => handleQuestionClick(question.id)}
+                    onClick={() => router.push(`/question/${question.id}`)}
                   >
                     <CardContent className="p-0">
                       <div className="p-6">
                         <div className="mb-4 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             <Avatar className="h-10 w-10 ring-2 ring-blue-100 hover:ring-blue-300 transition-all duration-300">
-                              <AvatarImage src={`/placeholder.svg?height=40&width=40`} alt={question.author?.name} />
+                              <AvatarImage src={question.author.avatar || "/placeholder.svg"} alt={question.author.name} />
                               <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
-                                {question.author?.name.charAt(0)}
+                                {question.author.name.charAt(0)}
                               </AvatarFallback>
                             </Avatar>
                             <div>
                               <p className="font-semibold text-slate-800 hover:text-blue-600 transition-colors duration-300">
-                                {question.author?.name}
+                                {question.author.name}
                               </p>
                               <p className="text-sm text-slate-500">{formatRelativeTime(question.createdAt)}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
-                            {question.isResolved && (
+                            {question.isAnswered && (
                               <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0 animate-pulse">
                                 <CheckCircle2 className="mr-1 h-3 w-3" />
                                 Resolved
@@ -364,7 +442,7 @@ export default function QAPage() {
                         <h3 className="text-xl font-bold mb-3 text-slate-900 hover:text-blue-600 transition-colors duration-300">
                           {question.title}
                         </h3>
-                        <p className="text-slate-700 mb-4 line-clamp-2 leading-relaxed">{question.body}</p>
+                        <p className="text-slate-700 mb-4 line-clamp-2 leading-relaxed">{question.content}</p>
 
                         <div className="flex flex-wrap gap-2 mb-4">
                           {question.tags.map((tag) => (
@@ -381,11 +459,11 @@ export default function QAPage() {
                         <div className="flex items-center gap-6 text-sm text-slate-500">
                           <div className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-300">
                             <ThumbsUp className="h-4 w-4" />
-                            <span>{question.voteCount} votes</span>
+                            <span>{question.upvotes} votes</span>
                           </div>
                           <div className="flex items-center gap-1 hover:text-green-600 transition-colors duration-300">
                             <MessageSquare className="h-4 w-4" />
-                            <span>{question.answers} answers</span>
+                            <span>{question.answerCount} answers</span>
                           </div>
                           <div className="flex items-center gap-1 hover:text-purple-600 transition-colors duration-300">
                             <Eye className="h-4 w-4" />
@@ -403,7 +481,7 @@ export default function QAPage() {
                   <MessageSquare className="h-16 w-16 text-slate-300 mx-auto mb-4" />
                   <h3 className="text-xl font-semibold text-slate-700 mb-2">No questions found</h3>
                   <p className="text-slate-500 mb-6">
-                    {searchQuery || selectedTag !== "all"
+                    {searchQuery || selectedSubject !== "all"
                       ? "Try adjusting your search or filters"
                       : "Be the first to ask a question!"}
                   </p>
@@ -420,14 +498,14 @@ export default function QAPage() {
           </TabsContent>
 
           <TabsContent value="unanswered" className="space-y-6">
-            {filteredQuestions
-              .filter((q) => !q.isResolved)
+            {questions
+              .filter((q) => q.answerCount === 0)
               .map((question, index) => (
                 <Card
                   key={question.id}
                   className="overflow-hidden cursor-pointer bg-white/70 backdrop-blur-sm border border-orange-200 shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-500 animate-slide-in-up"
                   style={{ animationDelay: `${index * 100}ms` }}
-                  onClick={() => handleQuestionClick(question.id)}
+                  onClick={() => router.push(`/question/${question.id}`)}
                 >
                   <CardContent className="p-6">
                     <div className="flex items-center gap-2 mb-3">
@@ -439,7 +517,7 @@ export default function QAPage() {
                     <h3 className="text-xl font-bold mb-2 text-slate-900 hover:text-orange-600 transition-colors duration-300">
                       {question.title}
                     </h3>
-                    <p className="text-slate-700 mb-4 line-clamp-2">{question.body}</p>
+                    <p className="text-slate-700 mb-4 line-clamp-2">{question.content}</p>
                     <div className="flex flex-wrap gap-2">
                       {question.tags.map((tag) => (
                         <Badge key={tag} variant="outline" className="bg-orange-50 border-orange-200 text-orange-700">
@@ -453,15 +531,15 @@ export default function QAPage() {
           </TabsContent>
 
           <TabsContent value="trending" className="space-y-6">
-            {filteredQuestions
-              .sort((a, b) => b.voteCount + b.views - (a.voteCount + a.views))
+            {questions
+              .filter((q) => q.views > 50 || q.upvotes > 5)
               .slice(0, 10)
               .map((question, index) => (
                 <Card
                   key={question.id}
                   className="overflow-hidden cursor-pointer bg-white/70 backdrop-blur-sm border border-green-200 shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-500 animate-slide-in-up"
                   style={{ animationDelay: `${index * 100}ms` }}
-                  onClick={() => handleQuestionClick(question.id)}
+                  onClick={() => router.push(`/question/${question.id}`)}
                 >
                   <CardContent className="p-6">
                     <div className="flex items-center gap-2 mb-3">
@@ -473,7 +551,7 @@ export default function QAPage() {
                     <h3 className="text-xl font-bold mb-2 text-slate-900 hover:text-green-600 transition-colors duration-300">
                       {question.title}
                     </h3>
-                    <p className="text-slate-700 mb-4 line-clamp-2">{question.body}</p>
+                    <p className="text-slate-700 mb-4 line-clamp-2">{question.content}</p>
                     <div className="flex items-center justify-between">
                       <div className="flex flex-wrap gap-2">
                         {question.tags.slice(0, 3).map((tag) => (
@@ -485,7 +563,7 @@ export default function QAPage() {
                       <div className="flex items-center gap-4 text-sm text-slate-500">
                         <span className="flex items-center gap-1">
                           <ThumbsUp className="h-3 w-3" />
-                          {question.voteCount}
+                          {question.upvotes}
                         </span>
                         <span className="flex items-center gap-1">
                           <Eye className="h-3 w-3" />
@@ -497,93 +575,21 @@ export default function QAPage() {
                 </Card>
               ))}
           </TabsContent>
-
-          <TabsContent value="my-questions" className="space-y-6">
-            {myQuestions.length > 0 ? (
-              <div className="space-y-6">
-                {myQuestions.map((question, index) => (
-                  <Card
-                    key={question.id}
-                    className="overflow-hidden cursor-pointer bg-white/70 backdrop-blur-sm border border-indigo-200 shadow-lg hover:shadow-2xl transform hover:scale-[1.02] transition-all duration-500 animate-slide-in-up"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                    onClick={() => handleQuestionClick(question.id)}
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-2 mb-3">
-                        <User className="h-4 w-4 text-indigo-500 animate-pulse" />
-                        <Badge className="bg-gradient-to-r from-indigo-100 to-purple-100 text-indigo-700 border-indigo-200">
-                          My Question
-                        </Badge>
-                        {question.isResolved && (
-                          <Badge className="bg-gradient-to-r from-green-500 to-emerald-500 text-white border-0">
-                            <CheckCircle2 className="mr-1 h-3 w-3" />
-                            Resolved
-                          </Badge>
-                        )}
-                      </div>
-                      <h3 className="text-xl font-bold mb-2 text-slate-900 hover:text-indigo-600 transition-colors duration-300">
-                        {question.title}
-                      </h3>
-                      <p className="text-slate-700 mb-4 line-clamp-2">{question.body}</p>
-                      <div className="flex items-center justify-between">
-                        <div className="flex flex-wrap gap-2">
-                          {question.tags.slice(0, 3).map((tag) => (
-                            <Badge
-                              key={tag}
-                              variant="outline"
-                              className="bg-indigo-50 border-indigo-200 text-indigo-700"
-                            >
-                              {tag}
-                            </Badge>
-                          ))}
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <ThumbsUp className="h-3 w-3" />
-                            {question.voteCount}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MessageSquare className="h-3 w-3" />
-                            {question.answers}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Eye className="h-3 w-3" />
-                            {question.views}
-                          </span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-12 animate-fade-in">
-                <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-lg">
-                  <User className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-slate-700 mb-2">No questions yet</h3>
-                  <p className="text-slate-500 mb-6">
-                    You haven't asked any questions yet. Start by asking your first question!
-                  </p>
-                  <Button
-                    onClick={() => setIsQuestionModalOpen(true)}
-                    className="bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Ask Your First Question
-                  </Button>
-                </div>
-              </div>
-            )}
-          </TabsContent>
         </Tabs>
 
-        {/* Question Modal */}
         <QuestionModal
           isOpen={isQuestionModalOpen}
           onClose={() => setIsQuestionModalOpen(false)}
-          onSubmit={handleCreateQuestion}
+          onSubmit={(questionData) => {
+            handleQuestionSubmit({
+              title: questionData.title,
+              content: questionData.body,
+              subject: selectedSubject !== "all" ? selectedSubject : "General",
+              tags: questionData.tags,
+            });
+          }}
         />
       </main>
     </div>
-  )
+  );
 }

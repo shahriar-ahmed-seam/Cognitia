@@ -1,90 +1,238 @@
 "use client"
 
+import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
-import {
-  CONTESTS,
-  type ContestProblem,
-  type ContestSubmission,
-  formatContestDate,
-  formatContestDuration,
-  generateLeaderboard,
-  getContestProblems,
-  getContestSubmissions,
-  getTimeRemainingUntilEnd,
-  getUserParticipationStatus,
-  registerForContest,
-  submitSolution,
-  unregisterFromContest,
-} from "@/lib/contest-data"
-import { Clock, Code, FileText, Trophy, Users } from "lucide-react"
-import { useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-// Add the Navbar component at the top of the component
-import { Navbar } from "@/components/navbar"
+import { Clock, Code, FileText, Trophy, Users, ArrowLeft, Loader2 } from "lucide-react"
+import { toast } from "sonner"
+
+interface Contest {
+  id: string
+  title: string
+  description: string
+  startTime: string
+  endTime: string
+  status: "upcoming" | "ongoing" | "finished"
+  difficulty: string
+  participants: number
+  problems: Problem[]
+  isRegistered: boolean
+  canSubmit: boolean
+}
+
+interface Problem {
+  id: string
+  title: string
+  description: string
+  difficulty: string
+  points: number
+  constraints: string
+  sampleInput: string
+  sampleOutput: string
+  explanation?: string
+  hints?: string[]
+}
+
+interface Submission {
+  id: string
+  problemId: string
+  status: string
+  score: number
+  language: string
+  executionTime: number
+  memoryUsed: number
+  submissionTime: string
+  code: string
+}
+
+interface LeaderboardEntry {
+  rank: number
+  userId: string
+  username: string
+  avatar?: string
+  score: number
+  solvedProblems: number
+  totalProblems: number
+  institution?: string
+}
 
 export default function ContestDetailsPage() {
   const params = useParams()
   const router = useRouter()
   const contestId = params.id as string
 
-  const [contest, setContest] = useState(() => CONTESTS.find((c) => c.id === contestId))
-  const [problems, setProblems] = useState<ContestProblem[]>([])
-  const [selectedProblem, setSelectedProblem] = useState<ContestProblem | null>(null)
-  const [participationStatus, setParticipationStatus] = useState("")
-  const [submissions, setSubmissions] = useState<ContestSubmission[]>([])
+  const [contest, setContest] = useState<Contest | null>(null)
+  const [selectedProblem, setSelectedProblem] = useState<Problem | null>(null)
+  const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [code, setCode] = useState("")
   const [language, setLanguage] = useState("javascript")
   const [activeTab, setActiveTab] = useState("problems")
-  const [leaderboard, setLeaderboard] = useState(generateLeaderboard(contestId))
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!contest) {
+    fetchContestDetails()
+    fetchSubmissions()
+    fetchLeaderboard()
+  }, [contestId])
+
+  const fetchContestDetails = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contestId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch contest details")
+      }
+
+      const data = await response.json()
+      setContest(data)
+
+      if (data.problems && data.problems.length > 0) {
+        setSelectedProblem(data.problems[0])
+      }
+    } catch (error) {
+      console.error("Error fetching contest:", error)
+      toast.error("Failed to load contest details")
       router.push("/contests")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchSubmissions = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contestId}/submissions`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setSubmissions(data)
+      }
+    } catch (error) {
+      console.error("Error fetching submissions:", error)
+    }
+  }
+
+  const fetchLeaderboard = async () => {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contestId}/leaderboard`)
+
+      if (response.ok) {
+        const data = await response.json()
+        setLeaderboard(data)
+      }
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error)
+    }
+  }
+
+  const handleRegister = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contestId}/register`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to register for contest")
+      }
+
+      setContest((prev) => (prev ? { ...prev, isRegistered: true } : null))
+      toast.success("Successfully registered for contest!")
+    } catch (error) {
+      console.error("Error registering:", error)
+      toast.error("Failed to register for contest")
+    }
+  }
+
+  const handleUnregister = async () => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contestId}/unregister`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to unregister from contest")
+      }
+
+      setContest((prev) => (prev ? { ...prev, isRegistered: false } : null))
+      toast.success("Successfully unregistered from contest")
+    } catch (error) {
+      console.error("Error unregistering:", error)
+      toast.error("Failed to unregister from contest")
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!selectedProblem || !code || !language) {
+      toast.error("Please select a problem and write your solution")
       return
     }
 
-    const fetchedProblems = getContestProblems(contestId)
-    setProblems(fetchedProblems)
-    if (fetchedProblems.length > 0) {
-      setSelectedProblem(fetchedProblems[0])
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contestId}/submit`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          problemId: selectedProblem.id,
+          code,
+          language,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to submit solution")
+      }
+
+      const submission = await response.json()
+      setSubmissions((prev) => [submission, ...prev])
+      setCode("")
+      toast.success("Solution submitted successfully!")
+
+      // Refresh leaderboard
+      fetchLeaderboard()
+    } catch (error) {
+      console.error("Error submitting solution:", error)
+      toast.error("Failed to submit solution")
+    } finally {
+      setSubmitting(false)
     }
-
-    setParticipationStatus(getUserParticipationStatus(contestId))
-    setSubmissions(getContestSubmissions(contestId))
-  }, [contestId, contest, router])
-
-  if (!contest) {
-    return null
-  }
-
-  const handleRegister = () => {
-    registerForContest(contestId)
-    setParticipationStatus("registered")
-  }
-
-  const handleUnregister = () => {
-    unregisterFromContest(contestId)
-    setParticipationStatus("not-registered")
-  }
-
-  const handleSubmit = () => {
-    if (!selectedProblem || !code || !language) return
-
-    const submission = submitSolution(contestId, selectedProblem.id, code, language)
-    setSubmissions([submission, ...submissions])
-    setCode("")
   }
 
   const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty) {
+    switch (difficulty.toLowerCase()) {
       case "easy":
         return "bg-green-100 text-green-800"
       case "medium":
@@ -99,7 +247,7 @@ export default function ContestDetailsPage() {
   }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
+    switch (status.toLowerCase()) {
       case "accepted":
         return "text-green-600"
       case "wrong_answer":
@@ -119,20 +267,72 @@ export default function ContestDetailsPage() {
     }
   }
 
+  const formatTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString()
+  }
+
+  const getTimeRemaining = () => {
+    if (!contest) return ""
+
+    const now = new Date()
+    const end = new Date(contest.endTime)
+    const diff = end.getTime() - now.getTime()
+
+    if (diff <= 0) return "Contest ended"
+
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+
+    return `${hours}h ${minutes}m remaining`
+  }
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p>Loading contest details...</p>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (!contest) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Contest not found</h1>
+            <Button onClick={() => router.push("/contests")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Contests
+            </Button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
   const renderActionButton = () => {
     if (contest.status === "finished") {
       return null
     }
 
     if (contest.status === "ongoing") {
-      if (participationStatus === "registered") {
+      if (contest.isRegistered) {
         return null // Already participating
       } else {
         return <Button onClick={handleRegister}>Register & Enter</Button>
       }
     }
 
-    if (participationStatus === "registered") {
+    if (contest.isRegistered) {
       return (
         <Button variant="outline" onClick={handleUnregister}>
           Unregister
@@ -143,8 +343,6 @@ export default function ContestDetailsPage() {
     }
   }
 
-  const canSubmit = contest.status === "ongoing" && participationStatus === "registered"
-
   return (
     <>
       <Navbar />
@@ -152,19 +350,18 @@ export default function ContestDetailsPage() {
         <div className="mb-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
             <div>
+              <Button variant="ghost" onClick={() => router.push("/contests")} className="mb-4">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Back to Contests
+              </Button>
               <h1 className="text-3xl font-bold flex items-center gap-3">
-                <Trophy className="h-8 w-8 text-yellow-500 animate-bounce" />
+                <Trophy className="h-8 w-8 text-yellow-500" />
                 {contest.title}
               </h1>
               <div className="flex flex-wrap gap-2 mt-2">
                 <Badge className={getDifficultyColor(contest.difficulty)} variant="secondary">
                   {contest.difficulty.charAt(0).toUpperCase() + contest.difficulty.slice(1)}
                 </Badge>
-                {contest.topics.map((topic) => (
-                  <Badge key={topic} variant="outline">
-                    {topic}
-                  </Badge>
-                ))}
               </div>
             </div>
             {renderActionButton()}
@@ -173,16 +370,22 @@ export default function ContestDetailsPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <Card>
               <CardContent className="flex items-center p-4">
-                <Clock className="h-5 w-5 mr-2 text-gray-500 animate-pulse" />
+                <Clock className="h-5 w-5 mr-2 text-gray-500" />
                 <div>
-                  <p className="text-sm text-gray-500">Duration</p>
-                  <p className="font-medium">{formatContestDuration(contest.startTime, contest.endTime)}</p>
+                  <p className="text-sm text-gray-500">Status</p>
+                  <p className="font-medium">
+                    {contest.status === "ongoing"
+                      ? getTimeRemaining()
+                      : contest.status === "upcoming"
+                        ? `Starts at ${formatTime(contest.startTime)}`
+                        : "Finished"}
+                  </p>
                 </div>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="flex items-center p-4">
-                <Users className="h-5 w-5 mr-2 text-gray-500 animate-pulse" />
+                <Users className="h-5 w-5 mr-2 text-gray-500" />
                 <div>
                   <p className="text-sm text-gray-500">Participants</p>
                   <p className="font-medium">{contest.participants}</p>
@@ -191,16 +394,10 @@ export default function ContestDetailsPage() {
             </Card>
             <Card>
               <CardContent className="flex items-center p-4">
-                <Trophy className="h-5 w-5 mr-2 text-gray-500 animate-pulse" />
+                <FileText className="h-5 w-5 mr-2 text-gray-500" />
                 <div>
-                  <p className="text-sm text-gray-500">Status</p>
-                  <p className="font-medium">
-                    {contest.status === "ongoing"
-                      ? `Ends in ${getTimeRemainingUntilEnd(contest.endTime)}`
-                      : contest.status === "upcoming"
-                        ? `Starts at ${formatContestDate(contest.startTime)}`
-                        : "Finished"}
-                  </p>
+                  <p className="text-sm text-gray-500">Problems</p>
+                  <p className="font-medium">{contest.problems.length}</p>
                 </div>
               </CardContent>
             </Card>
@@ -215,21 +412,21 @@ export default function ContestDetailsPage() {
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="mb-6">
               <TabsTrigger value="problems">
-                <FileText className="h-4 w-4 mr-2 animate-pulse" />
+                <FileText className="h-4 w-4 mr-2" />
                 Problems
               </TabsTrigger>
               <TabsTrigger value="submissions">
-                <Code className="h-4 w-4 mr-2 animate-pulse" />
+                <Code className="h-4 w-4 mr-2" />
                 My Submissions
               </TabsTrigger>
               <TabsTrigger value="leaderboard">
-                <Trophy className="h-4 w-4 mr-2 animate-bounce" />
+                <Trophy className="h-4 w-4 mr-2" />
                 Leaderboard
               </TabsTrigger>
             </TabsList>
 
             <TabsContent value="problems" className="space-y-6">
-              {problems.length === 0 ? (
+              {contest.problems.length === 0 ? (
                 <Card>
                   <CardContent className="p-6 text-center">
                     <p className="text-gray-500">No problems available for this contest.</p>
@@ -244,7 +441,7 @@ export default function ContestDetailsPage() {
                       </CardHeader>
                       <CardContent className="p-0">
                         <div className="divide-y">
-                          {problems.map((problem) => (
+                          {contest.problems.map((problem) => (
                             <div
                               key={problem.id}
                               className={`p-4 cursor-pointer hover:bg-gray-50 ${
@@ -319,7 +516,7 @@ export default function ContestDetailsPage() {
                             </div>
                           )}
 
-                          {canSubmit && (
+                          {contest.canSubmit && contest.status === "ongoing" && contest.isRegistered && (
                             <div className="space-y-4 mt-8 pt-6 border-t">
                               <h3 className="text-lg font-medium">Submit Solution</h3>
                               <div className="flex flex-col space-y-2">
@@ -350,8 +547,15 @@ export default function ContestDetailsPage() {
                                   onChange={(e) => setCode(e.target.value)}
                                 />
                               </div>
-                              <Button onClick={handleSubmit} disabled={!code}>
-                                Submit
+                              <Button onClick={handleSubmit} disabled={!code || submitting}>
+                                {submitting ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Submitting...
+                                  </>
+                                ) : (
+                                  "Submit"
+                                )}
                               </Button>
                             </div>
                           )}
@@ -386,7 +590,7 @@ export default function ContestDetailsPage() {
                       </TableHeader>
                       <TableBody>
                         {submissions.map((submission) => {
-                          const problem = problems.find((p) => p.id === submission.problemId)
+                          const problem = contest.problems.find((p) => p.id === submission.problemId)
                           return (
                             <TableRow key={submission.id}>
                               <TableCell className="font-medium">{problem?.title || "Unknown Problem"}</TableCell>
@@ -396,8 +600,8 @@ export default function ContestDetailsPage() {
                               <TableCell>{submission.score}</TableCell>
                               <TableCell>{submission.language}</TableCell>
                               <TableCell>{submission.executionTime} ms</TableCell>
-                              <TableCell>{(submission.memoryUsed! / 1024).toFixed(2)} MB</TableCell>
-                              <TableCell>{new Date(submission.submissionTime).toLocaleString()}</TableCell>
+                              <TableCell>{(submission.memoryUsed / 1024).toFixed(2)} MB</TableCell>
+                              <TableCell>{formatTime(submission.submissionTime)}</TableCell>
                             </TableRow>
                           )
                         })}
@@ -431,17 +635,17 @@ export default function ContestDetailsPage() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Avatar className="h-8 w-8">
-                                <AvatarImage src={result.user.avatar || "/placeholder.svg"} alt={result.user.name} />
-                                <AvatarFallback>{result.user.name.charAt(0)}</AvatarFallback>
+                                <AvatarImage src={result.avatar || "/placeholder.svg"} alt={result.username} />
+                                <AvatarFallback>{result.username.charAt(0)}</AvatarFallback>
                               </Avatar>
-                              <span className="font-medium">{result.user.name}</span>
+                              <span className="font-medium">{result.username}</span>
                             </div>
                           </TableCell>
                           <TableCell>{result.score}</TableCell>
                           <TableCell>
                             {result.solvedProblems}/{result.totalProblems}
                           </TableCell>
-                          <TableCell>{result.user.institution || "N/A"}</TableCell>
+                          <TableCell>{result.institution || "N/A"}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

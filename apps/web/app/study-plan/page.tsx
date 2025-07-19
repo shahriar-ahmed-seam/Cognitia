@@ -1,46 +1,131 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Calendar,
-  Clock,
-  Target,
-  TrendingUp,
-  CheckCircle,
-  Circle,
-  Plus,
-  Zap,
-  Award,
-  BookOpen,
-  Brain,
-  Sparkles,
-} from "lucide-react"
-import { getTasks, getUpcomingSessions, getStudyPlan, type Task } from "@/lib/study-plan-data"
+import { Calendar, Clock, Target, TrendingUp, CheckCircle, Circle, Plus, Zap, Award, BookOpen, Brain, Sparkles, Loader2, AlertCircle } from 'lucide-react'
 import { NewTaskModal } from "@/components/new-task-modal"
 import { TaskDetailsModal } from "@/components/task-details-modal"
 import { ScheduleSessionModal } from "@/components/schedule-session-modal"
+import { useToast } from "@/hooks/use-toast"
+
+interface Task {
+  id: string
+  title: string
+  description: string
+  subjectArea: string
+  priority: "low" | "medium" | "high"
+  completed: boolean
+  dueDate: Date | null
+  estimatedTime: number
+  createdAt: Date
+  completedAt: Date | null
+  tags: string[]
+}
+
+interface StudySession {
+  id: string
+  taskId: string
+  title: string
+  date: string
+  time: string
+  duration: number
+  status: "scheduled" | "in-progress" | "completed"
+  notes?: string
+}
+
+interface StudyPlan {
+  weeklyGoal: number
+  thisWeekHours: number
+  totalStudyTime: number
+  currentStreak: number
+  averageSessionTime: number
+}
 
 export default function StudyPlanPage() {
+  const router = useRouter()
+  const { toast } = useToast()
+
   const [tasks, setTasks] = useState<Task[]>([])
-  const [upcomingSessions, setUpcomingSessions] = useState<any[]>([])
-  const [studyPlan, setStudyPlan] = useState<any>(null)
+  const [upcomingSessions, setUpcomingSessions] = useState<StudySession[]>([])
+  const [studyPlan, setStudyPlan] = useState<StudyPlan | null>(null)
   const [isNewTaskModalOpen, setIsNewTaskModalOpen] = useState(false)
   const [isTaskDetailsModalOpen, setIsTaskDetailsModalOpen] = useState(false)
   const [isScheduleSessionModalOpen, setIsScheduleSessionModalOpen] = useState(false)
   const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+  const [loading, setLoading] = useState(true)
   const [mounted, setMounted] = useState(false)
+
+  // Fetch study plan data from backend
+  const fetchStudyPlanData = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("token")
+
+      if (!token) {
+        router.push("/login")
+        return
+      }
+
+      const [tasksResponse, sessionsResponse, planResponse] = await Promise.all([
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/sessions`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }),
+        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/stats`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }),
+      ])
+
+      if (!tasksResponse.ok || !sessionsResponse.ok || !planResponse.ok) {
+        throw new Error("Failed to fetch study plan data")
+      }
+
+      const tasksData = await tasksResponse.json()
+      const sessionsData = await sessionsResponse.json()
+      const planData = await planResponse.json()
+
+      setTasks(
+        tasksData.tasks.map((task: any) => ({
+          ...task,
+          dueDate: task.dueDate ? new Date(task.dueDate) : null,
+          createdAt: new Date(task.createdAt),
+          completedAt: task.completedAt ? new Date(task.completedAt) : null,
+        }))
+      )
+      setUpcomingSessions(sessionsData.sessions)
+      setStudyPlan(planData.stats)
+    } catch (error) {
+      console.error("Error fetching study plan data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load study plan data. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     setMounted(true)
-    setTasks(getTasks())
-    setUpcomingSessions(getUpcomingSessions())
-    setStudyPlan(getStudyPlan())
+    fetchStudyPlanData()
   }, [])
 
   const handleTaskClick = (task: Task) => {
@@ -48,45 +133,208 @@ export default function StudyPlanPage() {
     setIsTaskDetailsModalOpen(true)
   }
 
-  const handleCreateTask = (taskData: any) => {
-    const newTask = {
-      ...taskData,
-      id: Math.random().toString(36).substring(2, 11),
-      completed: false,
-      createdAt: new Date(),
-      completedAt: null,
+  const handleCreateTask = async (taskData: any) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(taskData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create task")
+      }
+
+      const newTask = await response.json()
+      setTasks((prevTasks) => [
+        ...prevTasks,
+        {
+          ...newTask.task,
+          dueDate: newTask.task.dueDate ? new Date(newTask.task.dueDate) : null,
+          createdAt: new Date(newTask.task.createdAt),
+          completedAt: newTask.task.completedAt ? new Date(newTask.task.completedAt) : null,
+        },
+      ])
+      setIsNewTaskModalOpen(false)
+
+      toast({
+        title: "Success",
+        description: "Task created successfully!",
+      })
+    } catch (error) {
+      console.error("Error creating task:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create task. Please try again.",
+        variant: "destructive",
+      })
     }
-    setTasks((prevTasks) => [...prevTasks, newTask])
-    setIsNewTaskModalOpen(false)
   }
 
-  const handleScheduleSession = (sessionData: any) => {
-    console.log("Scheduling session:", sessionData)
-    setIsScheduleSessionModalOpen(false)
+  const handleScheduleSession = async (sessionData: any) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/sessions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(sessionData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to schedule session")
+      }
+
+      const newSession = await response.json()
+      setUpcomingSessions((prev) => [...prev, newSession.session])
+      setIsScheduleSessionModalOpen(false)
+
+      toast({
+        title: "Success",
+        description: "Study session scheduled successfully!",
+      })
+    } catch (error) {
+      console.error("Error scheduling session:", error)
+      toast({
+        title: "Error",
+        description: "Failed to schedule session. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const toggleTaskCompletion = (taskId: string) => {
-    setTasks((prevTasks) =>
-      prevTasks.map((task) =>
-        task.id === taskId
-          ? {
-              ...task,
-              completed: !task.completed,
-              completedAt: !task.completed ? new Date() : null,
-            }
-          : task,
-      ),
-    )
+  const toggleTaskCompletion = async (taskId: string) => {
+    try {
+      const token = localStorage.getItem("token")
+      const task = tasks.find((t) => t.id === taskId)
+      if (!task) return
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          completed: !task.completed,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update task")
+      }
+
+      setTasks((prevTasks) =>
+        prevTasks.map((task) =>
+          task.id === taskId
+            ? {
+                ...task,
+                completed: !task.completed,
+                completedAt: !task.completed ? new Date() : null,
+              }
+            : task
+        )
+      )
+
+      toast({
+        title: "Success",
+        description: `Task ${!task.completed ? "completed" : "marked as pending"}!`,
+      })
+    } catch (error) {
+      console.error("Error updating task:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update task. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleUpdateTask = (taskId: string, taskData: any) => {
-    setTasks((prev) => prev.map((t) => (t.id === taskId ? { ...t, ...taskData } : t)))
-    setIsTaskDetailsModalOpen(false)
+  const handleUpdateTask = async (taskId: string, taskData: any) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks/${taskId}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(taskData),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to update task")
+      }
+
+      const updatedTask = await response.json()
+      setTasks((prev) =>
+        prev.map((t) =>
+          t.id === taskId
+            ? {
+                ...updatedTask.task,
+                dueDate: updatedTask.task.dueDate ? new Date(updatedTask.task.dueDate) : null,
+                createdAt: new Date(updatedTask.task.createdAt),
+                completedAt: updatedTask.task.completedAt ? new Date(updatedTask.task.completedAt) : null,
+              }
+            : t
+        )
+      )
+      setIsTaskDetailsModalOpen(false)
+
+      toast({
+        title: "Success",
+        description: "Task updated successfully!",
+      })
+    } catch (error) {
+      console.error("Error updating task:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update task. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
-  const handleDeleteTask = (taskId: string) => {
-    setTasks((prev) => prev.filter((t) => t.id !== taskId))
-    setIsTaskDetailsModalOpen(false)
+  const handleDeleteTask = async (taskId: string) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/study-plan/tasks/${taskId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete task")
+      }
+
+      setTasks((prev) => prev.filter((t) => t.id !== taskId))
+      setIsTaskDetailsModalOpen(false)
+
+      toast({
+        title: "Success",
+        description: "Task deleted successfully!",
+      })
+    } catch (error) {
+      console.error("Error deleting task:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete task. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const completedTasks = tasks.filter((task) => task.completed).length
@@ -108,6 +356,19 @@ export default function StudyPlanPage() {
 
   if (!mounted) {
     return null
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50">
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="flex justify-center items-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-violet-500" />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -135,7 +396,6 @@ export default function StudyPlanPage() {
             }}
           />
         ))}
-
         {/* Particles */}
         {Array.from({ length: 45 }).map((_, i) => (
           <div
@@ -148,7 +408,6 @@ export default function StudyPlanPage() {
             }}
           />
         ))}
-
         {/* Constellation Stars */}
         {Array.from({ length: 50 }).map((_, i) => (
           <div
@@ -161,7 +420,6 @@ export default function StudyPlanPage() {
             }}
           />
         ))}
-
         {/* Morphing Shapes */}
         {Array.from({ length: 12 }).map((_, i) => (
           <div
@@ -178,10 +436,8 @@ export default function StudyPlanPage() {
             }}
           />
         ))}
-
         {/* Aurora Effect */}
         <div className="absolute inset-0 bg-gradient-to-r from-violet-400/5 via-purple-400/5 to-indigo-400/5 animate-aurora" />
-
         {/* Gradient Flow */}
         <div className="absolute inset-0 bg-gradient-to-br from-transparent via-violet-400/5 to-transparent animate-gradient-flow" />
       </div>
@@ -243,7 +499,7 @@ export default function StudyPlanPage() {
             },
             {
               title: "Study Streak",
-              value: "7 days",
+              value: studyPlan ? `${studyPlan.currentStreak} days` : "0 days",
               icon: Award,
               gradient: "from-orange-500 to-red-500",
               bgGradient: "from-orange-50 to-red-50",
@@ -311,129 +567,144 @@ export default function StudyPlanPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Tabs defaultValue="all" className="space-y-4">
-                  <TabsList className="bg-white/70 backdrop-blur-sm border border-purple-200 shadow-lg">
-                    <TabsTrigger
-                      value="all"
-                      className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
+                {tasks.length === 0 ? (
+                  <div className="text-center py-12">
+                    <AlertCircle className="h-16 w-16 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-xl font-semibold text-slate-700 mb-2">No tasks yet</h3>
+                    <p className="text-slate-500 mb-4">Create your first study task to get started!</p>
+                    <Button
+                      onClick={() => setIsNewTaskModalOpen(true)}
+                      className="bg-gradient-to-r from-violet-500 to-purple-500 hover:from-violet-600 hover:to-purple-600 text-white"
                     >
-                      All Tasks
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="pending"
-                      className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-500 data-[state=active]:text-white"
-                    >
-                      Pending
-                    </TabsTrigger>
-                    <TabsTrigger
-                      value="completed"
-                      className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white"
-                    >
-                      Completed
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="all" className="space-y-3">
-                    {tasks.map((task, index) => (
-                      <div
-                        key={task.id}
-                        className="p-4 bg-gradient-to-r from-white to-violet-50/30 rounded-lg border border-violet-100 hover:border-violet-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
-                        style={{ animationDelay: `${index * 100}ms` }}
-                        onClick={() => handleTaskClick(task)}
+                      <Plus className="mr-2 h-4 w-4" />
+                      Create Task
+                    </Button>
+                  </div>
+                ) : (
+                  <Tabs defaultValue="all" className="space-y-4">
+                    <TabsList className="bg-white/70 backdrop-blur-sm border border-purple-200 shadow-lg">
+                      <TabsTrigger
+                        value="all"
+                        className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white"
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                toggleTaskCompletion(task.id)
-                              }}
-                              className="text-violet-500 hover:text-violet-700 transition-colors duration-300"
-                            >
-                              {task.completed ? (
-                                <CheckCircle className="h-5 w-5 text-green-500 animate-pulse" />
-                              ) : (
-                                <Circle className="h-5 w-5" />
-                              )}
-                            </button>
-                            <div>
-                              <h3
-                                className={`font-medium ${
-                                  task.completed
-                                    ? "text-slate-500 line-through"
-                                    : "text-slate-900 hover:text-violet-600"
-                                } transition-colors duration-300`}
-                              >
-                                {task.title}
-                              </h3>
-                              <p className="text-sm text-slate-500">{task.subjectArea}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge className={`${getPriorityColor(task.priority)} border animate-pulse`}>
-                              {task.priority}
-                            </Badge>
-                            {task.dueDate && (
-                              <div className="flex items-center gap-1 text-sm text-slate-500">
-                                <Clock className="h-3 w-3" />
-                                <span>{task.dueDate.toLocaleDateString()}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </TabsContent>
+                        All Tasks
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="pending"
+                        className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-500 data-[state=active]:text-white"
+                      >
+                        Pending
+                      </TabsTrigger>
+                      <TabsTrigger
+                        value="completed"
+                        className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-500 data-[state=active]:to-emerald-500 data-[state=active]:text-white"
+                      >
+                        Completed
+                      </TabsTrigger>
+                    </TabsList>
 
-                  <TabsContent value="pending" className="space-y-3">
-                    {tasks
-                      .filter((task) => !task.completed)
-                      .map((task, index) => (
+                    <TabsContent value="all" className="space-y-3">
+                      {tasks.map((task, index) => (
                         <div
                           key={task.id}
-                          className="p-4 bg-gradient-to-r from-white to-orange-50/30 rounded-lg border border-orange-100 hover:border-orange-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
+                          className="p-4 bg-gradient-to-r from-white to-violet-50/30 rounded-lg border border-violet-100 hover:border-violet-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
                           style={{ animationDelay: `${index * 100}ms` }}
                           onClick={() => handleTaskClick(task)}
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                              <Circle className="h-5 w-5 text-orange-500 animate-pulse" />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  toggleTaskCompletion(task.id)
+                                }}
+                                className="text-violet-500 hover:text-violet-700 transition-colors duration-300"
+                              >
+                                {task.completed ? (
+                                  <CheckCircle className="h-5 w-5 text-green-500 animate-pulse" />
+                                ) : (
+                                  <Circle className="h-5 w-5" />
+                                )}
+                              </button>
                               <div>
-                                <h3 className="font-medium text-slate-900 hover:text-orange-600 transition-colors duration-300">
+                                <h3
+                                  className={`font-medium ${
+                                    task.completed
+                                      ? "text-slate-500 line-through"
+                                      : "text-slate-900 hover:text-violet-600"
+                                  } transition-colors duration-300`}
+                                >
                                   {task.title}
                                 </h3>
                                 <p className="text-sm text-slate-500">{task.subjectArea}</p>
                               </div>
                             </div>
-                            <Badge className={`${getPriorityColor(task.priority)} border animate-pulse`}>
-                              {task.priority}
-                            </Badge>
-                          </div>
-                        </div>
-                      ))}
-                  </TabsContent>
-
-                  <TabsContent value="completed" className="space-y-3">
-                    {tasks
-                      .filter((task) => task.completed)
-                      .map((task, index) => (
-                        <div
-                          key={task.id}
-                          className="p-4 bg-gradient-to-r from-white to-green-50/30 rounded-lg border border-green-100 hover:border-green-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
-                          style={{ animationDelay: `${index * 100}ms` }}
-                          onClick={() => handleTaskClick(task)}
-                        >
-                          <div className="flex items-center gap-3">
-                            <CheckCircle className="h-5 w-5 text-green-500 animate-pulse" />
-                            <div>
-                              <h3 className="font-medium text-slate-500 line-through">{task.title}</h3>
-                              <p className="text-sm text-slate-400">{task.subjectArea}</p>
+                            <div className="flex items-center gap-2">
+                              <Badge className={`${getPriorityColor(task.priority)} border animate-pulse`}>
+                                {task.priority}
+                              </Badge>
+                              {task.dueDate && (
+                                <div className="flex items-center gap-1 text-sm text-slate-500">
+                                  <Clock className="h-3 w-3" />
+                                  <span>{task.dueDate.toLocaleDateString()}</span>
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
                       ))}
-                  </TabsContent>
-                </Tabs>
+                    </TabsContent>
+
+                    <TabsContent value="pending" className="space-y-3">
+                      {tasks
+                        .filter((task) => !task.completed)
+                        .map((task, index) => (
+                          <div
+                            key={task.id}
+                            className="p-4 bg-gradient-to-r from-white to-orange-50/30 rounded-lg border border-orange-100 hover:border-orange-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
+                            style={{ animationDelay: `${index * 100}ms` }}
+                            onClick={() => handleTaskClick(task)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <Circle className="h-5 w-5 text-orange-500 animate-pulse" />
+                                <div>
+                                  <h3 className="font-medium text-slate-900 hover:text-orange-600 transition-colors duration-300">
+                                    {task.title}
+                                  </h3>
+                                  <p className="text-sm text-slate-500">{task.subjectArea}</p>
+                                </div>
+                              </div>
+                              <Badge className={`${getPriorityColor(task.priority)} border animate-pulse`}>
+                                {task.priority}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                    </TabsContent>
+
+                    <TabsContent value="completed" className="space-y-3">
+                      {tasks
+                        .filter((task) => task.completed)
+                        .map((task, index) => (
+                          <div
+                            key={task.id}
+                            className="p-4 bg-gradient-to-r from-white to-green-50/30 rounded-lg border border-green-100 hover:border-green-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
+                            style={{ animationDelay: `${index * 100}ms` }}
+                            onClick={() => handleTaskClick(task)}
+                          >
+                            <div className="flex items-center gap-3">
+                              <CheckCircle className="h-5 w-5 text-green-500 animate-pulse" />
+                              <div>
+                                <h3 className="font-medium text-slate-500 line-through">{task.title}</h3>
+                                <p className="text-sm text-slate-400">{task.subjectArea}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </TabsContent>
+                  </Tabs>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -450,25 +721,32 @@ export default function StudyPlanPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {upcomingSessions.slice(0, 4).map((session, index) => (
-                    <div
-                      key={session.id}
-                      className="p-4 bg-gradient-to-r from-white to-indigo-50/30 rounded-lg border border-indigo-100 hover:border-indigo-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 animate-slide-in-up"
-                      style={{ animationDelay: `${index * 100}ms` }}
-                    >
-                      <h3 className="font-medium text-slate-900 mb-2">{session.title}</h3>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Calendar className="h-3 w-3 text-indigo-500" />
-                          <span>{session.date}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-slate-600">
-                          <Clock className="h-3 w-3 text-blue-500" />
-                          <span>{session.time}</span>
+                  {upcomingSessions.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Calendar className="h-12 w-12 text-slate-300 mx-auto mb-3" />
+                      <p className="text-slate-500 text-sm">No sessions scheduled</p>
+                    </div>
+                  ) : (
+                    upcomingSessions.slice(0, 4).map((session, index) => (
+                      <div
+                        key={session.id}
+                        className="p-4 bg-gradient-to-r from-white to-indigo-50/30 rounded-lg border border-indigo-100 hover:border-indigo-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 animate-slide-in-up"
+                        style={{ animationDelay: `${index * 100}ms` }}
+                      >
+                        <h3 className="font-medium text-slate-900 mb-2">{session.title}</h3>
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <Calendar className="h-3 w-3 text-indigo-500" />
+                            <span>{session.date}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <Clock className="h-3 w-3 text-blue-500" />
+                            <span>{session.time}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -522,9 +800,7 @@ export default function StudyPlanPage() {
             task={selectedTask}
             onUpdate={handleUpdateTask}
             onDelete={handleDeleteTask}
-            /* NEW: provide the sessions array so TaskDetailsModal can safely read it */
             sessions={upcomingSessions}
-            /* NEW: update master list when a session is scheduled from inside the modal */
             onScheduleSession={(data) => setUpcomingSessions((prev) => [...prev, data])}
           />
         )}

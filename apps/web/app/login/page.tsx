@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Eye, EyeOff, Mail, Lock, Sparkles, Zap, ArrowLeft, Star, Heart, Lightbulb } from "lucide-react"
 import Link from "next/link"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -18,6 +19,7 @@ export default function LoginPage() {
   const [isVisible, setIsVisible] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const { toast } = useToast()
 
   useEffect(() => {
     setIsVisible(true)
@@ -27,25 +29,77 @@ export default function LoginPage() {
     e.preventDefault()
     setIsLoading(true)
 
-    // Simulate loading
-    await new Promise((resolve) => setTimeout(resolve, 1500))
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      })
 
-    console.log("Login attempt:", { email, password })
-    router.push("/dashboard")
+      const data = await response.json()
+
+      if (response.ok) {
+        // Store token in localStorage
+        localStorage.setItem("token", data.token)
+        localStorage.setItem("user", JSON.stringify(data.user))
+
+        toast({
+          title: "Login successful",
+          description: "Welcome back to Cognitia!",
+        })
+
+        router.push("/dashboard")
+      } else {
+        toast({
+          title: "Login failed",
+          description: data.message || "Invalid credentials",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Login error:", error)
+      toast({
+        title: "Login failed",
+        description: "Something went wrong. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleGoogleLogin = async () => {
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    console.log("Google login initiated")
-    router.push("/dashboard")
+    try {
+      // Redirect to Google OAuth
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`
+    } catch (error) {
+      console.error("Google login error:", error)
+      toast({
+        title: "Login failed",
+        description: "Google login is temporarily unavailable.",
+        variant: "destructive",
+      })
+      setIsLoading(false)
+    }
   }
 
   const handleFacebookLogin = async () => {
     setIsLoading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    console.log("Facebook login initiated")
-    router.push("/dashboard")
+    try {
+      // Redirect to Facebook OAuth
+      window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/facebook`
+    } catch (error) {
+      console.error("Facebook login error:", error)
+      toast({
+        title: "Login failed",
+        description: "Facebook login is temporarily unavailable.",
+        variant: "destructive",
+      })
+      setIsLoading(false)
+    }
   }
 
   return (

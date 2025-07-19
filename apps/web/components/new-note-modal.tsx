@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { NOTES_GROUPS } from "@/lib/mock-data"
+// import { NOTES_GROUPS } from "@/lib/mock-data" // Remove static groups
 
 interface NewNoteModalProps {
   isOpen: boolean
@@ -22,9 +22,10 @@ interface NewNoteModalProps {
     tags: string[]
     files: File[]
   }) => void
+  groups: Array<{ id: string; name: string; description?: string }>
 }
 
-export function NewNoteModal({ isOpen, onClose, onSubmit }: NewNoteModalProps) {
+export function NewNoteModal({ isOpen, onClose, onSubmit, groups }: NewNoteModalProps) {
   const [title, setTitle] = useState("")
   const [groupId, setGroupId] = useState("")
   const [isPublic, setIsPublic] = useState(false)
@@ -162,7 +163,7 @@ export function NewNoteModal({ isOpen, onClose, onSubmit }: NewNoteModalProps) {
                   <SelectValue placeholder="Select a group" />
                 </SelectTrigger>
                 <SelectContent className="bg-white border-blue-200 rounded-xl">
-                  {NOTES_GROUPS.map((group) => (
+                  {groups.map((group) => (
                     <SelectItem key={group.id} value={group.id} className="hover:bg-blue-50 rounded-lg">
                       {group.name}
                     </SelectItem>

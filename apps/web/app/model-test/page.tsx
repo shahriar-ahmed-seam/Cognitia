@@ -27,66 +27,128 @@ import {
   Plus,
   Sparkles,
   User,
+  Loader2,
 } from "lucide-react"
-import { MODEL_TESTS, getUserTestAttempts, type ModelTest } from "@/lib/model-test-data"
+import { useToast } from "@/hooks/use-toast"
+
+interface ModelTest {
+  id: string
+  title: string
+  description: string
+  difficulty: "easy" | "medium" | "hard" | "expert"
+  timeLimit: number
+  totalQuestions: number
+  totalPoints: number
+  passingScore: number
+  subjects: string[]
+  topics: string[]
+  participants: number
+  createdAt: string
+  createdBy: {
+    id: string
+    name: string
+    avatar?: string
+  }
+}
+
+interface TestAttempt {
+  id: string
+  testId: string
+  score: number
+  status: "completed" | "in-progress"
+  startTime: string
+  endTime?: string
+  timeSpent?: number
+}
 
 export default function ModelTestPage() {
   const router = useRouter()
+  const { toast } = useToast()
+
+  const [tests, setTests] = useState<ModelTest[]>([])
+  const [userAttempts, setUserAttempts] = useState<TestAttempt[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedSubject, setSelectedSubject] = useState("all")
   const [selectedDifficulty, setSelectedDifficulty] = useState("all")
   const [sortBy, setSortBy] = useState("popular")
-  const [filteredTests, setFilteredTests] = useState<ModelTest[]>(MODEL_TESTS)
 
-  // Get user's test history
-  const userAttempts = getUserTestAttempts("user123") // Replace with actual user ID
+  // Fetch model tests from API
+  const fetchTests = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("token")
 
-  // Get all unique subjects
-  const allSubjects = Array.from(new Set(MODEL_TESTS.flatMap((test) => test.subjects)))
+      const params = new URLSearchParams({
+        search: searchQuery,
+        subject: selectedSubject,
+        difficulty: selectedDifficulty,
+        sort: sortBy,
+        page: "1",
+        limit: "20",
+      })
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests?${params}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch tests")
+      }
+
+      const data = await response.json()
+      setTests(data.tests || [])
+    } catch (error) {
+      console.error("Error fetching tests:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load tests. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fetch user test attempts
+  const fetchUserAttempts = async () => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/attempts`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch attempts")
+      }
+
+      const data = await response.json()
+      setUserAttempts(data.attempts || [])
+    } catch (error) {
+      console.error("Error fetching attempts:", error)
+    }
+  }
 
   useEffect(() => {
-    let filtered = [...MODEL_TESTS]
-
-    // Filter by search query
-    if (searchQuery) {
-      filtered = filtered.filter(
-        (test) =>
-          test.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          test.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          test.subjects.some((subject) => subject.toLowerCase().includes(searchQuery.toLowerCase())) ||
-          test.topics.some((topic) => topic.toLowerCase().includes(searchQuery.toLowerCase())),
-      )
+    const token = localStorage.getItem("token")
+    if (!token) {
+      router.push("/login")
+      return
     }
 
-    // Filter by subject
-    if (selectedSubject !== "all") {
-      filtered = filtered.filter((test) => test.subjects.includes(selectedSubject))
-    }
+    fetchTests()
+    fetchUserAttempts()
+  }, [router, searchQuery, selectedSubject, selectedDifficulty, sortBy])
 
-    // Filter by difficulty
-    if (selectedDifficulty !== "all") {
-      filtered = filtered.filter((test) => test.difficulty === selectedDifficulty)
-    }
-
-    // Sort tests
-    switch (sortBy) {
-      case "popular":
-        filtered.sort((a, b) => b.participants - a.participants)
-        break
-      case "recent":
-        filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-        break
-      case "difficulty":
-        const difficultyOrder = { easy: 1, medium: 2, hard: 3, expert: 4 }
-        filtered.sort((a, b) => difficultyOrder[a.difficulty] - difficultyOrder[b.difficulty])
-        break
-      case "duration":
-        filtered.sort((a, b) => a.timeLimit - b.timeLimit)
-        break
-    }
-
-    setFilteredTests(filtered)
-  }, [searchQuery, selectedSubject, selectedDifficulty, sortBy])
+  // Get all unique subjects
+  const allSubjects = Array.from(new Set(tests.flatMap((test) => test.subjects)))
 
   const handleStartTest = (testId: string) => {
     router.push(`/model-test/${testId}`)
@@ -161,36 +223,6 @@ export default function ModelTestPage() {
           />
         ))}
 
-        {/* Constellation Stars */}
-        {Array.from({ length: 45 }).map((_, i) => (
-          <div
-            key={`star-${i}`}
-            className="absolute w-1 h-1 bg-white rounded-full animate-twinkle-enhanced"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`,
-            }}
-          />
-        ))}
-
-        {/* Morphing Shapes */}
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div
-            key={`morph-${i}`}
-            className={`absolute w-32 h-32 ${
-              i % 2 === 0
-                ? "bg-gradient-to-br from-emerald-300/10 to-teal-300/10"
-                : "bg-gradient-to-br from-teal-300/10 to-cyan-300/10"
-            } rounded-full animate-morph-enhanced blur-2xl`}
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 10}s`,
-            }}
-          />
-        ))}
-
         {/* Aurora Effect */}
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/5 via-teal-400/5 to-cyan-400/5 animate-aurora" />
 
@@ -240,7 +272,7 @@ export default function ModelTestPage() {
           {[
             {
               title: "Available Tests",
-              value: MODEL_TESTS.length,
+              value: tests.length,
               icon: BookOpen,
               gradient: "from-emerald-500 to-teal-500",
               bgGradient: "from-emerald-50 to-teal-50",
@@ -377,14 +409,18 @@ export default function ModelTestPage() {
           </TabsList>
 
           <TabsContent value="all" className="space-y-6">
-            {filteredTests.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredTests.map((test, index) => {
+            {loading ? (
+              <div className="flex justify-center items-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
+              </div>
+            ) : tests.length > 0 ? (
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                {tests.map((test, index) => {
                   const progress = getTestProgress(test.id)
                   return (
                     <Card
                       key={test.id}
-                      className="overflow-hidden bg-white/70 backdrop-blur-sm border border-white/20 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
+                      className="h-full cursor-pointer bg-gradient-to-br from-white to-emerald-50/50 border-0 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
                       style={{ animationDelay: `${index * 100}ms` }}
                     >
                       <CardHeader className="pb-3">
@@ -423,7 +459,7 @@ export default function ModelTestPage() {
                           </div>
                           <div className="flex items-center gap-2 text-slate-600">
                             <Target className="h-4 w-4 text-green-500" />
-                            <span>{test.questions.length} questions</span>
+                            <span>{test.totalQuestions} questions</span>
                           </div>
                           <div className="flex items-center gap-2 text-slate-600">
                             <Users className="h-4 w-4 text-purple-500" />
@@ -505,14 +541,14 @@ export default function ModelTestPage() {
           </TabsContent>
 
           <TabsContent value="recommended" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredTests
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {tests
                 .filter((test) => test.difficulty === "medium" || test.difficulty === "easy")
                 .slice(0, 6)
                 .map((test, index) => (
                   <Card
                     key={test.id}
-                    className="overflow-hidden bg-white/70 backdrop-blur-sm border border-blue-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
+                    className="h-full cursor-pointer bg-gradient-to-br from-white to-blue-50/50 border border-blue-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <CardHeader className="pb-3">
@@ -542,14 +578,14 @@ export default function ModelTestPage() {
           </TabsContent>
 
           <TabsContent value="trending" className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredTests
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              {tests
                 .sort((a, b) => b.participants - a.participants)
                 .slice(0, 6)
                 .map((test, index) => (
                   <Card
                     key={test.id}
-                    className="overflow-hidden bg-white/70 backdrop-blur-sm border border-orange-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
+                    className="h-full cursor-pointer bg-gradient-to-br from-white to-orange-50/50 border border-orange-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
                     <CardHeader className="pb-3">

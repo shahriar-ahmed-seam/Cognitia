@@ -8,8 +8,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Progress } from "@/components/ui/progress"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
-import { getModelTestById, startTest, submitAnswer, finishTest } from "@/lib/model-test-data"
-import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle, Clock, Flag, Brain } from "lucide-react"
+import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle, Clock, Flag, Brain, Loader2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   Dialog,
@@ -19,20 +18,57 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { toast } from "sonner"
+
+interface Question {
+  id: string
+  question: string
+  options: string[]
+  correctAnswer: number
+  subject: string
+  topic: string
+  points: number
+  explanation?: string
+}
+
+interface TestAttempt {
+  id: string
+  testId: string
+  userId: string
+  startTime: string
+  endTime?: string
+  timeSpent?: number
+  answers: Record<string, number>
+  score?: number
+  status: "in-progress" | "completed"
+}
+
+interface Test {
+  id: string
+  title: string
+  description: string
+  timeLimit: number
+  questions: Question[]
+  totalPoints: number
+  passingScore: number
+  subjects: string[]
+}
 
 export default function TakeTestPage() {
   const params = useParams()
   const router = useRouter()
   const testId = params.id as string
 
-  const [test, setTest] = useState(() => getModelTestById(testId))
+  const [test, setTest] = useState<Test | null>(null)
+  const [attempt, setAttempt] = useState<TestAttempt | null>(null)
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
   const [answers, setAnswers] = useState<Record<string, number>>({})
   const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set())
   const [timeRemaining, setTimeRemaining] = useState(0)
-  const [attemptId, setAttemptId] = useState<string | null>(null)
   const [showSubmitDialog, setShowSubmitDialog] = useState(false)
   const [showTimeUpDialog, setShowTimeUpDialog] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
 
   // Format time as MM:SS
   const formatTime = (seconds: number) => {
@@ -42,48 +78,97 @@ export default function TakeTestPage() {
   }
 
   useEffect(() => {
-    if (!test) {
-      router.push("/model-test")
-      return
+    fetchTestAndStartAttempt()
+  }, [testId])
+
+  useEffect(() => {
+    if (timeRemaining > 0) {
+      const timer = setInterval(() => {
+        setTimeRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer)
+            setShowTimeUpDialog(true)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+
+      return () => clearInterval(timer)
     }
+  }, [timeRemaining])
 
-    // Start the test
-    const attempt = startTest(testId, "user123") // Replace with actual user ID
-    setAttemptId(attempt.id)
+  const fetchTestAndStartAttempt = async () => {
+    try {
+      const token = localStorage.getItem("token")
 
-    // Set initial time
-    setTimeRemaining(test.timeLimit * 60)
-
-    // Start the timer
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          setShowTimeUpDialog(true)
-          return 0
-        }
-        return prev - 1
+      // Fetch test details
+      const testResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/${testId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
       })
-    }, 1000)
 
-    return () => clearInterval(timer)
-  }, [test, testId, router])
+      if (!testResponse.ok) {
+        throw new Error("Failed to fetch test")
+      }
 
-  if (!test) {
-    return null
+      const testData = await testResponse.json()
+      setTest(testData)
+
+      // Start test attempt
+      const attemptResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/${testId}/start`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!attemptResponse.ok) {
+        throw new Error("Failed to start test")
+      }
+
+      const attemptData = await attemptResponse.json()
+      setAttempt(attemptData)
+      setTimeRemaining(testData.timeLimit * 60)
+
+      // Load existing answers if resuming
+      if (attemptData.answers) {
+        setAnswers(attemptData.answers)
+      }
+    } catch (error) {
+      console.error("Error starting test:", error)
+      toast.error("Failed to start test")
+      router.push("/model-test")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const currentQuestion = test.questions[currentQuestionIndex]
-  const totalQuestions = test.questions.length
-  const answeredCount = Object.keys(answers).length
+  const handleAnswer = async (value: string) => {
+    if (!test || !attempt) return
 
-  const handleAnswer = (value: string) => {
+    const currentQuestion = test.questions[currentQuestionIndex]
     const newAnswers = { ...answers, [currentQuestion.id]: Number.parseInt(value) }
     setAnswers(newAnswers)
 
-    // Submit the answer to the server
-    if (attemptId) {
-      submitAnswer(attemptId, currentQuestion.id, Number.parseInt(value))
+    // Save answer to backend
+    try {
+      const token = localStorage.getItem("token")
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/attempts/${attempt.id}/answer`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          questionId: currentQuestion.id,
+          answer: Number.parseInt(value),
+        }),
+      })
+    } catch (error) {
+      console.error("Error saving answer:", error)
     }
   }
 
@@ -98,7 +183,7 @@ export default function TakeTestPage() {
   }
 
   const handleNextQuestion = () => {
-    if (currentQuestionIndex < totalQuestions - 1) {
+    if (test && currentQuestionIndex < test.questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1)
     }
   }
@@ -113,19 +198,74 @@ export default function TakeTestPage() {
     setCurrentQuestionIndex(index)
   }
 
-  const handleSubmitTest = () => {
-    if (attemptId) {
-      const result = finishTest(attemptId)
+  const handleSubmitTest = async () => {
+    if (!attempt) return
+
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/attempts/${attempt.id}/submit`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to submit test")
+      }
+
+      const result = await response.json()
       router.push(`/model-test/results/${result.id}`)
+    } catch (error) {
+      console.error("Error submitting test:", error)
+      toast.error("Failed to submit test")
+    } finally {
+      setSubmitting(false)
     }
   }
 
   const handleTimeUp = () => {
-    if (attemptId) {
-      const result = finishTest(attemptId)
-      router.push(`/model-test/results/${result.id}`)
-    }
+    handleSubmitTest()
   }
+
+  if (loading) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="flex items-center justify-center min-h-[60vh]">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p>Loading test...</p>
+            </div>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  if (!test || !attempt) {
+    return (
+      <>
+        <Navbar />
+        <div className="container mx-auto py-8">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Test not found</h1>
+            <Button onClick={() => router.push("/model-test")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Tests
+            </Button>
+          </div>
+        </div>
+      </>
+    )
+  }
+
+  const currentQuestion = test.questions[currentQuestionIndex]
+  const totalQuestions = test.questions.length
+  const answeredCount = Object.keys(answers).length
 
   return (
     <>
@@ -133,7 +273,7 @@ export default function TakeTestPage() {
       <div className="container mx-auto py-4">
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold flex items-center gap-3">
-            <Brain className="h-7 w-7 text-blue-500 animate-pulse" />
+            <Brain className="h-7 w-7 text-blue-500" />
             {test.title}
           </h1>
           <div className="flex items-center gap-4">
@@ -157,12 +297,7 @@ export default function TakeTestPage() {
                   <CardTitle className="text-lg">
                     Question {currentQuestionIndex + 1} of {totalQuestions}
                   </CardTitle>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex items-center gap-1 bg-transparent"
-                    onClick={handleFlagQuestion}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleFlagQuestion}>
                     <Flag
                       className={`h-4 w-4 ${flaggedQuestions.has(currentQuestionIndex) ? "text-red-500 fill-red-500" : ""}`}
                     />
@@ -314,7 +449,16 @@ export default function TakeTestPage() {
             <Button variant="outline" onClick={() => setShowSubmitDialog(false)}>
               Continue Test
             </Button>
-            <Button onClick={handleSubmitTest}>Submit Test</Button>
+            <Button onClick={handleSubmitTest} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Submit Test"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
