@@ -15,6 +15,7 @@ import {
   registerForContest,
   unregisterFromContest,
 } from "@/lib/contest-data"
+import { formatTimeRemaining, formatDuration } from "@/lib/date-utils"
 import { useState } from "react"
 import { Clock, Users } from "lucide-react"
 
@@ -66,12 +67,16 @@ export function ContestCard({ contest }: ContestCardProps) {
   }
 
   const getTimeInfo = () => {
-    if (contest.status === "upcoming") {
-      return `Starts in ${getTimeRemaining(contest.startTime)}`
-    } else if (contest.status === "ongoing") {
-      return `Started ${getTimeElapsed(contest.startTime)} ago • Ends in ${getTimeRemainingUntilEnd(contest.endTime)}`
+    const now = new Date()
+    const start = new Date(contest.startTime)
+    const end = new Date(contest.endTime)
+
+    if (now < start) {
+      return `Starts in ${formatTimeRemaining(contest.startTime)}`
+    } else if (now < end) {
+      return `Started ${formatTimeRemaining(contest.startTime)} ago • Ends in ${formatTimeRemaining(contest.endTime)}`
     } else {
-      return `Ended ${getTimeElapsed(contest.endTime)} ago`
+      return `Ended ${formatTimeRemaining(contest.endTime)} ago`
     }
   }
 
@@ -147,7 +152,7 @@ export function ContestCard({ contest }: ContestCardProps) {
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4" />
-            <span>{formatContestDuration(contest.startTime, contest.endTime)}</span>
+            <span>{formatDuration(contest.startTime, contest.endTime)}</span>
           </div>
           <div className="flex items-center gap-1">
             <Users className="h-4 w-4" />
@@ -163,11 +168,11 @@ export function ContestCard({ contest }: ContestCardProps) {
       <CardFooter className="p-4 pt-0 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <img
-            src={contest.organizer.avatar || "/placeholder.svg"}
-            alt={contest.organizer.name}
-            className="h-6 w-6 rounded-full"
+            //src={contest.organizer.avatar || "/placeholder.svg"}
+            //alt={contest.organizer.name}
+            //className="h-6 w-6 rounded-full"
           />
-          <span className="text-sm text-gray-600">by {contest.organizer.name}</span>
+          {/* <span className="text-sm text-gray-600">by {contest.organizer.name}</span> */}
         </div>
         <div className="w-1/3">{renderActionButton()}</div>
       </CardFooter>
