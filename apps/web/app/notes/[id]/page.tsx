@@ -13,6 +13,7 @@ import { ReportModal } from "@/components/report-modal"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { Textarea } from "@/components/ui/textarea"
+
 import {
   ArrowLeft,
   Eye,
@@ -415,94 +416,15 @@ export default function NoteViewerPage() {
                   </div>
                 )}
               </div>
-
-              <div className="flex items-center gap-2">
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDownload}
-                  className="bg-white/80 border-purple-200 hover:bg-purple-50 hover:border-purple-300 transition-all duration-300 transform hover:scale-105"
-                >
-                  <Download className="h-4 w-4 mr-1" />
-                  Download
-                </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="bg-white/80 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all duration-300 transform hover:scale-105"
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => setShowReportModal(true)}>
-                      <Flag className="h-4 w-4 mr-2" />
-                      Report
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
             </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-            <div className="lg:col-span-1 space-y-6">
-              <Card className="bg-white/90 backdrop-blur-sm border-blue-200 shadow-lg hover:shadow-xl transition-all duration-300">
-                <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-lg">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <div className="p-1 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-md">
-                      <Users className="h-4 w-4 text-white" />
-                    </div>
-                    Author
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3 mb-4">
-                    <Avatar className="h-12 w-12 ring-2 ring-blue-200 ring-offset-2">
-                      <AvatarImage src={note.author?.avatar || "/placeholder.svg"} alt={note.author?.username || ""} />
-                      <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white">
-                        {note.author?.username ? note.author.username.charAt(0).toUpperCase() : "N"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-semibold">{note.author?.username || "Unknown"}</div>
-                      {note.author?.institution && (
-                        <div className="text-sm text-slate-500">{note.author.institution}</div>
-                      )}
-                      {note.author?.followersCount && (
-                        <div className="text-xs text-slate-400">{note.author.followersCount} followers</div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {note.files?.length > 0 && (
-                <Card className="bg-white/90 backdrop-blur-sm border-purple-200 shadow-lg hover:shadow-xl transition-all duration-300">
-                  <CardHeader className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-t-lg">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <div className="p-1 bg-gradient-to-r from-purple-500 to-pink-500 rounded-md">
-                        <FileText className="h-4 w-4 text-white" />
-                      </div>
-                      Files ({note.files?.length ?? 0})
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    {/* <FileTree files={note.files} onFileSelect={handleFileSelect} selectedFileId={note.id} /> */}
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            <div className="lg:col-span-3">
+            <div className="lg:col-span-full">
               <Tabs defaultValue="content" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 bg-white/80 backdrop-blur-sm">
                   <TabsTrigger value="content">Content</TabsTrigger>
                   <TabsTrigger value="info">Information</TabsTrigger>
-                  {/* <TabsTrigger value="comments">Comments ({note.comments?.length || 0})</TabsTrigger> */}
                 </TabsList>
 
                 <TabsContent value="content" className="mt-6">
@@ -525,7 +447,7 @@ export default function NoteViewerPage() {
                       {token ? (
                         <iframe
                           src={`${process.env.NEXT_PUBLIC_API_URL}/api/notes/${note.id}/file?token=${token}`}
-                          className="w-full h-[700px] rounded-lg"
+                          className="w-full h-[1000px] rounded-lg"
                           style={{ border: "none" }}
                         />
                       ) : (
@@ -599,6 +521,10 @@ export default function NoteViewerPage() {
       <ReportModal
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
+        onSubmit={(reportData) => {
+          console.log("Report submitted:", reportData);
+        }}
+        noteTitle={note.title}
         itemType="note"
         itemId={noteId}
         itemTitle={note.title}

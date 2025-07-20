@@ -10,19 +10,25 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 interface ReportModalProps {
   isOpen: boolean
   onClose: () => void
-  onSubmit: (reportData: { reason: string; details: string }) => void
+  onSubmit: (reportData: { reason: string; details: string; itemType: string; itemId: string; itemTitle: string }) => void
   noteTitle: string
-  itemType: string
+  itemType: "note"
   itemId: string
   itemTitle: string
 }
 
-export function ReportModal({ isOpen, onClose, onSubmit, noteTitle }: ReportModalProps) {
+export function ReportModal({ isOpen, onClose, onSubmit, itemType, itemId, itemTitle }: ReportModalProps) {
   const [reason, setReason] = useState<string>("inappropriate")
   const [details, setDetails] = useState<string>("")
 
   const handleSubmit = () => {
-    onSubmit({ reason, details })
+    onSubmit({
+      reason,
+      details,
+      itemType,
+      itemId,
+      itemTitle
+    })
     setReason("inappropriate")
     setDetails("")
     onClose()
@@ -32,7 +38,7 @@ export function ReportModal({ isOpen, onClose, onSubmit, noteTitle }: ReportModa
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Report Note: {noteTitle}</DialogTitle>
+          <DialogTitle>Report {itemType}: {itemTitle}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">

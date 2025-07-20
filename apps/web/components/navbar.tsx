@@ -57,7 +57,7 @@ export function Navbar() {
                 <BookOpen className="h-5 w-5 text-white" />
               </div>
               <span className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                StudyPlatform
+                Cognitia
               </span>
             </Link>
           </div>
