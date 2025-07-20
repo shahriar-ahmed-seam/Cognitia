@@ -39,14 +39,11 @@ import { toast } from "sonner"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { FileViewer } from "@/components/file-viewer"
 
-// Update NoteFile interface to match what we actually get
+// Modify the NoteFile interface to be simpler
 interface NoteFile {
   id: string
   name: string
-  type: "file" | "directory"
-  size?: number
-  updatedAt?: string
-  children?: NoteFile[]
+  contentType?: string
 }
 
 interface Comment {
@@ -63,7 +60,7 @@ interface Comment {
 interface Note {
   id: string
   title: string
-  visibility: "PUBLIC" | "PRIVATE" | "SHARED" // Changed to match API
+  visibility: "PUBLIC" | "PRIVATE" | "SHARED"
   createdAt: string
   updatedAt: string
   viewCount: number
@@ -72,7 +69,7 @@ interface Note {
   description?: string
   author: {
     id: string
-    username: string // Note: API returns 'name', we'll map it to username
+    username: string
     avatar?: string
     institution?: string
     followersCount?: number
@@ -95,12 +92,17 @@ export default function NoteViewerPage() {
   const noteId = params.id as string
 
   const [note, setNote] = useState<Note | null>(null)
-  const [selectedFile, setSelectedFile] = useState<NoteFile | null>(null)
   const [showReportModal, setShowReportModal] = useState(false)
   const [loading, setLoading] = useState(true)
   const [commenting, setCommenting] = useState(false)
   const [newComment, setNewComment] = useState("")
   const [showComments, setShowComments] = useState(false)
+  const [token, setToken] = useState<string | null>(null)
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem("token")
+    setToken(storedToken)
+  }, [])
 
   useEffect(() => {
     fetchNote()
@@ -134,8 +136,7 @@ export default function NoteViewerPage() {
       }
 
       const data = await response.json()
-      
-      // Map API response to frontend Note interface
+
       const mappedNote: Note = {
         id: data.note.id,
         title: data.note.title,
@@ -148,34 +149,29 @@ export default function NoteViewerPage() {
         author: {
           id: data.note.author.id,
           username: data.note.author.name,
-          avatar: data.note.author.avatar ? 
-            `data:image/jpeg;base64,${arrayBufferToBase64(data.note.author.avatar)}` : 
-            undefined
+          avatar: data.note.author.avatar
+            ? `data:image/jpeg;base64,${arrayBufferToBase64(data.note.author.avatar)}`
+            : undefined,
         },
         group: {
           id: data.note.notesGroup.id,
-          name: data.note.notesGroup.name
+          name: data.note.notesGroup.name,
         },
-        files: [{
-          id: noteId,
-          name: data.note.title,
-          type: 'file',
-          updatedAt: data.note.updatedAt
-        }],
+        files: [
+          {
+            id: data.note.id,
+            name: data.note.title.endsWith(".pdf") ? data.note.title : `${data.note.title}.pdf`,
+            contentType: "application/pdf", // Assuming PDF for now
+          },
+        ],
         tags: data.note.tags || [],
         isLiked: false,
         isDisliked: false,
         isBookmarked: false,
-        comments: []
+        comments: [],
       }
 
       setNote(mappedNote)
-
-      // Set file as selected by default
-      if (mappedNote.files?.length > 0) {
-        setSelectedFile(mappedNote.files[0])
-      }
-
     } catch (error) {
       console.error("Error fetching note:", error)
       toast.error("Failed to load note")
@@ -194,159 +190,6 @@ export default function NoteViewerPage() {
     }
     return btoa(binary)
   }
-
-  const findFirstFile = (files: NoteFile[]): NoteFile | null => {
-    for (const file of files) {
-      if (file.type === "file") {
-        return file
-      }
-      if (file.type === "directory" && file.children) {
-        const found = findFirstFile(file.children)
-        if (found) return found
-      }
-    }
-    return null
-  }
-
-  const findFileById = (files: NoteFile[], fileId: string): NoteFile | null => {
-    for (const file of files) {
-      if (file.id === fileId) {
-        return file
-      }
-      if (file.type === "directory" && file.children) {
-        const found = findFileById(file.children, fileId)
-        if (found) return found
-      }
-    }
-    return null
-  }
-
-  // const incrementViewCount = async () => {
-  //   try {
-  //     const token = localStorage.getItem("token")
-  //     await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notes/${noteId}/view`, {
-  //       method: "POST",
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //       },
-  //     })
-  //   } catch (error) {
-  //     console.error("Error incrementing view count:", error)
-  //   }
-  // }
-
-  // const handleLike = async () => {
-  //   if (!note) return
-
-  //   try {
-  //     const token = localStorage.getItem("token")
-  //     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notes/${noteId}/like`, {
-  //       method: "POST",
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //         "Content-Type": "application/json",
-  //       },
-  //     })
-
-  //     if (!response.ok) {
-  //       throw new Error("Failed to like note")
-  //     }
-
-  //     const data = await response.json()
-  //     setNote((prev) =>
-  //       prev
-  //         ? {
-  //             ...prev,
-  //             likeCount: data.likeCount,
-  //             dislikeCount: data.dislikeCount,
-  //             isLiked: data.isLiked,
-  //             isDisliked: data.isDisliked,
-  //           }
-  //         : null,
-  //     )
-  //   } catch (error) {
-  //     console.error("Error liking note:", error)
-  //     toast.error("Failed to like note")
-  //   }
-  // }
-
-  // const handleDislike = async () => {
-  //   if (!note) return
-
-  //   try {
-  //     const token = localStorage.getItem("token")
-  //     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notes/${noteId}/dislike`, {
-  //       method: "POST",
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //         "Content-Type": "application/json",
-  //       },
-  //     })
-
-  //     if (!response.ok) {
-  //       throw new Error("Failed to dislike note")
-  //     }
-
-  //     const data = await response.json()
-  //     setNote((prev) =>
-  //       prev
-  //         ? {
-  //             ...prev,
-  //             likeCount: data.likeCount,
-  //             dislikeCount: data.dislikeCount,
-  //             isLiked: data.isLiked,
-  //             isDisliked: data.isDisliked,
-  //           }
-  //         : null,
-  //     )
-  //   } catch (error) {
-  //     console.error("Error disliking note:", error)
-  //     toast.error("Failed to dislike note")
-  //   }
-  // }
-
-  // const handleBookmark = async () => {
-  //   if (!note) return
-
-  //   try {
-  //     const token = localStorage.getItem("token")
-  //     const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notes/${noteId}/bookmark`, {
-  //       method: "POST",
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //       },
-  //     })
-
-  //     if (!response.ok) {
-  //       throw new Error("Failed to bookmark note")
-  //     }
-
-  //     const data = await response.json()
-  //     setNote((prev) => (prev ? { ...prev, isBookmarked: data.isBookmarked } : null))
-  //     toast.success(data.isBookmarked ? "Note bookmarked!" : "Bookmark removed!")
-  //   } catch (error) {
-  //     console.error("Error bookmarking note:", error)
-  //     toast.error("Failed to bookmark note")
-  //   }
-  // }
-
-  // const handleShare = async () => {
-  //   try {
-  //     if (navigator.share) {
-  //       await navigator.share({
-  //         title: note?.title,
-  //         text: `Check out this note: ${note?.title}`,
-  //         url: window.location.href,
-  //       })
-  //     } else {
-  //       await navigator.clipboard.writeText(window.location.href)
-  //       toast.success("Link copied to clipboard!")
-  //     }
-  //   } catch (error) {
-  //     console.error("Error sharing:", error)
-  //     toast.error("Failed to share note")
-  //   }
-  // }
 
   const handleDownload = async () => {
     if (!note) return
@@ -381,14 +224,6 @@ export default function NoteViewerPage() {
     }
   }
 
-  const handleFileSelect = (fileId: string) => {
-    if (!note) return
-    const file = findFileById(note.files, fileId)
-    if (file && file.type === "file") {
-      setSelectedFile(file)
-    }
-  }
-
   const handleAddComment = async () => {
     if (!newComment.trim() || !note) return
 
@@ -412,9 +247,9 @@ export default function NoteViewerPage() {
       setNote((prev) =>
         prev
           ? {
-              ...prev,
-              comments: [...(prev.comments || []), comment],
-            }
+            ...prev,
+            comments: [...(prev.comments || []), comment],
+          }
           : null,
       )
       setNewComment("")
@@ -537,7 +372,7 @@ export default function NoteViewerPage() {
                   </Badge>
                 </div>
 
-                <div className="flex items-center gap-4 text-sm text-slate-600 mb-4">
+                <div className="flex items-center gap-3 text-sm text-slate-600 mb-4">
                   <div className="flex items-center gap-2">
                     <Avatar className="h-6 w-6 ring-2 ring-blue-200 ring-offset-1">
                       <AvatarImage src={note.author?.avatar || "/placeholder.svg"} alt={note.author?.username || ""} />
@@ -557,11 +392,7 @@ export default function NoteViewerPage() {
                     <Calendar className="h-4 w-4 text-blue-500" />
                     <span>Updated {formatRelativeTime(note.updatedAt)}</span>
                   </div>
-                  <Separator orientation="vertical" className="h-4" />
-                  <div className="flex items-center gap-1">
-                    <Eye className="h-4 w-4 text-emerald-500" />
-                    <span>{(note.viewCount ?? 0).toLocaleString()} views</span>
-                  </div>
+
                   <Separator orientation="vertical" className="h-4" />
                   <Badge variant="outline" className="bg-white/80">
                     {note.group?.name || "No group"}
@@ -586,54 +417,7 @@ export default function NoteViewerPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  //onClick={handleLike}
-                  className={`transition-all duration-300 transform hover:scale-105 ${
-                    note.isLiked
-                      ? "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
-                      : "bg-white/80 border-green-200 hover:bg-green-50 hover:text-green-600"
-                  }`}
-                >
-                  <ThumbsUp className="h-4 w-4 mr-1" />
-                  {note.likeCount}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  //onClick={handleDislike}
-                  className={`transition-all duration-300 transform hover:scale-105 ${
-                    note.isDisliked
-                      ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
-                      : "bg-white/80 border-red-200 hover:bg-red-50 hover:text-red-600"
-                  }`}
-                >
-                  <ThumbsDown className="h-4 w-4 mr-1" />
-                  {note.dislikeCount}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  //onClick={handleBookmark}
-                  className={`transition-all duration-300 transform hover:scale-105 ${
-                    note.isBookmarked
-                      ? "bg-yellow-50 text-yellow-600 border-yellow-200 hover:bg-yellow-100"
-                      : "bg-white/80 border-yellow-200 hover:bg-yellow-50 hover:text-yellow-600"
-                  }`}
-                >
-                  <Bookmark className="h-4 w-4 mr-1" />
-                  {note.isBookmarked ? "Saved" : "Save"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  //onClick={handleShare}
-                  className="bg-white/80 border-blue-200 hover:bg-blue-50 hover:border-blue-300 transition-all duration-300 transform hover:scale-105"
-                >
-                  <Share2 className="h-4 w-4 mr-1" />
-                  Share
-                </Button>
+
                 <Button
                   variant="outline"
                   size="sm"
@@ -660,19 +444,6 @@ export default function NoteViewerPage() {
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-6 mb-6">
-              <div className="flex items-center gap-4 text-sm text-slate-600">
-                <div className="flex items-center gap-1">
-                  <Heart className="h-4 w-4 text-red-500" />
-                  <span>{note.likeCount} likes</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <MessageCircle className="h-4 w-4 text-blue-500" />
-                  <span>{note.comments?.length || 0} comments</span>
-                </div>
               </div>
             </div>
           </div>
@@ -728,10 +499,10 @@ export default function NoteViewerPage() {
 
             <div className="lg:col-span-3">
               <Tabs defaultValue="content" className="w-full">
-                <TabsList className="grid w-full grid-cols-3 bg-white/80 backdrop-blur-sm">
+                <TabsList className="grid w-full grid-cols-2 bg-white/80 backdrop-blur-sm">
                   <TabsTrigger value="content">Content</TabsTrigger>
                   <TabsTrigger value="info">Information</TabsTrigger>
-                  <TabsTrigger value="comments">Comments ({note.comments?.length || 0})</TabsTrigger>
+                  {/* <TabsTrigger value="comments">Comments ({note.comments?.length || 0})</TabsTrigger> */}
                 </TabsList>
 
                 <TabsContent value="content" className="mt-6">
@@ -742,41 +513,29 @@ export default function NoteViewerPage() {
                           <div className="p-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-md">
                             <FileText className="h-4 w-4 text-white" />
                           </div>
-                          {selectedFile ? selectedFile.name : "Select a file"}
+                          {note.title}
                         </div>
-                        {selectedFile && selectedFile.updatedAt && (
-                          <div className="flex items-center gap-2 text-sm text-slate-500">
-                            <Clock className="h-4 w-4" />
-                            <span>Updated {formatRelativeTime(selectedFile.updatedAt)}</span>
-                            {selectedFile.size && (
-                              <>
-                                <Separator orientation="vertical" className="h-4" />
-                                <span>{(selectedFile.size / 1024).toFixed(1)} KB</span>
-                              </>
-                            )}
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <Clock className="h-4 w-4" />
+                          <span>Updated {formatRelativeTime(note.updatedAt)}</span>
+                        </div>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-6">
-                      {selectedFile ? (
-                        <FileViewer
-                          noteId={noteId}
-                          fileName={selectedFile.name}
+                      {token ? (
+                        <iframe
+                          src={`${process.env.NEXT_PUBLIC_API_URL}/api/notes/${note.id}/file?token=${token}`}
+                          className="w-full h-[700px] rounded-lg"
+                          style={{ border: "none" }}
                         />
                       ) : (
-                        <div className="text-center py-16 text-slate-500">
-                          <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-r from-slate-200 to-slate-300 rounded-full flex items-center justify-center">
-                            <FileText className="h-8 w-8 text-slate-400" />
-                          </div>
-                          <p className="text-lg font-medium mb-2">No file selected</p>
-                          <p className="text-sm">Choose a file from the sidebar to view its contents</p>
+                        <div className="flex items-center justify-center h-[700px]">
+                          <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
                         </div>
                       )}
                     </CardContent>
                   </Card>
                 </TabsContent>
-
                 <TabsContent value="info" className="mt-6">
                   <Card className="bg-white/90 backdrop-blur-sm border-emerald-200 shadow-lg">
                     <CardHeader className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-t-lg">
@@ -828,104 +587,7 @@ export default function NoteViewerPage() {
                           </div>
                         </div>
                       </div>
-
                       <Separator />
-
-                      <div className="grid grid-cols-4 gap-4 text-center">
-                        <div className="p-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg">
-                          <div className="text-2xl font-bold text-blue-600">{(note.viewCount ?? 0).toLocaleString()}</div>
-                          <div className="text-sm text-blue-500">Views</div>
-                        </div>
-                        <div className="p-4 bg-gradient-to-r from-green-50 to-green-100 rounded-lg">
-                          <div className="text-2xl font-bold text-green-600">{note.likeCount ?? 0}</div>
-                          <div className="text-sm text-green-500">Likes</div>
-                        </div>
-                        <div className="p-4 bg-gradient-to-r from-yellow-50 to-yellow-100 rounded-lg">
-                          <div className="text-sm text-yellow-500">Rating</div>
-                        </div>
-                        <div className="p-4 bg-gradient-to-r from-purple-50 to-purple-100 rounded-lg">
-                          <div className="text-2xl font-bold text-purple-600">{note.comments?.length || 0}</div>
-                          <div className="text-sm text-purple-500">Comments</div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="comments" className="mt-6">
-                  <Card className="bg-white/90 backdrop-blur-sm border-orange-200 shadow-lg">
-                    <CardHeader className="bg-gradient-to-r from-orange-50 to-red-50 rounded-t-lg">
-                      <CardTitle className="flex items-center gap-2">
-                        <div className="p-1 bg-gradient-to-r from-orange-500 to-red-500 rounded-md">
-                          <MessageCircle className="h-4 w-4 text-white" />
-                        </div>
-                        Comments ({note.comments?.length || 0})
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="pt-6">
-                      <div className="space-y-4 mb-6">
-                        <div className="flex gap-3">
-                          <Textarea
-                            placeholder="Add a comment..."
-                            value={newComment}
-                            onChange={(e) => setNewComment(e.target.value)}
-                            className="flex-1 bg-white/80 border-slate-200 focus:border-blue-300 focus:ring-blue-200"
-                            rows={3}
-                          />
-                        </div>
-                        <div className="flex justify-end">
-                          <Button
-                            onClick={handleAddComment}
-                            disabled={!newComment.trim() || commenting}
-                            className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600"
-                          >
-                            {commenting ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            ) : (
-                              <Send className="h-4 w-4 mr-2" />
-                            )}
-                            {commenting ? "Posting..." : "Post Comment"}
-                          </Button>
-                        </div>
-                      </div>
-
-                      <Separator className="mb-6" />
-
-                      <div className="space-y-4">
-                        {note.comments && note.comments.length > 0 ? (
-                          note.comments.map((comment) => (
-                            <div
-                              key={comment.id}
-                              className="flex gap-3 p-4 bg-white/60 rounded-lg border border-white/40"
-                            >
-                              <Avatar className="h-8 w-8 ring-2 ring-blue-200 ring-offset-1">
-                                <AvatarImage
-                                  src={comment.author.avatar || "/placeholder.svg"}
-                                  alt={comment.author.username}
-                                />
-                                <AvatarFallback className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white text-xs">
-                                  {comment.author.username.charAt(0).toUpperCase()}
-                                </AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className="font-medium text-sm">{comment.author.username}</span>
-                                  <span className="text-xs text-slate-500">
-                                    {formatRelativeTime(comment.createdAt)}
-                                  </span>
-                                </div>
-                                <p className="text-sm text-slate-700">{comment.content}</p>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-center py-8 text-slate-500">
-                            <MessageCircle className="h-12 w-12 mx-auto mb-3 text-slate-300" />
-                            <p className="text-lg font-medium mb-1">No comments yet</p>
-                            <p className="text-sm">Be the first to share your thoughts!</p>
-                          </div>
-                        )}
-                      </div>
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -934,7 +596,6 @@ export default function NoteViewerPage() {
           </div>
         </div>
       </div>
-
       <ReportModal
         isOpen={showReportModal}
         onClose={() => setShowReportModal(false)}
