@@ -1,6 +1,7 @@
 import type React from "react"
 import type { Metadata } from "next"
 import "./globals.css"
+import { UserProvider } from "@/contexts/user-context"
 
 export const metadata: Metadata = {
   title: "Cognitia - AI-Powered Learning Platform",
@@ -17,7 +18,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <div className="page-transition">{children}</div>
+        <UserProvider>
+          <div className="page-transition">{children}</div>
+        </UserProvider>
       </body>
     </html>
   )

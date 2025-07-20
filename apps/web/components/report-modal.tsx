@@ -12,6 +12,9 @@ interface ReportModalProps {
   onClose: () => void
   onSubmit: (reportData: { reason: string; details: string }) => void
   noteTitle: string
+  itemType: string
+  itemId: string
+  itemTitle: string
 }
 
 export function ReportModal({ isOpen, onClose, onSubmit, noteTitle }: ReportModalProps) {

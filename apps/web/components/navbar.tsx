@@ -1,8 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
+import { useUser } from "@/contexts/user-context"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
@@ -15,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { NotificationDropdown } from "@/components/notification-dropdown"
 import { BookOpen, Brain, Home, MessageSquare, Settings, Trophy, User, Menu, X, Target } from "lucide-react"
-import { CURRENT_USER } from "@/lib/mock-data"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
@@ -28,7 +28,23 @@ const navigation = [
 
 export function Navbar() {
   const pathname = usePathname()
+  const router = useRouter()
+  const { user, loading, logout } = useUser()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login")
+    }
+  }, [loading, user, router])
+
+  if (loading) {
+    return <nav className="h-16 bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-50" />
+  }
+
+  if (!user) {
+    return null
+  }
 
   return (
     <nav className="bg-white backdrop-blur-md border-b border-gray-200 sticky top-0 z-50">
@@ -78,9 +94,9 @@ export function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={CURRENT_USER.avatar || "/placeholder.svg"} alt={CURRENT_USER.name} />
+                    <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
                     <AvatarFallback className="bg-purple-500 text-white text-sm">
-                      {CURRENT_USER.name.charAt(0)}
+                      {user.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
@@ -88,8 +104,11 @@ export function Navbar() {
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{CURRENT_USER.name}</p>
-                    <p className="text-xs leading-none text-muted-foreground">{CURRENT_USER.email}</p>
+                    <p className="text-sm font-medium leading-none">{user.name}</p>
+                    <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                    {user.institution && (
+                      <p className="text-xs leading-none text-muted-foreground">{user.institution}</p>
+                    )}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -106,7 +125,7 @@ export function Navbar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={logout}>
                   <span>Log out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
