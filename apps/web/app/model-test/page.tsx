@@ -422,6 +422,7 @@ export default function ModelTestPage() {
           </CardContent>
         </Card>
 
+        {/* Model Tests List */}
         <Tabs defaultValue="all" className="space-y-6">
           <TabsList className="bg-white/70 backdrop-blur-sm border border-emerald-200 shadow-lg w-[700px]">
             <TabsTrigger
@@ -446,7 +447,7 @@ export default function ModelTestPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
               </div>
             ) : tests.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2">
                 {tests.map((test, index) => {
                   const progress = getTestProgress(test.id)
                   return (
@@ -544,7 +545,7 @@ export default function ModelTestPage() {
             )}
           </TabsContent>
           <TabsContent value="trending" className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2">
               {tests
                 .sort((a, b) => b.participants - a.participants)
                 .slice(0, 6)
