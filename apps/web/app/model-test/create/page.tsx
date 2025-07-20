@@ -27,6 +27,7 @@ export default function CreateModelTestPage() {
     difficulty: "",
     numberOfQuestions: "",
     subjects: [] as string[],
+    topics: [] as string[], // Add topics field
   })
 
   const availableSubjects = [
@@ -80,20 +81,20 @@ export default function CreateModelTestPage() {
         setGenerationProgress(step.progress)
       }
 
-      // Call API to generate test
+      // Call API to generate test (new endpoint and structure)
       const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/generate`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/create`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          title: formData.testName,
-          duration: Number.parseInt(formData.duration),
-          difficulty: formData.difficulty,
-          numberOfQuestions: Number.parseInt(formData.numberOfQuestions),
           subjects: formData.subjects,
+          topics: formData.topics, // currently empty, can add UI for topics if needed
+          difficulty: formData.difficulty.toUpperCase(),
+          timeLimit: Number.parseInt(formData.duration),
+          questionCount: Number.parseInt(formData.numberOfQuestions),
         }),
       })
 
@@ -102,7 +103,7 @@ export default function CreateModelTestPage() {
       }
 
       const result = await response.json()
-      setGeneratedTestId(result.testId)
+      setGeneratedTestId(result.modelTest.id)
       setIsGenerated(true)
       toast.success("Test generated successfully!")
     } catch (error) {
@@ -113,29 +114,35 @@ export default function CreateModelTestPage() {
     }
   }
 
-  const handleStartExam = () => {
+  const handleStartExam = async () => {
     if (generatedTestId) {
-      router.push(`/model-test/${generatedTestId}`)
-    }
-  }
-
-  const handleDoLater = async () => {
-    if (generatedTestId) {
+      setLoading(true)
       try {
         const token = localStorage.getItem("token")
-        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/${generatedTestId}/save-draft`, {
+        // Start the test attempt before navigating
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/${generatedTestId}/start`, {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
+          body: JSON.stringify({}),
         })
-        toast.success("Test saved for later!")
+        if (!response.ok) {
+          throw new Error("Failed to start test attempt")
+        }
+        // Optionally, you can use the response if needed
+        router.push(`/model-test/${generatedTestId}`)
       } catch (error) {
-        console.error("Error saving test:", error)
-        toast.error("Failed to save test")
+        console.error("Error starting test attempt:", error)
+        toast.error("Failed to start test attempt")
+      } finally {
+        setLoading(false)
       }
     }
+  }
+
+  const handleDoLater = () => {
     router.push("/model-test")
   }
 
@@ -194,22 +201,15 @@ export default function CreateModelTestPage() {
                       <Clock className="h-4 w-4 text-blue-500" />
                       Duration (minutes)
                     </Label>
-                    <Select
+                    <Input
+                      id="duration"
+                      type="number"
+                      min={1}
+                      max={180}
+                      placeholder="Enter duration in minutes"
                       value={formData.duration}
-                      onValueChange={(value) => setFormData((prev) => ({ ...prev, duration: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select duration" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="30">30 minutes</SelectItem>
-                        <SelectItem value="45">45 minutes</SelectItem>
-                        <SelectItem value="60">1 hour</SelectItem>
-                        <SelectItem value="90">1.5 hours</SelectItem>
-                        <SelectItem value="120">2 hours</SelectItem>
-                        <SelectItem value="180">3 hours</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      onChange={(e) => setFormData((prev) => ({ ...prev, duration: e.target.value }))}
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -217,21 +217,15 @@ export default function CreateModelTestPage() {
                       <Target className="h-4 w-4 text-purple-500" />
                       Number of Questions
                     </Label>
-                    <Select
+                    <Input
+                      id="questions"
+                      type="number"
+                      min={1}
+                      max={100}
+                      placeholder="Enter number of questions"
                       value={formData.numberOfQuestions}
-                      onValueChange={(value) => setFormData((prev) => ({ ...prev, numberOfQuestions: value }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select questions" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="10">10 questions</SelectItem>
-                        <SelectItem value="20">20 questions</SelectItem>
-                        <SelectItem value="30">30 questions</SelectItem>
-                        <SelectItem value="50">50 questions</SelectItem>
-                        <SelectItem value="100">100 questions</SelectItem>
-                      </SelectContent>
-                    </Select>
+                      onChange={(e) => setFormData((prev) => ({ ...prev, numberOfQuestions: e.target.value }))}
+                    />
                   </div>
                 </div>
 
@@ -249,7 +243,6 @@ export default function CreateModelTestPage() {
                       <SelectItem value="easy">Easy</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
                       <SelectItem value="hard">Hard</SelectItem>
-                      <SelectItem value="expert">Expert</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
