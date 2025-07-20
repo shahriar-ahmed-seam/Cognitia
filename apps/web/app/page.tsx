@@ -7,9 +7,34 @@ import { ArrowRight, BookOpen, Users, Trophy, Sparkles, Star, Rocket } from "luc
 
 export default function Home() {
   const [isVisible, setIsVisible] = useState(false)
+  const [notesCount, setNotesCount] = useState(0)
+  const [userCount, setUserCount] = useState(0)
 
   useEffect(() => {
     setIsVisible(true)
+
+    // Fetch the number of notes
+    async function fetchNotesCount() {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notes/count`, {})
+        const data = await response.json()
+        setNotesCount(data.count)
+      } catch (error) {
+        console.error("Failed to fetch notes count:", error)
+      }
+    }
+    // Fetch the number of users
+    async function fetchUserCount() {
+      try {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/users/count`, {})
+        const data = await response.json()
+        setUserCount(data.count)
+      } catch (error) {
+        console.error("Failed to fetch user count:", error)
+      }
+    }
+    fetchUserCount()
+    fetchNotesCount()
   }, [])
 
   return (
@@ -226,12 +251,12 @@ export default function Home() {
             }`}
           >
             <div className="text-center">
-              <div className="text-3xl font-bold text-white mb-1">10K+</div>
-              <div className="text-purple-300 text-sm">Active Learners</div>
+              <div className="text-3xl font-bold text-white mb-1">{userCount}</div>
+              <div className="text-purple-300 text-sm">Users</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-white mb-1">500+</div>
-              <div className="text-purple-300 text-sm">Courses</div>
+              <div className="text-3xl font-bold text-white mb-1">{notesCount}</div>
+              <div className="text-purple-300 text-sm">Notes</div>
             </div>
             <div className="text-center">
               <div className="text-3xl font-bold text-white mb-1">95%</div>
