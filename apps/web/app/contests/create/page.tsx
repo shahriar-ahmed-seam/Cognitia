@@ -116,12 +116,10 @@ export default function CreateContestPage() {
     setLoading(true)
     try {
       const token = localStorage.getItem("token")
-
       // Create start date
       const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`)
       const endDateTime = new Date(startDateTime)
       endDateTime.setHours(endDateTime.getHours() + Number.parseInt(formData.duration))
-
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests`, {
         method: "POST",
         headers: {
@@ -133,18 +131,16 @@ export default function CreateContestPage() {
           description: formData.description,
           startTime: startDateTime.toISOString(),
           endTime: endDateTime.toISOString(),
-          difficulty: formData.difficulty,
+          difficulty: formData.difficulty.toUpperCase(),
           topics: topics.length > 0 ? topics : ["general"],
-          isVirtual: formData.isVirtual,
           eligibility: formData.eligibility,
-          status: startDateTime > new Date() ? "upcoming" : "ongoing",
+          isVirtual: formData.isVirtual,
+          status: startDateTime > new Date() ? "UPCOMING" : "ONGOING",
         }),
       })
-
       if (!response.ok) {
         throw new Error("Failed to create contest")
       }
-
       const newContest = await response.json()
       toast.success("Contest published successfully!")
       router.push(`/contests/${newContest.id}`)

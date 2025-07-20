@@ -18,7 +18,7 @@ interface QuestionCardProps {
   question: Question
   questionIndex: number
   totalQuestions: number
-  answer: number | undefined
+  answer: string | undefined
   flagged: boolean
   onAnswer: (value: string) => void
   onFlag: () => void
@@ -53,7 +53,7 @@ export function QuestionCard({ question, questionIndex, totalQuestions, answer, 
         <div className="space-y-6">
           <div className="text-lg font-medium">{question.question}</div>
           <RadioGroup
-            value={answer !== undefined ? answer.toString() : ""}
+            value={answer || ""}
             onValueChange={onAnswer}
             className="space-y-3"
           >

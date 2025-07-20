@@ -4,38 +4,79 @@ import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import {
-  type Contest,
-  type ParticipationStatus,
-  formatContestDuration,
-  getTimeElapsed,
-  getTimeRemaining,
-  getTimeRemainingUntilEnd,
-  getUserParticipationStatus,
-  registerForContest,
-  unregisterFromContest,
-} from "@/lib/contest-data"
-import { formatTimeRemaining, formatDuration } from "@/lib/date-utils"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Clock, Users } from "lucide-react"
+import type { Contest, ParticipationStatus } from "@/types/contest"
+import { formatTimeRemaining, formatDuration } from "@/lib/date-utils"
+import { fetchWithAuth } from "@/lib/utils"
+import { useUser } from "@/contexts/user-context"
 
 interface ContestCardProps {
   contest: Contest
 }
 
 export function ContestCard({ contest }: ContestCardProps) {
-  const [participationStatus, setParticipationStatus] = useState<ParticipationStatus>(
-    getUserParticipationStatus(contest.id),
-  )
+  const { user, loading } = useUser()
+  const [participationStatus, setParticipationStatus] = useState<ParticipationStatus>("not-registered")
+  const [isLoading, setIsLoading] = useState(false)
 
-  const handleRegister = () => {
-    registerForContest(contest.id)
-    setParticipationStatus("registered")
+  // Fetch participation status from backend
+  useEffect(() => {
+    if (!user || loading) return;
+    const fetchStatus = async () => {
+      try {
+        const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}`;
+        console.log("Fetching contest status from:", url);
+        const res = await fetchWithAuth(url, { method: "GET" });
+        if (!res.ok) throw new Error(`Status fetch failed: ${res.status}`);
+        const data = await res.json();
+        const isRegistered = data?.contest?.userStatus?.isRegistered;
+        setParticipationStatus(isRegistered ? "registered" : "not-registered");
+        console.log("Fetched participation status:", isRegistered);
+      } catch (err) {
+        console.error("Error fetching participation status:", err);
+        setParticipationStatus("not-registered");
+      }
+    };
+    fetchStatus();
+  }, [contest.id, user, loading]);
+
+  const handleRegister = async () => {
+    if (!user || loading || !user.id) return
+    setIsLoading(true)
+    try {
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}/register`;
+      console.log("Registering at:", url);
+      const res = await fetchWithAuth(url, { method: "POST" });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error || "Failed to register");
+      }
+      setParticipationStatus("registered")
+      alert("Successfully registered for contest!");
+    } catch (error) {
+      console.error("Register error:", error);
+      alert("Failed to register for contest. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleUnregister = () => {
-    unregisterFromContest(contest.id)
-    setParticipationStatus("not-registered")
+  const handleUnregister = async () => {
+    if (!user || loading || !user.id) return
+    setIsLoading(true)
+    try {
+      // Try DELETE to /api/contests/register
+      await fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/register`, {
+        method: "DELETE",
+        body: JSON.stringify({ contestId: contest.id, userId: user.id }),
+      })
+      setParticipationStatus("not-registered")
+    } catch (error) {
+      alert("Failed to unregister from contest. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const getDifficultyColor = (difficulty: string) => {
@@ -72,11 +113,11 @@ export function ContestCard({ contest }: ContestCardProps) {
     const end = new Date(contest.endTime)
 
     if (now < start) {
-      return `Starts in ${formatTimeRemaining(contest.startTime.toISOString())}`
+      return `Starts in ${formatTimeRemaining(contest.startTime.toString())}`
     } else if (now < end) {
-      return `Started ${formatTimeRemaining(contest.startTime.toISOString())} ago • Ends in ${formatTimeRemaining(contest.endTime.toISOString())}`
+      return `Started ${formatTimeRemaining(contest.startTime.toString())} ago • Ends in ${formatTimeRemaining(contest.endTime.toString())}`
     } else {
-      return `Ended ${formatTimeRemaining(contest.endTime.toISOString())} ago`
+      return `Ended ${formatTimeRemaining(contest.endTime.toString())} ago`
     }
   }
 
@@ -100,8 +141,8 @@ export function ContestCard({ contest }: ContestCardProps) {
         )
       } else {
         return (
-          <Button onClick={handleRegister} className="w-full">
-            Register & Enter
+          <Button onClick={handleRegister} className="w-full" disabled={isLoading || loading || !user}>
+            {isLoading ? "Registering..." : "Register & Enter"}
           </Button>
         )
       }
@@ -109,14 +150,15 @@ export function ContestCard({ contest }: ContestCardProps) {
 
     if (participationStatus === "registered") {
       return (
-        <Button variant="outline" onClick={handleUnregister} className="w-full">
-          Unregister
+        <Button variant="outline" /* onClick={handleUnregister} */ className="w-full" disabled={isLoading || loading || !user}>
+          {/* {isLoading ? "Unregistering..." : "Unregister"} */}
+          Registered
         </Button>
       )
     } else {
       return (
-        <Button onClick={handleRegister} className="w-full">
-          Register
+        <Button onClick={handleRegister} className="w-full" disabled={isLoading || loading || !user}>
+          {isLoading ? "Registering..." : "Register"}
         </Button>
       )
     }
@@ -152,7 +194,7 @@ export function ContestCard({ contest }: ContestCardProps) {
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4" />
-            <span>{formatDuration(contest.startTime.toISOString(), contest.endTime.toISOString())}</span>
+            <span>{formatDuration(contest.startTime.toString(), contest.endTime.toString())}</span>
           </div>
           <div className="flex items-center gap-1">
             <Users className="h-4 w-4" />
@@ -167,12 +209,7 @@ export function ContestCard({ contest }: ContestCardProps) {
       </CardContent>
       <CardFooter className="p-4 pt-0 flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <img
-            //src={contest.organizer.avatar || "/placeholder.svg"}
-            //alt={contest.organizer.name}
-            //className="h-6 w-6 rounded-full"
-          />
-          {/* <span className="text-sm text-gray-600">by {contest.organizer.name}</span> */}
+          {/* Organizer avatar/name can go here if needed */}
         </div>
         <div className="w-1/3">{renderActionButton()}</div>
       </CardFooter>

@@ -11,7 +11,7 @@ interface TestProgressSidebarProps {
   answeredCount: number
   currentQuestionIndex: number
   flaggedQuestions: Set<number>
-  answers: Record<string, number>
+  answers: Record<string, string>
   onJumpToQuestion: (index: number) => void
   onSubmit: () => void
 }
