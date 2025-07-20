@@ -106,7 +106,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const { toast } = useToast()
   const router = useRouter()
-
+  
   useEffect(() => {
     setMounted(true)
     fetchDashboardData()
