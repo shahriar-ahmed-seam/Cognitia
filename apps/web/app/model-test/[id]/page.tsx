@@ -1,13 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Navbar } from "@/components/navbar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle, Clock, Flag, Brain, Loader2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
@@ -18,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast"
 
 interface Question {
   id: string
@@ -57,7 +58,10 @@ interface Test {
 export default function TakeTestPage() {
   const params = useParams()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
   const testId = params.id as string
+  const resumeAttemptId = searchParams.get('resumeAttempt')
 
   const [test, setTest] = useState<Test | null>(null)
   const [attempt, setAttempt] = useState<TestAttempt | null>(null)
@@ -78,8 +82,12 @@ export default function TakeTestPage() {
   }
 
   useEffect(() => {
-    fetchTestAndStartAttempt()
-  }, [testId])
+    if (resumeAttemptId) {
+      resumeTestAttempt()
+    } else {
+      fetchTestAndStartAttempt()
+    }
+  }, [testId, resumeAttemptId])
 
   useEffect(() => {
     if (timeRemaining > 0) {
@@ -98,48 +106,160 @@ export default function TakeTestPage() {
     }
   }, [timeRemaining])
 
-  const fetchTestAndStartAttempt = async () => {
+  const resumeTestAttempt = async () => {
     try {
+      setLoading(true)
       const token = localStorage.getItem("token")
 
-      // Fetch test details
-      const testResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/${testId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!testResponse.ok) {
-        throw new Error("Failed to fetch test")
+      if (!token) {
+        toast({
+          title: "Authentication Error",
+          description: "Please log in to continue.",
+          variant: "destructive",
+        })
+        router.push("/login")
+        return
       }
 
-      const testData = await testResponse.json()
-      setTest(testData)
-
-      // Start test attempt
-      const attemptResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/${testId}/start`, {
-        method: "POST",
+      // Resume the existing attempt
+      const resumeResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/attempt/${resumeAttemptId}/resume`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       })
 
+      if (!resumeResponse.ok) {
+        const errorText = await resumeResponse.text()
+        console.error("Resume response error:", errorText)
+        throw new Error(`Failed to resume test: ${resumeResponse.status}`)
+      }
+
+      const resumeData = await resumeResponse.json()
+      
+      // Fetch test details
+      const testResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/${testId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!testResponse.ok) {
+        throw new Error("Failed to fetch test details")
+      }
+
+      const testData = await testResponse.json()
+      setTest(testData.modelTest)
+
+      // Set attempt data
+      setAttempt({
+        id: resumeAttemptId!,
+        testId: testId,
+        userId: "",
+        startTime: resumeData.startTime,
+        answers: resumeData.savedAnswers || {},
+        status: "in-progress"
+      })
+
+      // Set saved answers
+      setAnswers(resumeData.savedAnswers || {})
+
+      // Calculate remaining time
+      const startTime = new Date(resumeData.startTime).getTime()
+      const currentTime = new Date().getTime()
+      const elapsedSeconds = Math.floor((currentTime - startTime) / 1000)
+      const remainingSeconds = Math.max(0, resumeData.timeLimit * 60 - elapsedSeconds)
+      setTimeRemaining(remainingSeconds)
+
+      toast({
+        title: "Success",
+        description: "Test resumed successfully",
+      })
+    } catch (error) {
+      console.error("Error resuming test:", error)
+      toast({
+        title: "Error",
+        description: "Failed to resume test. Starting a new attempt.",
+        variant: "destructive",
+      })
+      // Fallback to starting new attempt
+      await fetchTestAndStartAttempt()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchTestAndStartAttempt = async () => {
+    try {
+      setLoading(true)
+      const token = localStorage.getItem("token")
+
+      if (!token) {
+        toast({
+          title: "Authentication Error",
+          description: "Please log in to continue.",
+          variant: "destructive",
+        })
+        router.push("/login")
+        return
+      }
+
+      // Fetch test details first
+      const testResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/${testId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!testResponse.ok) {
+        const errorText = await testResponse.text()
+        console.error("Test fetch error:", errorText)
+        throw new Error(`Failed to fetch test: ${testResponse.status}`)
+      }
+
+      const testData = await testResponse.json()
+      setTest(testData.modelTest)
+
+      // Start test attempt
+      const attemptResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/${testId}/start`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({}), // Send empty object instead of undefined
+      })
+
       if (!attemptResponse.ok) {
-        throw new Error("Failed to start test")
+        const errorText = await attemptResponse.text()
+        console.error("Start attempt error:", errorText)
+        throw new Error(`Failed to start test: ${attemptResponse.status}`)
       }
 
       const attemptData = await attemptResponse.json()
-      setAttempt(attemptData)
-      setTimeRemaining(testData.timeLimit * 60)
+      setAttempt({ 
+        id: attemptData.attemptId, 
+        testId: testId, 
+        userId: "", 
+        startTime: new Date().toISOString(),
+        answers: {},
+        status: "in-progress"
+      })
+      setTimeRemaining(attemptData.timeLimit * 60)
 
-      // Load existing answers if resuming
-      if (attemptData.answers) {
-        setAnswers(attemptData.answers)
-      }
+      toast({
+        title: "Success",
+        description: "Test started successfully",
+      })
     } catch (error) {
       console.error("Error starting test:", error)
-      toast.error("Failed to start test")
+      toast({
+        title: "Error",
+        description: "Failed to start test. Please try again.",
+        variant: "destructive",
+      })
       router.push("/model-test")
     } finally {
       setLoading(false)
@@ -151,12 +271,14 @@ export default function TakeTestPage() {
 
     const currentQuestion = test.questions[currentQuestionIndex]
     const newAnswers = { ...answers, [currentQuestion.id]: Number.parseInt(value) }
+    
+    // Update UI immediately for better user experience
     setAnswers(newAnswers)
 
-    // Save answer to backend
+    // Auto-save answer to backend immediately
     try {
       const token = localStorage.getItem("token")
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/attempts/${attempt.id}/answer`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/attempt/${attempt.id}/answer`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -164,11 +286,31 @@ export default function TakeTestPage() {
         },
         body: JSON.stringify({
           questionId: currentQuestion.id,
-          answer: Number.parseInt(value),
+          answer: value,
         }),
       })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Save answer error:", errorText)
+        throw new Error("Failed to save answer")
+      }
+
+      // Update the attempt object with the new answer only on successful save
+      setAttempt(prev => prev ? {
+        ...prev,
+        answers: newAnswers
+      } : null)
+
     } catch (error) {
       console.error("Error saving answer:", error)
+      toast({
+        title: "Warning",
+        description: "Answer saved locally but failed to sync with server. It will be saved when you submit the test.",
+        variant: "destructive",
+      })
+      // Don't revert the answer - keep it in local state
+      // The answer will still be submitted when the test is completed
     }
   }
 
@@ -204,30 +346,82 @@ export default function TakeTestPage() {
     setSubmitting(true)
     try {
       const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/attempts/${attempt.id}/submit`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/attempt/${attempt.id}/submit`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          answers: answers,
+          timeSpent: (test?.timeLimit ? test.timeLimit * 60 : 0) - timeRemaining,
+          autoSubmit: false
+        }),
       })
 
       if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Submit test error:", errorText)
         throw new Error("Failed to submit test")
       }
 
       const result = await response.json()
-      router.push(`/model-test/results/${result.id}`)
+      toast({
+        title: "Success",
+        description: "Test submitted successfully!",
+      })
+      
+      // Navigate back to model test home page
+      router.push("/model-test")
     } catch (error) {
       console.error("Error submitting test:", error)
-      toast.error("Failed to submit test")
+      toast({
+        title: "Error",
+        description: "Failed to submit test. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setSubmitting(false)
+      setShowSubmitDialog(false)
     }
   }
 
-  const handleTimeUp = () => {
-    handleSubmitTest()
+  const handleTimeUp = async () => {
+    if (!attempt) return
+
+    setSubmitting(true)
+    try {
+      const token = localStorage.getItem("token")
+      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/attempt/${attempt.id}/submit`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          answers: answers,
+          timeSpent: test?.timeLimit ? test.timeLimit * 60 : 0,
+          autoSubmit: true
+        }),
+      })
+
+      toast({
+        title: "Time's Up",
+        description: "Test submitted automatically.",
+      })
+      router.push("/model-test")
+    } catch (error) {
+      console.error("Error auto-submitting test:", error)
+      toast({
+        title: "Error",
+        description: "Failed to submit test automatically.",
+        variant: "destructive",
+      })
+      router.push("/model-test")
+    } finally {
+      setSubmitting(false)
+      setShowTimeUpDialog(false)
+    }
   }
 
   if (loading) {
@@ -274,7 +468,12 @@ export default function TakeTestPage() {
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold flex items-center gap-3">
             <Brain className="h-7 w-7 text-blue-500" />
-            {test.title}
+            {test?.title || "Loading..."}
+            {resumeAttemptId && (
+              <Badge variant="outline" className="ml-2 text-blue-600 border-blue-600">
+                Resumed
+              </Badge>
+            )}
           </h1>
           <div className="flex items-center gap-4">
             <div className="flex items-center">
@@ -421,7 +620,7 @@ export default function TakeTestPage() {
           <DialogHeader>
             <DialogTitle>Submit Test</DialogTitle>
             <DialogDescription>
-              Are you sure you want to submit your test? This action cannot be undone.
+              Are you sure you want to submit your test? You will be redirected to the tests page.
             </DialogDescription>
           </DialogHeader>
 
@@ -456,7 +655,7 @@ export default function TakeTestPage() {
                   Submitting...
                 </>
               ) : (
-                "Submit Test"
+                "Submit & Return Home"
               )}
             </Button>
           </DialogFooter>
@@ -489,7 +688,16 @@ export default function TakeTestPage() {
           </div>
 
           <DialogFooter>
-            <Button onClick={handleTimeUp}>View Results</Button>
+            <Button onClick={handleTimeUp} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Submitting...
+                </>
+              ) : (
+                "Return Home"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -81,14 +81,11 @@ export default function ModelTestPage() {
 
       const params = new URLSearchParams({
         search: searchQuery,
-        subject: selectedSubject,
-        difficulty: selectedDifficulty,
-        sort: sortBy,
-        page: "1",
-        limit: "20",
+        subjects: selectedSubject !== "all" ? selectedSubject : "",
+        difficulty: selectedDifficulty !== "all" ? selectedDifficulty : "",
       })
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests?${params}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test?${params}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -96,11 +93,18 @@ export default function ModelTestPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to fetch tests")
+        throw new Error(`Failed to fetch tests: ${response.statusText}`)
       }
 
       const data = await response.json()
-      setTests(data.tests || [])
+
+      // Ensure the response contains the expected structure
+      if (data && Array.isArray(data.modelTests)) {
+        setTests(data.modelTests)
+      } else {
+        console.error("Unexpected response structure:", data)
+        setTests([]) // Reset tests if the structure is unexpected
+      }
     } catch (error) {
       console.error("Error fetching tests:", error)
       toast({
@@ -118,7 +122,7 @@ export default function ModelTestPage() {
     try {
       const token = localStorage.getItem("token")
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-tests/attempts`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/recent-attempts`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -126,13 +130,28 @@ export default function ModelTestPage() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to fetch attempts")
+        // Don't throw error for 404, just log it and continue with empty array
+        if (response.status === 404) {
+          console.log("No recent attempts found")
+          setUserAttempts([])
+          return
+        }
+        throw new Error(`Failed to fetch attempts: ${response.statusText}`)
       }
 
       const data = await response.json()
-      setUserAttempts(data.attempts || [])
+
+      // Ensure the response contains the expected structure
+      if (data && Array.isArray(data.attempts)) {
+        setUserAttempts(data.attempts)
+      } else {
+        console.error("Unexpected response structure:", data)
+        setUserAttempts([]) // Reset attempts if the structure is unexpected
+      }
     } catch (error) {
       console.error("Error fetching attempts:", error)
+      // Don't show error toast for attempts, just set empty array
+      setUserAttempts([])
     }
   }
 
@@ -145,13 +164,41 @@ export default function ModelTestPage() {
 
     fetchTests()
     fetchUserAttempts()
-  }, [router, searchQuery, selectedSubject, selectedDifficulty, sortBy])
+  }, [router, searchQuery, selectedSubject, selectedDifficulty])
 
   // Get all unique subjects
   const allSubjects = Array.from(new Set(tests.flatMap((test) => test.subjects)))
 
-  const handleStartTest = (testId: string) => {
-    router.push(`/model-test/${testId}`)
+  const handleStartTest = async (testId: string) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      // First check if there's an existing in-progress attempt
+      const existingAttemptResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/${testId}/attempts`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (existingAttemptResponse.ok) {
+        const attemptsData = await existingAttemptResponse.json()
+        const inProgressAttempt = attemptsData.attempts?.find((attempt: TestAttempt) => attempt.status === "in-progress")
+
+        if (inProgressAttempt) {
+          // Resume existing attempt
+          router.push(`/model-test/${testId}?resumeAttempt=${inProgressAttempt.id}`)
+          return
+        }
+      }
+
+      // No in-progress attempt found, start new test
+      router.push(`/model-test/${testId}`)
+    } catch (error) {
+      console.error("Error checking for existing attempts:", error)
+      // If there's an error, proceed with starting new test
+      router.push(`/model-test/${testId}`)
+    }
   }
 
   const getDifficultyColor = (difficulty: string) => {
@@ -192,13 +239,12 @@ export default function ModelTestPage() {
         {Array.from({ length: 20 }).map((_, i) => (
           <div
             key={`orb-${i}`}
-            className={`absolute rounded-full bg-gradient-to-br ${
-              i % 3 === 0
-                ? "from-emerald-400/20 to-teal-400/20"
-                : i % 3 === 1
-                  ? "from-teal-400/20 to-cyan-400/20"
-                  : "from-cyan-400/20 to-blue-400/20"
-            } blur-xl animate-float-enhanced`}
+            className={`absolute rounded-full bg-gradient-to-br ${i % 3 === 0
+              ? "from-emerald-400/20 to-teal-400/20"
+              : i % 3 === 1
+                ? "from-teal-400/20 to-cyan-400/20"
+                : "from-cyan-400/20 to-blue-400/20"
+              } blur-xl animate-float-enhanced`}
             style={{
               width: `${Math.random() * 200 + 100}px`,
               height: `${Math.random() * 200 + 100}px`,
@@ -377,31 +423,17 @@ export default function ModelTestPage() {
         </Card>
 
         <Tabs defaultValue="all" className="space-y-6">
-          <TabsList className="bg-white/70 backdrop-blur-sm border border-emerald-200 shadow-lg">
+          <TabsList className="bg-white/70 backdrop-blur-sm border border-emerald-200 shadow-lg w-[700px]">
             <TabsTrigger
               value="all"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white"
+              className="w-[700px] data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-500 data-[state=active]:to-teal-500 data-[state=active]:text-white"
             >
               <BookOpen className="h-4 w-4 mr-2 animate-pulse" />
               All Tests
             </TabsTrigger>
             <TabsTrigger
-              value="my-tests"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-indigo-500 data-[state=active]:text-white"
-            >
-              <User className="h-4 w-4 mr-2 animate-pulse" />
-              My Model Tests
-            </TabsTrigger>
-            <TabsTrigger
-              value="recommended"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-500 data-[state=active]:to-cyan-500 data-[state=active]:text-white"
-            >
-              <Star className="h-4 w-4 mr-2 animate-pulse" />
-              Recommended
-            </TabsTrigger>
-            <TabsTrigger
               value="trending"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-500 data-[state=active]:text-white"
+              className="w-[700px] data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-red-500 data-[state=active]:text-white"
             >
               <TrendingUp className="h-4 w-4 mr-2 animate-pulse" />
               Trending
@@ -511,116 +543,94 @@ export default function ModelTestPage() {
               </div>
             )}
           </TabsContent>
-
-          <TabsContent value="my-tests" className="space-y-6">
-            <div className="text-center py-12 animate-fade-in">
-              <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-lg">
-                <User className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-slate-700 mb-2">No custom tests yet</h3>
-                <p className="text-slate-500 mb-4">
-                  Create your own model tests or generate them with AI to see them here.
-                </p>
-                <div className="flex gap-3 justify-center">
-                  <Button
-                    onClick={() => router.push("/model-test/create")}
-                    className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Create Test
-                  </Button>
-                  <Button
-                    onClick={() => router.push("/model-test/ai-generate")}
-                    className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white"
-                  >
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    AI Generate
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="recommended" className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-              {tests
-                .filter((test) => test.difficulty === "medium" || test.difficulty === "easy")
-                .slice(0, 6)
-                .map((test, index) => (
-                  <Card
-                    key={test.id}
-                    className="h-full cursor-pointer bg-gradient-to-br from-white to-blue-50/50 border border-blue-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Star className="h-4 w-4 text-blue-500 animate-pulse" />
-                        <Badge className="bg-gradient-to-r from-blue-100 to-cyan-100 text-blue-700 border-blue-200">
-                          Recommended
-                        </Badge>
-                      </div>
-                      <CardTitle className="text-lg text-slate-900 hover:text-blue-600 transition-colors duration-300">
-                        {test.title}
-                      </CardTitle>
-                      <CardDescription className="line-clamp-2">{test.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <Button
-                        onClick={() => handleStartTest(test.id)}
-                        className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-600 hover:to-cyan-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
-                      >
-                        <Zap className="mr-2 h-4 w-4" />
-                        Start Recommended Test
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-            </div>
-          </TabsContent>
-
           <TabsContent value="trending" className="space-y-6">
             <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
               {tests
                 .sort((a, b) => b.participants - a.participants)
                 .slice(0, 6)
-                .map((test, index) => (
-                  <Card
-                    key={test.id}
-                    className="h-full cursor-pointer bg-gradient-to-br from-white to-orange-50/50 border border-orange-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-center gap-2 mb-2">
-                        <TrendingUp className="h-4 w-4 text-orange-500 animate-pulse" />
-                        <Badge className="bg-gradient-to-r from-orange-100 to-red-100 text-orange-700 border-orange-200">
-                          Trending
-                        </Badge>
-                      </div>
-                      <CardTitle className="text-lg text-slate-900 hover:text-orange-600 transition-colors duration-300">
-                        {test.title}
-                      </CardTitle>
-                      <CardDescription className="line-clamp-2">{test.description}</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between mb-4 text-sm text-slate-600">
-                        <span className="flex items-center gap-1">
-                          <Users className="h-3 w-3" />
-                          {test.participants} participants
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-3 w-3" />
-                          {test.timeLimit} min
-                        </span>
-                      </div>
-                      <Button
-                        onClick={() => handleStartTest(test.id)}
-                        className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
-                      >
-                        <Zap className="mr-2 h-4 w-4" />
-                        Join Trending Test
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
+                .map((test, index) => {
+                  const progress = getTestProgress?.(test.id) // optional chaining in case trending doesn’t use this
+                  return (
+                    <Card
+                      key={test.id}
+                      className="h-full cursor-pointer bg-gradient-to-br from-white to-orange-50/50 border border-orange-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
+                      style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-start mb-2">
+                          <CardTitle className="text-lg text-slate-900 hover:text-orange-600 transition-colors duration-300">
+                            {test.title}
+                          </CardTitle>
+                          <Badge className="bg-gradient-to-r from-orange-100 to-red-100 text-orange-700 border-orange-200 animate-pulse">
+                            Trending
+                          </Badge>
+                        </div>
+                        <CardDescription className="line-clamp-2">{test.description}</CardDescription>
+                      </CardHeader>
+
+                      <CardContent className="space-y-4">
+                        <div className="flex flex-wrap gap-1">
+                          {test.subjects?.slice(0, 3).map((subject) => (
+                            <Badge
+                              key={subject}
+                              variant="outline"
+                              className="text-xs bg-orange-50 border-orange-200 text-orange-700"
+                            >
+                              {subject}
+                            </Badge>
+                          ))}
+                          {test.subjects?.length > 3 && (
+                            <Badge variant="outline" className="text-xs bg-slate-50 border-slate-200 text-slate-600">
+                              +{test.subjects.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4 text-sm">
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <Clock className="h-4 w-4 text-blue-500" />
+                            <span>{test.timeLimit} min</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <Target className="h-4 w-4 text-green-500" />
+                            <span>{test.totalQuestions} questions</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <Users className="h-4 w-4 text-purple-500" />
+                            <span>{test.participants} taken</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-slate-600">
+                            <Trophy className="h-4 w-4 text-yellow-500" />
+                            <span>{test.passingScore}% to pass</span>
+                          </div>
+                        </div>
+
+                        {progress && (
+                          <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-600">Best Score:</span>
+                              <span className="font-medium text-orange-600">{progress.bestScore}%</span>
+                            </div>
+                            <Progress value={progress.bestScore} className="h-2" />
+                            <div className="text-xs text-slate-500">
+                              Attempted {progress.attempts} time{progress.attempts !== 1 ? "s" : ""}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+
+                      <CardContent className="pt-0">
+                        <Button
+                          onClick={() => handleStartTest(test.id)}
+                          className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                        >
+                          <Zap className="mr-2 h-4 w-4" />
+                          {progress ? "Retake Test" : "Join Trending Test"}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
             </div>
           </TabsContent>
         </Tabs>
