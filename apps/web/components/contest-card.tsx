@@ -72,11 +72,11 @@ export function ContestCard({ contest }: ContestCardProps) {
     const end = new Date(contest.endTime)
 
     if (now < start) {
-      return `Starts in ${formatTimeRemaining(contest.startTime)}`
+      return `Starts in ${formatTimeRemaining(contest.startTime.toISOString())}`
     } else if (now < end) {
-      return `Started ${formatTimeRemaining(contest.startTime)} ago • Ends in ${formatTimeRemaining(contest.endTime)}`
+      return `Started ${formatTimeRemaining(contest.startTime.toISOString())} ago • Ends in ${formatTimeRemaining(contest.endTime.toISOString())}`
     } else {
-      return `Ended ${formatTimeRemaining(contest.endTime)} ago`
+      return `Ended ${formatTimeRemaining(contest.endTime.toISOString())} ago`
     }
   }
 
@@ -152,7 +152,7 @@ export function ContestCard({ contest }: ContestCardProps) {
         <div className="flex items-center gap-4 text-sm text-gray-500">
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4" />
-            <span>{formatDuration(contest.startTime, contest.endTime)}</span>
+            <span>{formatDuration(contest.startTime.toISOString(), contest.endTime.toISOString())}</span>
           </div>
           <div className="flex items-center gap-1">
             <Users className="h-4 w-4" />
