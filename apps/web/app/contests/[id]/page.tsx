@@ -103,15 +103,19 @@ export default function TakeContestPage() {
         endTime: attemptData.endTime,
         status: (attemptData.status || "ONGOING").toUpperCase(),
         difficulty: (attemptData.difficulty || "MEDIUM").toUpperCase(),
-        questions: (attemptData.questions || []).map((q: any) => ({
-          id: q.id,
-          question: q.question,
-          options: q.options,
-          points: q.points,
-          number: q.number,
-          subject: q.subject,
-          topic: q.topic,
-        })),
+        questions: Array.isArray(attemptData.questions)
+          ? attemptData.questions
+              .filter((q: any) => q && typeof q === 'object')
+              .map((q: any) => ({
+                id: q.id,
+                question: q.question,
+                options: q.options,
+                points: q.points,
+                number: q.number,
+                subject: q.subject || "",
+                topic: q.topic || "",
+              }))
+          : [],
         totalQuestions: attemptData.totalQuestions,
       })
       setAttempt({
@@ -274,30 +278,31 @@ export default function TakeContestPage() {
             {contest?.title || "Loading..."}
           </h1>
           <div className="flex items-center gap-4">
-            <div className="flex items-center">
-              <Clock className="h-5 w-5 mr-2 text-slate-500" />
+            <div className="flex items-center text-3xl">
+              <Clock className="h-10 w-10 mr-2 text-slate-700" />
               <span className={`font-mono font-bold ${timeRemaining < 300 ? "text-red-500" : ""}`}>{formatTime(timeRemaining)}</span>
             </div>
-            <button className="btn-outline" onClick={() => setShowSubmitDialog(true)}>
-              Submit Contest
-            </button>
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="md:col-span-3">
-            <QuestionCard
-              question={{ ...currentQuestion, subject: currentQuestion.subject || "", topic: currentQuestion.topic || "" }}
-              questionIndex={currentQuestionIndex}
-              totalQuestions={totalQuestions}
-              answer={answers[currentQuestion.id]}
-              flagged={flaggedQuestions.has(currentQuestionIndex)}
-              onAnswer={handleAnswer}
-              onFlag={handleFlagQuestion}
-              onPrev={handlePrevQuestion}
-              onNext={handleNextQuestion}
-              disablePrev={currentQuestionIndex === 0}
-              disableNext={currentQuestionIndex === totalQuestions - 1}
-            />
+            {currentQuestion ? (
+              <QuestionCard
+                question={{ ...currentQuestion, subject: currentQuestion.subject || "", topic: currentQuestion.topic || "" }}
+                questionIndex={currentQuestionIndex}
+                totalQuestions={totalQuestions}
+                answer={answers[currentQuestion.id]}
+                flagged={flaggedQuestions.has(currentQuestionIndex)}
+                onAnswer={handleAnswer}
+                onFlag={handleFlagQuestion}
+                onPrev={handlePrevQuestion}
+                onNext={handleNextQuestion}
+                disablePrev={currentQuestionIndex === 0}
+                disableNext={currentQuestionIndex === totalQuestions - 1}
+              />
+            ) : (
+              <div className="p-8 text-center text-gray-500">No questions available for this contest.</div>
+            )}
           </div>
           <div className="md:col-span-1">
             <TestProgressSidebar

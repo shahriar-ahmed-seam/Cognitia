@@ -113,21 +113,21 @@ export function ContestCard({ contest }: ContestCardProps) {
     if (!user || loading || !user.id) return
     setIsLoading(true)
     try {
-      // Note: The backend doesn't have an unregister endpoint, so we'll keep this disabled
-      setIsLoading(false)
-      alert("Unregistering from contests is not supported.")
-      return;
-      
-      /* Commented out since backend doesn't support unregistering
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("No auth token found");
       const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}/unregister`;
-      const res = await fetchWithAuth(url, { method: "DELETE" });
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.message || "Failed to unregister");
+        throw new Error(data.error || data.message || "Failed to unregister");
       }
       setParticipationStatus("not-registered");
       alert("Successfully unregistered from contest!");
-      */
     } catch (error) {
       console.error("Unregister error:", error);
       alert(error instanceof Error ? error.message : "Failed to unregister from contest. Please try again.")

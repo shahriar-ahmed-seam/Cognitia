@@ -297,13 +297,13 @@ export default function TakeTestPage() {
             )}
           </h1>
           <div className="flex items-center gap-4">
-            <div className="flex items-center">
-              <Clock className="h-5 w-5 mr-2 text-slate-500" />
+            <div className="flex items-center text-3xl">
+              <Clock className="h-10 w-10 mr-2 text-slate-700" />
               <span className={`font-mono font-bold ${timeRemaining < 300 ? "text-red-500" : ""}`}>{formatTime(timeRemaining)}</span>
             </div>
-            <button className="btn-outline" onClick={() => setShowSubmitDialog(true)}>
+            {/* <button className="btn-outline" onClick={() => setShowSubmitDialog(true)}>
               Submit Test
-            </button>
+            </button> */}
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -312,7 +312,7 @@ export default function TakeTestPage() {
               question={currentQuestion}
               questionIndex={currentQuestionIndex}
               totalQuestions={totalQuestions}
-              answer={answers[currentQuestion.id]}
+              answer={answers[currentQuestion.id]?.toString() ?? ""}
               flagged={flaggedQuestions.has(currentQuestionIndex)}
               onAnswer={handleAnswer}
               onFlag={handleFlagQuestion}
@@ -328,7 +328,9 @@ export default function TakeTestPage() {
               answeredCount={answeredCount}
               currentQuestionIndex={currentQuestionIndex}
               flaggedQuestions={flaggedQuestions}
-              answers={answers}
+              answers={Object.fromEntries(
+                Object.entries(answers).map(([k, v]) => [k, v.toString()])
+              )}
               onJumpToQuestion={handleJumpToQuestion}
               onSubmit={() => setShowSubmitDialog(true)}
             />
