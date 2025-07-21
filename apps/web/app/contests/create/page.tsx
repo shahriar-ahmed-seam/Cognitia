@@ -188,7 +188,7 @@ export default function CreateContestPage() {
     formData.title && formData.description && formData.startDate && formData.startTime && formData.duration
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 relative overflow-hidden">
+    <div className="min-h-screen bg-gradient-to-br from-orange-100 to-red-250 relative overflow-hidden">
       <Navbar />
 
       <div className="container mx-auto py-8 relative z-10">
@@ -196,13 +196,13 @@ export default function CreateContestPage() {
           <Button
             variant="outline"
             onClick={() => router.push("/contests")}
-            className="bg-white/70 backdrop-blur-sm border-emerald-200 hover:bg-emerald-50"
+            className="bg-white/70 backdrop-blur-sm border-red-200 hover:bg-red-50"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Contests
           </Button>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent flex items-center gap-3">
-            <Settings className="h-8 w-8 text-emerald-600" />
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent flex items-center gap-3">
+            <Settings className="h-8 w-8 text-red-600" />
             Create Contest
           </h1>
         </div>
@@ -212,9 +212,9 @@ export default function CreateContestPage() {
             <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
               <div className="md:col-span-2 space-y-6">
                 <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl">
-                  <CardHeader className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10">
+                  <CardHeader className="bg-gradient-to-r from-orange-500/10 to-red-500/10">
                     <CardTitle className="flex items-center gap-2">
-                      <Target className="h-5 w-5 text-emerald-600" />
+                      <Target className="h-5 w-5 text-red-600" />
                       Contest Details
                     </CardTitle>
                   </CardHeader>
@@ -245,7 +245,7 @@ export default function CreateContestPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="start-date" className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-teal-500" />
+                          <Clock className="h-4 w-4 text-red-500" />
                           Start Date
                         </Label>
                         <Input
@@ -291,7 +291,7 @@ export default function CreateContestPage() {
                 </Card>
 
                 <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl">
-                  <CardHeader className="bg-gradient-to-r from-teal-500/10 to-cyan-500/10">
+                  <CardHeader className="bg-gradient-to-r from-orange-500/10 to-red-500/10">
                     <CardTitle>Problem Configuration</CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 space-y-4">
@@ -352,7 +352,7 @@ export default function CreateContestPage() {
               <Button
                 onClick={handleGenerateContest}
                 disabled={!isFormValid || isGenerating}
-                className="w-full max-w-md bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                className="text-black text-bold w-full max-w-md bg-gradient-to-r from-orange-400 to-red-500 hover:from-red-600 hover:to-red-600"
               >
                 {isGenerating ? (
                   <>
@@ -361,7 +361,7 @@ export default function CreateContestPage() {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-2 h-5 w-5" />
+                    <Sparkles className="mr-2 h-5 w-5 text-black" />
                     Generate Contest
                   </>
                 )}
