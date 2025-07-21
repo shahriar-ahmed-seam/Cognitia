@@ -36,14 +36,14 @@ export function NewGroupModal({ isOpen, onClose, onSubmit }: NewGroupModalProps)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border-emerald-300 animate-slide-in-up">
+      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl border-purple-300 animate-slide-in-up">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-emerald-200 p-6 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-t-2xl">
+        <div className="flex items-center justify-between border-b border-purple-200 p-6 bg-gradient-to-r from-purple-50 to-teal-50 rounded-t-2xl">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 shadow-lg">
+            <div className="p-2 rounded-xl bg-gradient-to-r from-purple-500 to-teal-500 shadow-lg">
               <FolderPlus className="h-5 w-5 text-white animate-pulse" />
             </div>
-            <h2 className="text-xl font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
+            <h2 className="text-xl font-semibold bg-gradient-to-r from-purple-600 to-teal-600 bg-clip-text text-transparent">
               Create New Group
             </h2>
           </div>
@@ -62,7 +62,7 @@ export function NewGroupModal({ isOpen, onClose, onSubmit }: NewGroupModalProps)
             {/* Group Name */}
             <div className="space-y-3 animate-slide-in-from-left" style={{ animationDelay: "100ms" }}>
               <Label htmlFor="group-name" className="text-sm font-medium text-slate-700 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-emerald-500" />
+                <Sparkles className="h-4 w-4 text-purple-500" />
                 Group Name
               </Label>
               <Input
@@ -70,7 +70,7 @@ export function NewGroupModal({ isOpen, onClose, onSubmit }: NewGroupModalProps)
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="e.g., Calculus, Physics, Programming"
-                className="bg-white border-emerald-200 focus:border-emerald-500 focus:ring-emerald-500/20 hover:border-emerald-300 transition-all duration-300 rounded-xl"
+                className="bg-white border-purple-200 focus:border-purple-500 focus:ring-purple-500/20 hover:border-purple-300 transition-all duration-300 rounded-xl"
                 required
               />
             </div>
@@ -86,24 +86,24 @@ export function NewGroupModal({ isOpen, onClose, onSubmit }: NewGroupModalProps)
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Brief description of this group"
                 rows={3}
-                className="bg-white border-emerald-200 focus:border-emerald-500 focus:ring-emerald-500/20 hover:border-emerald-300 transition-all duration-300 rounded-xl resize-none"
+                className="bg-white border-purple-200 focus:border-purple-500 focus:ring-purple-500/20 hover:border-purple-300 transition-all duration-300 rounded-xl resize-none"
               />
             </div>
           </div>
 
           {/* Footer */}
-          <div className="flex justify-end gap-3 border-t border-emerald-200 p-6 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-b-2xl">
+          <div className="flex justify-end gap-3 border-t border-purple-200 p-6 bg-gradient-to-r from-purple-50 to-teal-50 rounded-b-2xl">
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              className="border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:border-emerald-300 transition-all duration-300 transform hover:scale-105 bg-white rounded-xl"
+              className="border-purple-200 text-purple-700 hover:bg-purple-50 hover:border-purple-300 transition-all duration-300 transform hover:scale-105 bg-white rounded-xl"
             >
               Cancel
             </Button>
             <Button
               type="submit"
-              className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in-up rounded-xl"
+              className="bg-gradient-to-r from-purple-500 to-teal-500 hover:from-purple-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300 animate-slide-in-up rounded-xl"
               style={{ animationDelay: "300ms" }}
               disabled={!name.trim()}
             >
