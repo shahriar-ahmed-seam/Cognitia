@@ -1,4 +1,4 @@
-export type ContestStatus = "upcoming" | "ongoing" | "finished";
+export type ContestStatus = "UPCOMING" | "ONGOING" | "FINISHED";
 export type ContestDifficulty = "easy" | "medium" | "hard" | "expert";
 
 export interface Contest {
@@ -11,7 +11,6 @@ export interface Contest {
   endTime: string;
   topics: string[];
   participants: number;
-  isVirtual: boolean;
   organizer: {
     id: string;
     name: string;

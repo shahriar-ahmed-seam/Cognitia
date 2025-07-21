@@ -15,7 +15,7 @@ interface Contest {
   title: string
   description: string
   difficulty: "easy" | "medium" | "hard" | "expert"
-  status: "upcoming" | "ongoing" | "finished"
+  status: "UPCOMING" | "ONGOING" | "FINISHED"
   startTime: string
   endTime: string
   participants: number
@@ -36,7 +36,7 @@ export default function ContestsPage() {
 
   const [contests, setContests] = useState<Contest[]>([])
   const [loading, setLoading] = useState(true)
-  const [status, setStatus] = useState<"upcoming" | "ongoing" | "finished" | "all">("all")
+  const [status, setStatus] = useState<"UPCOMING" | "ONGOING" | "FINISHED" | "ALL">("ALL")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
   const [mounted, setMounted] = useState(false)
@@ -49,7 +49,7 @@ export default function ContestsPage() {
 
       const params = new URLSearchParams({
         search: searchQuery,
-        status: status === "all" ? "" : status,
+        status: status === "ALL" ? "" : status,
         topics: selectedTopics.join(","),
         page: "1",
         limit: "20",
@@ -109,7 +109,7 @@ export default function ContestsPage() {
   const filteredContests = useMemo(() => {
     return contests.filter((contest) => {
       // Filter by status
-      if (status !== "all" && contest.status !== status) {
+      if (status !== "ALL" && contest.status !== status) {
         return false
       }
 
@@ -200,14 +200,14 @@ export default function ContestsPage() {
           {[
             {
               title: "Active Contests",
-              value: contests.filter((c) => c.status === "ongoing").length,
+              value: contests.filter((c) => c.status === "ONGOING").length,
               icon: Zap,
               gradient: "from-green-500 to-emerald-500",
               bgGradient: "from-green-50 to-emerald-50",
             },
             {
               title: "Upcoming",
-              value: contests.filter((c) => c.status === "upcoming").length,
+              value: contests.filter((c) => c.status === "UPCOMING").length,
               icon: Target,
               gradient: "from-blue-500 to-cyan-500",
               bgGradient: "from-blue-50 to-cyan-50",
@@ -255,6 +255,7 @@ export default function ContestsPage() {
               selectedTopics={selectedTopics}
               setSelectedTopics={setSelectedTopics}
               availableTopics={availableTopics}
+              showAllStatusOption={true}
             />
           </div>
           <div className="md:col-span-3">
@@ -269,7 +270,7 @@ export default function ContestsPage() {
                 <p className="text-orange-600">Try adjusting your filters or check back later for new contests.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {filteredContests.map((contest, index) => (
                   <div
                     key={contest.id}
@@ -279,7 +280,6 @@ export default function ContestsPage() {
                     <ContestCard
                       contest={{
                         ...contest,
-                        isVirtual: false,
                         organizer: contest.createdBy,
                       }}
                     />

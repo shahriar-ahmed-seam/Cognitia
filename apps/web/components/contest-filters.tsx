@@ -4,18 +4,18 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import type { ContestStatus } from "@/lib/contest-data"
 import { Search } from "lucide-react"
 import { Badge } from "./ui/badge"
 
 interface ContestFiltersProps {
-  status: ContestStatus | "all"
-  setStatus: (status: ContestStatus | "all") => void
-  searchQuery: string
-  setSearchQuery: (query: string) => void
-  selectedTopics: string[]
-  setSelectedTopics: (topics: string[]) => void
-  availableTopics: string[]
+  status: "UPCOMING" | "ONGOING" | "FINISHED" | "ALL";
+  setStatus: (status: "UPCOMING" | "ONGOING" | "FINISHED" | "ALL") => void;
+  searchQuery: string;
+  setSearchQuery: (query: string) => void;
+  selectedTopics: string[];
+  setSelectedTopics: (topics: string[]) => void;
+  availableTopics: string[];
+  showAllStatusOption?: boolean;
 }
 
 export function ContestFilters({
@@ -36,7 +36,7 @@ export function ContestFilters({
   }
 
   const clearFilters = () => {
-    setStatus("all")
+    setStatus("UPCOMING")
     setSearchQuery("")
     setSelectedTopics([])
   }
@@ -61,24 +61,24 @@ export function ContestFilters({
         <h3 className="text-lg font-medium mb-3">Status</h3>
         <RadioGroup
           value={status}
-          onValueChange={(value) => setStatus(value as ContestStatus | "all")}
+          onValueChange={(value) => setStatus(value as "UPCOMING" | "ONGOING" | "FINISHED")}
           className="flex flex-col space-y-1"
         >
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="all" id="all" />
-            <Label htmlFor="all">All Contests</Label>
+            <RadioGroupItem value="ALL" id="ALL" />
+            <Label htmlFor="ALL">All Contests</Label>
           </div>
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="ongoing" id="ongoing" />
-            <Label htmlFor="ongoing">Ongoing</Label>
+            <RadioGroupItem value="ONGOING" id="ONGOING" />
+            <Label htmlFor="ONGOING">Ongoing</Label>
           </div>
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="upcoming" id="upcoming" />
-            <Label htmlFor="upcoming">Upcoming</Label>
+            <RadioGroupItem value="UPCOMING" id="UPCOMING" />
+            <Label htmlFor="UPCOMING">Upcoming</Label>
           </div>
           <div className="flex items-center space-x-2">
-            <RadioGroupItem value="finished" id="finished" />
-            <Label htmlFor="finished">Finished</Label>
+            <RadioGroupItem value="FINISHED" id="FINISHED" />
+            <Label htmlFor="FINISHED">Finished</Label>
           </div>
         </RadioGroup>
       </div>

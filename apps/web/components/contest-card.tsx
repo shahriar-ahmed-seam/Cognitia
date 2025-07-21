@@ -20,7 +20,7 @@ export function ContestCard({ contest }: ContestCardProps) {
   const [participationStatus, setParticipationStatus] = useState<ParticipationStatus>("not-registered")
   const [isLoading, setIsLoading] = useState(false)
 
-  // taod 
+
   // Fetch participation status from backend
   useEffect(() => {
     if (!user || loading) {
@@ -75,20 +75,20 @@ export function ContestCard({ contest }: ContestCardProps) {
   }, [contest.id, user, loading]);
 
   const handleRegister = async () => {
-    console.log("[DEBUG] handleRegister called");
+    console.log("handleRegister called");
     if (!user || loading || !user.id) {
-      console.log("[DEBUG] Register: user missing or loading", { user, loading });
+      console.log("Register: user missing or loading", { user, loading });
       return
     }
     const token = localStorage.getItem("token");
     if (!token) {
-      console.log("[DEBUG] Register: No token in localStorage");
+      console.log("Register: No token in localStorage");
       return;
     }
     setIsLoading(true)
     try {
       const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}/register`;
-      console.log("[DEBUG] Registering at URL:", url);
+      console.log("Registering at URL:", url);
       const res = await fetch(url, { 
         method: "POST",
         headers: {
@@ -96,7 +96,7 @@ export function ContestCard({ contest }: ContestCardProps) {
         }
       });
       const data = await res.json();
-      console.log("[DEBUG] Register API response:", data);
+      console.log("Register API response:", data);
       if (!res.ok) {
         throw new Error(data.error || "Failed to register");
       }
@@ -107,7 +107,7 @@ export function ContestCard({ contest }: ContestCardProps) {
         throw new Error(data.message || "Failed to register");
       }
     } catch (error) {
-      console.error("[DEBUG] Register error:", error);
+      console.error("Register error:", error);
       alert(error instanceof Error ? error.message : "Failed to register for contest. Please try again.")
     } finally {
       setIsLoading(false)
@@ -115,20 +115,20 @@ export function ContestCard({ contest }: ContestCardProps) {
   }
 
   const handleUnregister = async () => {
-    console.log("[DEBUG] handleUnregister called");
+    console.log("handleUnregister called");
     if (!user || loading || !user.id) {
-      console.log("[DEBUG] Unregister: user missing or loading", { user, loading });
+      console.log("Unregister: user missing or loading", { user, loading });
       return
     }
     setIsLoading(true)
     try {
       const token = localStorage.getItem("token");
       if (!token) {
-        console.log("[DEBUG] Unregister: No token in localStorage");
+        console.log("Unregister: No token in localStorage");
         throw new Error("No auth token found");
       }
       const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}/unregister`;
-      console.log("[DEBUG] Unregistering at URL:", url);
+      console.log("Unregistering at URL:", url);
       const res = await fetch(url, {
         method: "DELETE",
         headers: {
@@ -136,14 +136,14 @@ export function ContestCard({ contest }: ContestCardProps) {
         }
       });
       const data = await res.json();
-      console.log("[DEBUG] Unregister API response:", data);
+      console.log("Unregister API response:", data);
       if (!res.ok) {
         throw new Error(data.error || data.message || "Failed to unregister");
       }
       setParticipationStatus("not-registered");
       alert("Successfully unregistered from contest!");
     } catch (error) {
-      console.error("[DEBUG] Unregister error:", error);
+      console.error("Unregister error:", error);
       alert(error instanceof Error ? error.message : "Failed to unregister from contest. Please try again.")
     } finally {
       setIsLoading(false)
@@ -167,11 +167,11 @@ export function ContestCard({ contest }: ContestCardProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "ongoing":
+      case "ONGOING":
         return "bg-emerald-100 text-emerald-800"
-      case "upcoming":
+      case "UPCOMING":
         return "bg-blue-100 text-blue-800"
-      case "finished":
+      case "FINISHED":
         return "bg-gray-100 text-gray-800"
       default:
         return "bg-gray-100 text-gray-800"
@@ -193,17 +193,17 @@ export function ContestCard({ contest }: ContestCardProps) {
   }
 
   const renderActionButton = () => {
-    console.log("[DEBUG] renderActionButton", { status: contest.status, participationStatus, isLoading, loading, user });
-    if (contest.status === "finished") {
+    //console.log("renderActionButton", { status: contest.status, participationStatus, isLoading, loading, user });
+    if (contest.status === "FINISHED") {
       return (
-        <Link href={`/contests/${contest.id}`} className="w-full">
+        <Link href={`/contests/${contest.id}/result`} className="w-full">
           <Button variant="outline" className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors">
             View Results
           </Button>
         </Link>
       )
     }
-    if (contest.status === "ongoing") {
+    if (contest.status === "ONGOING") {
       if (participationStatus === "registered") {
         return (
           <Link href={`/contests/${contest.id}`} className="w-full">
@@ -212,7 +212,7 @@ export function ContestCard({ contest }: ContestCardProps) {
         )
       } else {
         return (
-          <Button onClick={() => { console.log("[DEBUG] Register button clicked"); handleRegister(); }} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
+          <Button onClick={() => { console.log("Register button clicked"); handleRegister(); }} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
             {isLoading ? "Registering..." : "Register & Enter"}
           </Button>
         )
@@ -220,13 +220,13 @@ export function ContestCard({ contest }: ContestCardProps) {
     }
     if (participationStatus === "registered") {
       return (
-        <Button variant="outline" onClick={() => { console.log("[DEBUG] Unregister button clicked"); handleUnregister(); }} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
+        <Button variant="outline" onClick={() => { console.log("Unregister button clicked"); handleUnregister(); }} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
           {isLoading ? "Unregistering..." : "Unregister"}
         </Button>
       )
     } else {
       return (
-        <Button onClick={() => { console.log("[DEBUG] Register button clicked"); handleRegister(); }} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
+        <Button onClick={() => { console.log("Register button clicked"); handleRegister(); }} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
           {isLoading ? "Registering..." : "Register"}
         </Button>
       )
@@ -269,18 +269,13 @@ export function ContestCard({ contest }: ContestCardProps) {
             <Users className="h-4 w-4" />
             <span>{contest.participants} participants</span>
           </div>
-          {contest.isVirtual && (
-            <Badge variant="outline" className="text-xs">
-              Virtual
-            </Badge>
-          )}
         </div>
       </CardContent>
       <CardFooter className="p-4 pt-0 flex justify-between items-center mt-auto">
         <div className="flex items-center gap-2">
           {/* Organizer avatar/name can go here if needed */}
         </div>
-        <div className="w-1/3">{renderActionButton()}</div>
+        <div className="w-1/2">{renderActionButton()}</div>
       </CardFooter>
     </Card>
   )

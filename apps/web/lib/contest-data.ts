@@ -2,7 +2,7 @@ import { CURRENT_USER, STUDENTS, generateId } from "./mock-data"
 
 // Types and interfaces
 export type ContestDifficulty = "easy" | "medium" | "hard" | "expert"
-export type ContestStatus = "upcoming" | "ongoing" | "finished"
+export type ContestStatus = "UPCOMING" | "ONGOING" | "FINISHED"
 export type ParticipationStatus = "registered" | "not-registered" | "participated"
 
 export interface ContestProblem {
