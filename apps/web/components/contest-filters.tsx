@@ -36,7 +36,7 @@ export function ContestFilters({
   }
 
   const clearFilters = () => {
-    setStatus("UPCOMING")
+    setStatus("ALL")
     setSearchQuery("")
     setSelectedTopics([])
   }
@@ -99,7 +99,7 @@ export function ContestFilters({
         </div>
       </div>
 
-      <Button variant="outline" onClick={clearFilters} className="w-full">
+      <Button variant="outline" onClick={clearFilters} className="w-full bg-slate-100 text-slate-500 text-black hover:bg-slate-200 hover:text-slate-600 bg-gradient-to-r from-orange-200 to-red-300">
         Clear Filters
       </Button>
     </div>
