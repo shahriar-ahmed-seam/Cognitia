@@ -48,10 +48,12 @@ export default function RegisterPage() {
   const router = useRouter()
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([])
   const { toast } = useToast()
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     // Staggered entrance animation
     const timer = setTimeout(() => setIsVisible(true), 100)
+    setMounted(true)
     return () => clearTimeout(timer)
   }, [])
 
@@ -260,107 +262,108 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-emerald-900 via-teal-900 to-cyan-900">
       {/* Enhanced Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Floating Bubbles with Enhanced Animation */}
-        {Array.from({ length: 30 }).map((_, i) => (
-          <div
-            key={i}
-            className="absolute rounded-full animate-bubble-enhanced opacity-60"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${100 + Math.random() * 20}%`,
-              width: `${6 + Math.random() * 20}px`,
-              height: `${6 + Math.random() * 20}px`,
-              backgroundColor: ["#10B981", "#06B6D4", "#8B5CF6", "#EC4899", "#F59E0B", "#EF4444"][i % 6],
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${20 + Math.random() * 15}s`,
-            }}
-          />
-        ))}
-
-        {/* Animated Particles */}
-        {Array.from({ length: 50 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute w-1 h-1 bg-white rounded-full animate-particle-float opacity-40"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 10}s`,
-              animationDuration: `${8 + Math.random() * 12}s`,
-            }}
-          />
-        ))}
-
-        {/* Enhanced Constellation */}
-        <svg className="absolute inset-0 w-full h-full opacity-30">
-          {Array.from({ length: 60 }).map((_, i) => (
-            <circle
-              key={`star-${i}`}
-              cx={`${Math.random() * 100}%`}
-              cy={`${Math.random() * 100}%`}
-              r={Math.random() * 2 + 0.5}
-              fill="white"
-              className="animate-twinkle-enhanced"
+      {mounted && (
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Floating Bubbles with Enhanced Animation */}
+          {Array.from({ length: 30 }).map((_, i) => (
+            <div
+              key={i}
+              className="absolute rounded-full animate-bubble-enhanced opacity-60"
               style={{
-                animationDelay: `${Math.random() * 8}s`,
-                animationDuration: `${3 + Math.random() * 4}s`,
+                left: `${Math.random() * 100}%`,
+                top: `${100 + Math.random() * 20}%`,
+                width: `${6 + Math.random() * 20}px`,
+                height: `${6 + Math.random() * 20}px`,
+                backgroundColor: ["#10B981", "#06B6D4", "#8B5CF6", "#EC4899", "#F59E0B", "#EF4444"][i % 6],
+                animationDelay: `${Math.random() * 20}s`,
+                animationDuration: `${20 + Math.random() * 15}s`,
               }}
             />
           ))}
-          {Array.from({ length: 25 }).map((_, i) => (
-            <line
-              key={`line-${i}`}
-              x1={`${Math.random() * 100}%`}
-              y1={`${Math.random() * 100}%`}
-              x2={`${Math.random() * 100}%`}
-              y2={`${Math.random() * 100}%`}
-              stroke="url(#constellation-gradient-enhanced)"
-              strokeWidth="0.8"
-              className="animate-constellation-enhanced"
-              style={{ animationDelay: `${i * 0.2}s` }}
+
+          {/* Animated Particles */}
+          {Array.from({ length: 50 }).map((_, i) => (
+            <div
+              key={`particle-${i}`}
+              className="absolute w-1 h-1 bg-white rounded-full animate-particle-float opacity-40"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 10}s`,
+                animationDuration: `${8 + Math.random() * 12}s`,
+              }}
             />
           ))}
-          <defs>
-            <linearGradient id="constellation-gradient-enhanced" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#10B981" stopOpacity="0.8" />
-              <stop offset="33%" stopColor="#06B6D4" stopOpacity="0.6" />
-              <stop offset="66%" stopColor="#8B5CF6" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#EC4899" stopOpacity="0.6" />
-            </linearGradient>
-          </defs>
-        </svg>
 
-        {/* Enhanced Morphing Shapes */}
-        <div className="absolute top-20 left-20 w-40 h-40 bg-gradient-to-br from-emerald-400/25 to-teal-400/25 rounded-full animate-morph-enhanced blur-sm"></div>
-        <div className="absolute bottom-32 right-32 w-32 h-32 bg-gradient-to-br from-cyan-400/25 to-blue-400/25 animate-morph-enhanced-reverse blur-sm"></div>
-        <div className="absolute top-1/2 left-10 w-24 h-24 bg-gradient-to-br from-purple-400/25 to-pink-400/25 animate-pulse-enhanced blur-sm"></div>
-        <div className="absolute top-1/4 right-1/4 w-20 h-20 bg-gradient-to-br from-yellow-400/25 to-orange-400/25 animate-float-enhanced blur-sm"></div>
+          {/* Enhanced Constellation */}
+          <svg className="absolute inset-0 w-full h-full opacity-30">
+            {Array.from({ length: 60 }).map((_, i) => (
+              <circle
+                key={`star-${i}`}
+                cx={`${Math.random() * 100}%`}
+                cy={`${Math.random() * 100}%`}
+                r={Math.random() * 2 + 0.5}
+                fill="white"
+                className="animate-twinkle-enhanced"
+                style={{
+                  animationDelay: `${Math.random() * 8}s`,
+                  animationDuration: `${3 + Math.random() * 4}s`,
+                }}
+              />
+            ))}
+            {Array.from({ length: 25 }).map((_, i) => (
+              <line
+                key={`line-${i}`}
+                x1={`${Math.random() * 100}%`}
+                y1={`${Math.random() * 100}%`}
+                x2={`${Math.random() * 100}%`}
+                y2={`${Math.random() * 100}%`}
+                stroke="url(#constellation-gradient-enhanced)"
+                strokeWidth="0.8"
+                className="animate-constellation-enhanced"
+                style={{ animationDelay: `${i * 0.2}s` }}
+              />
+            ))}
+            <defs>
+              <linearGradient id="constellation-gradient-enhanced" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#10B981" stopOpacity="0.8" />
+                <stop offset="33%" stopColor="#06B6D4" stopOpacity="0.6" />
+                <stop offset="66%" stopColor="#8B5CF6" stopOpacity="0.8" />
+                <stop offset="100%" stopColor="#EC4899" stopOpacity="0.6" />
+              </linearGradient>
+            </defs>
+          </svg>
 
-        {/* Enhanced Geometric Elements */}
-        <div className="absolute top-40 right-20 w-16 h-16 border-2 border-emerald-400/40 transform rotate-45 animate-rotate-enhanced"></div>
-        <div className="absolute bottom-40 left-40 w-12 h-12 bg-gradient-to-br from-teal-400/40 to-cyan-400/40 rounded-full animate-bounce-enhanced"></div>
-        <div className="absolute top-60 right-40 w-24 h-24 border-2 border-purple-400/30 rounded-full animate-scale-enhanced"></div>
-        <div className="absolute bottom-60 left-60 w-8 h-8 bg-gradient-to-br from-pink-400/40 to-rose-400/40 animate-spin-enhanced"></div>
+          {/* Enhanced Morphing Shapes */}
+          <div className="absolute top-20 left-20 w-40 h-40 bg-gradient-to-br from-emerald-400/25 to-teal-400/25 rounded-full animate-morph-enhanced blur-sm"></div>
+          <div className="absolute bottom-32 right-32 w-32 h-32 bg-gradient-to-br from-cyan-400/25 to-blue-400/25 animate-morph-enhanced-reverse blur-sm"></div>
+          <div className="absolute top-1/2 left-10 w-24 h-24 bg-gradient-to-br from-purple-400/25 to-pink-400/25 animate-pulse-enhanced blur-sm"></div>
+          <div className="absolute top-1/4 right-1/4 w-20 h-20 bg-gradient-to-br from-yellow-400/25 to-orange-400/25 animate-float-enhanced blur-sm"></div>
 
-        {/* Enhanced Orbs */}
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-emerald-600/20 to-teal-600/20 rounded-full blur-3xl animate-pulse-slow-enhanced"></div>
-        <div className="absolute -bottom-40 -left-40 w-[32rem] h-[32rem] bg-gradient-to-br from-cyan-600/15 to-blue-600/15 rounded-full blur-3xl animate-pulse-slow-enhanced delay-3000"></div>
-        <div className="absolute top-1/3 right-1/3 w-80 h-80 bg-gradient-to-br from-purple-600/12 to-pink-600/12 rounded-full blur-2xl animate-pulse-slow-enhanced delay-6000"></div>
+          {/* Enhanced Geometric Elements */}
+          <div className="absolute top-40 right-20 w-16 h-16 border-2 border-emerald-400/40 transform rotate-45 animate-rotate-enhanced"></div>
+          <div className="absolute bottom-40 left-40 w-12 h-12 bg-gradient-to-br from-teal-400/40 to-cyan-400/40 rounded-full animate-bounce-enhanced"></div>
+          <div className="absolute top-60 right-40 w-24 h-24 border-2 border-purple-400/30 rounded-full animate-scale-enhanced"></div>
+          <div className="absolute bottom-60 left-60 w-8 h-8 bg-gradient-to-br from-pink-400/40 to-rose-400/40 animate-spin-enhanced"></div>
 
-        {/* Enhanced Aurora Effects */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/4 to-transparent animate-aurora-enhanced"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/4 to-transparent animate-aurora-vertical-enhanced delay-5000"></div>
-        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-purple-500/3 to-transparent animate-aurora-enhanced delay-8000"></div>
+          {/* Enhanced Orbs */}
+          <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-emerald-600/20 to-teal-600/20 rounded-full blur-3xl animate-pulse-slow-enhanced"></div>
+          <div className="absolute -bottom-40 -left-40 w-[32rem] h-[32rem] bg-gradient-to-br from-cyan-600/15 to-blue-600/15 rounded-full blur-3xl animate-pulse-slow-enhanced delay-3000"></div>
+          <div className="absolute top-1/3 right-1/3 w-80 h-80 bg-gradient-to-br from-purple-600/12 to-pink-600/12 rounded-full blur-2xl animate-pulse-slow-enhanced delay-6000"></div>
 
-        {/* Enhanced Gradient Mesh */}
-        <div className="absolute inset-0 opacity-25">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-emerald-500/8 via-transparent to-cyan-500/8 animate-gradient-flow-enhanced"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tl from-purple-500/8 via-transparent to-pink-500/8 animate-gradient-flow-reverse-enhanced"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-blue-500/6 via-transparent to-teal-500/6 animate-gradient-flow-enhanced delay-4000"></div>
+          {/* Enhanced Aurora Effects */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-emerald-500/4 to-transparent animate-aurora-enhanced"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-cyan-500/4 to-transparent animate-aurora-vertical-enhanced delay-5000"></div>
+          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-purple-500/3 to-transparent animate-aurora-enhanced delay-8000"></div>
+
+          {/* Enhanced Gradient Mesh */}
+          <div className="absolute inset-0 opacity-25">
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-emerald-500/8 via-transparent to-cyan-500/8 animate-gradient-flow-enhanced"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tl from-purple-500/8 via-transparent to-pink-500/8 animate-gradient-flow-reverse-enhanced"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-blue-500/6 via-transparent to-teal-500/6 animate-gradient-flow-enhanced delay-4000"></div>
+          </div>
         </div>
-      </div>
-
+      )}
       {/* Back Button with Animation */}
       <div className="absolute top-6 left-6 z-20">
         <Button
@@ -684,7 +687,7 @@ export default function RegisterPage() {
                     {otpCode.map((digit, index) => (
                       <Input
                         key={index}
-                        ref={(el) => (otpInputRefs.current[index] = el)}
+                        ref={el => { otpInputRefs.current[index] = el }}
                         type="text"
                         inputMode="numeric"
                         maxLength={1}

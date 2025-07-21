@@ -20,9 +20,11 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setIsVisible(true)
+    setMounted(true)
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -105,85 +107,86 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900">
       {/* Enhanced Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Floating Particles with Enhanced Animation */}
-        {Array.from({ length: 50 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute rounded-full animate-float-particle opacity-70"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              width: `${Math.random() * 8 + 4}px`,
-              height: `${Math.random() * 8 + 4}px`,
-              backgroundColor: ["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B", "#EF4444"][i % 6],
-              animationDelay: `${Math.random() * 15}s`,
-              animationDuration: `${8 + Math.random() * 12}s`,
-            }}
-          />
-        ))}
-
-        {/* Animated Icons */}
-        {Array.from({ length: 15 }).map((_, i) => {
-          const icons = [Star, Heart, Lightbulb, Sparkles, Zap]
-          const IconComponent = icons[i % icons.length]
-          return (
+      {mounted && (
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Floating Particles with Enhanced Animation */}
+          {Array.from({ length: 50 }).map((_, i) => (
             <div
-              key={`icon-${i}`}
-              className="absolute text-white/20 animate-float-enhanced"
+              key={`particle-${i}`}
+              className="absolute rounded-full animate-float-particle opacity-70"
               style={{
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 10}s`,
-                animationDuration: `${10 + Math.random() * 8}s`,
+                width: `${Math.random() * 8 + 4}px`,
+                height: `${Math.random() * 8 + 4}px`,
+                backgroundColor: ["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B", "#EF4444"][i % 6],
+                animationDelay: `${Math.random() * 15}s`,
+                animationDuration: `${8 + Math.random() * 12}s`,
               }}
-            >
-              <IconComponent className="h-6 w-6" />
-            </div>
-          )
-        })}
+            />
+          ))}
 
-        {/* Enhanced Gradient Waves */}
-        <div className="absolute inset-0 opacity-40">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-600/30 via-transparent to-pink-600/30 animate-gradient-flow"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tl from-blue-600/25 via-transparent to-cyan-600/25 animate-gradient-flow-reverse"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-indigo-600/20 via-transparent to-purple-600/20 animate-pulse-slow"></div>
+          {/* Animated Icons */}
+          {Array.from({ length: 15 }).map((_, i) => {
+            const icons = [Star, Heart, Lightbulb, Sparkles, Zap]
+            const IconComponent = icons[i % icons.length]
+            return (
+              <div
+                key={`icon-${i}`}
+                className="absolute text-white/20 animate-float-enhanced"
+                style={{
+                  left: `${Math.random() * 100}%`,
+                  top: `${Math.random() * 100}%`,
+                  animationDelay: `${Math.random() * 10}s`,
+                  animationDuration: `${10 + Math.random() * 8}s`,
+                }}
+              >
+                <IconComponent className="h-6 w-6" />
+              </div>
+            )
+          })}
+
+          {/* Enhanced Gradient Waves */}
+          <div className="absolute inset-0 opacity-40">
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-600/30 via-transparent to-pink-600/30 animate-gradient-flow"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tl from-blue-600/25 via-transparent to-cyan-600/25 animate-gradient-flow-reverse"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-r from-indigo-600/20 via-transparent to-purple-600/20 animate-pulse-slow"></div>
+          </div>
+
+          {/* Enhanced Geometric Shapes */}
+          <div className="absolute top-20 left-20 w-20 h-20 border-2 border-purple-400/40 rotate-45 animate-rotate-smooth"></div>
+          <div className="absolute top-40 right-32 w-16 h-16 bg-gradient-to-br from-pink-400/30 to-purple-400/30 rounded-full animate-pulse-smooth"></div>
+          <div className="absolute bottom-40 left-32 w-12 h-12 bg-gradient-to-br from-cyan-400/40 to-blue-400/40 animate-bounce-smooth"></div>
+          <div className="absolute top-60 right-20 w-24 h-24 border-2 border-emerald-400/30 rounded-full animate-scale-smooth"></div>
+          <div className="absolute bottom-60 right-60 w-8 h-8 bg-gradient-to-br from-yellow-400/40 to-orange-400/40 rotate-45 animate-spin-slow"></div>
+
+          {/* Enhanced Smooth Orbs */}
+          <div className="absolute -top-40 -left-40 w-96 h-96 bg-gradient-to-br from-purple-600/30 to-pink-600/30 rounded-full blur-3xl animate-pulse-slow"></div>
+          <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-gradient-to-br from-blue-600/25 to-cyan-600/25 rounded-full blur-3xl animate-pulse-slow delay-2000"></div>
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-gradient-to-br from-emerald-600/20 to-teal-600/20 rounded-full blur-2xl animate-pulse-slow delay-4000"></div>
+
+          {/* Enhanced Aurora Effects */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-aurora-smooth"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent animate-aurora-vertical-smooth delay-3000"></div>
+          <div className="absolute inset-0 bg-gradient-to-l from-transparent via-pink-500/3 to-transparent animate-aurora-smooth delay-6000"></div>
+
+          {/* Morphing Shapes */}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={`morph-${i}`}
+              className="absolute bg-gradient-to-br from-white/10 to-white/5 rounded-full animate-morph-enhanced blur-xl"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                width: `${Math.random() * 100 + 50}px`,
+                height: `${Math.random() * 100 + 50}px`,
+                animationDelay: `${Math.random() * 8}s`,
+                animationDuration: `${12 + Math.random() * 8}s`,
+              }}
+            />
+          ))}
         </div>
-
-        {/* Enhanced Geometric Shapes */}
-        <div className="absolute top-20 left-20 w-20 h-20 border-2 border-purple-400/40 rotate-45 animate-rotate-smooth"></div>
-        <div className="absolute top-40 right-32 w-16 h-16 bg-gradient-to-br from-pink-400/30 to-purple-400/30 rounded-full animate-pulse-smooth"></div>
-        <div className="absolute bottom-40 left-32 w-12 h-12 bg-gradient-to-br from-cyan-400/40 to-blue-400/40 animate-bounce-smooth"></div>
-        <div className="absolute top-60 right-20 w-24 h-24 border-2 border-emerald-400/30 rounded-full animate-scale-smooth"></div>
-        <div className="absolute bottom-60 right-60 w-8 h-8 bg-gradient-to-br from-yellow-400/40 to-orange-400/40 rotate-45 animate-spin-slow"></div>
-
-        {/* Enhanced Smooth Orbs */}
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-gradient-to-br from-purple-600/30 to-pink-600/30 rounded-full blur-3xl animate-pulse-slow"></div>
-        <div className="absolute -bottom-40 -right-40 w-[500px] h-[500px] bg-gradient-to-br from-blue-600/25 to-cyan-600/25 rounded-full blur-3xl animate-pulse-slow delay-2000"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-gradient-to-br from-emerald-600/20 to-teal-600/20 rounded-full blur-2xl animate-pulse-slow delay-4000"></div>
-
-        {/* Enhanced Aurora Effects */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent animate-aurora-smooth"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-purple-500/5 to-transparent animate-aurora-vertical-smooth delay-3000"></div>
-        <div className="absolute inset-0 bg-gradient-to-l from-transparent via-pink-500/3 to-transparent animate-aurora-smooth delay-6000"></div>
-
-        {/* Morphing Shapes */}
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={`morph-${i}`}
-            className="absolute bg-gradient-to-br from-white/10 to-white/5 rounded-full animate-morph-enhanced blur-xl"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              width: `${Math.random() * 100 + 50}px`,
-              height: `${Math.random() * 100 + 50}px`,
-              animationDelay: `${Math.random() * 8}s`,
-              animationDuration: `${12 + Math.random() * 8}s`,
-            }}
-          />
-        ))}
-      </div>
-
+      )}
       {/* Back Button with Animation */}
       <div className="absolute top-6 left-6 z-20">
         <Button
