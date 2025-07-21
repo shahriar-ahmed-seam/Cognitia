@@ -19,7 +19,7 @@ import { useToast } from "@/hooks/use-toast"
 interface Note {
   id: string
   title: string
-  visibility: "public" | "private"
+  visibility: "PUBLIC" | "PRIVATE"
   createdAt: string
   updatedAt: string
   rating: number
@@ -154,7 +154,7 @@ export default function NotesPage() {
       const token = localStorage.getItem("token")
 
 
-      // Fetch all public notes (global)
+      // Fetch all PUBLIC notes (global)
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notes`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -291,6 +291,9 @@ export default function NotesPage() {
   // Filter and sort global notes
   const filteredGlobalNotes = useMemo(() => {
     let result = [...globalNotes]
+
+    // Only show PUBLIC notes
+    result = result.filter(note => note.visibility === "PUBLIC");
 
     // Apply search filter
     if (globalNotesSearchTerm) {
@@ -584,24 +587,33 @@ export default function NotesPage() {
                     {filteredMyNotes.map((note, index) => (
                       <Link key={note.id} href={`/notes/${note.id}`}>
                         <Card
-                          className="h-full cursor-pointer bg-gradient-to-br from-white to-purple-50/50 border-0 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-from-bottom"
-                          style={{ animationDelay: `${index * 100}ms` }}
+                          className="h-full flex flex-col overflow-hidden cursor-pointer bg-gradient-to-br from-white to-purple-50/50 border-0 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-from-bottom"
+                          style={{ animationDelay: `${index * 100}ms`, minHeight: 320 }}
                         >
-                          <CardContent className="p-4">
+                          {/* Thumbnail */}
+                          <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
+                            <img
+                              src={"/placeholder.svg"}
+                              alt={note.title}
+                              className="h-full w-full object-cover transition-transform hover:scale-105"
+                            />
+                          </div>
+                          <CardContent className="flex-1 flex flex-col p-4">
                             <div className="mb-2 flex items-center justify-between">
                               <span className="text-xs text-slate-500 bg-purple-100 px-2 py-1 rounded-full">
                                 {formatRelativeTime(note.updatedAt)}
                               </span>
-                              {note.visibility === "private" ? (
+                              {note.visibility === "PRIVATE" ? (
                                 <EyeOff className="h-3 w-3 text-slate-400 animate-pulse" />
                               ) : (
                                 <Eye className="h-3 w-3 text-emerald-500 animate-pulse" />
                               )}
                             </div>
-                            <h3 className="mb-1 font-medium text-slate-900 hover:text-purple-600 transition-colors duration-300">
+                            <h3 className="mb-1 font-medium text-slate-900 hover:text-purple-600 transition-colors duration-300 line-clamp-2">
                               {note.title}
                             </h3>
-                            <p className="text-sm text-slate-500 bg-gradient-to-r from-purple-100 to-pink-100 px-2 py-1 rounded-lg">
+                            <div className="flex-1" />
+                            <p className="text-xs text-slate-500 bg-gradient-to-r from-purple-100 to-pink-100 px-2 py-1 rounded-lg mt-2 mb-1 line-clamp-1 text-center">
                               {note.groupName}
                             </p>
                             {note.rating > 0 && (
@@ -627,20 +639,31 @@ export default function NotesPage() {
                     {recentlyViewedNotes.map((note, index) => (
                       <Link key={note.id} href={`/notes/${note.id}`}>
                         <Card
-                          className="h-full cursor-pointer bg-gradient-to-br from-white to-blue-50/50 border-0 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-from-bottom"
-                          style={{ animationDelay: `${index * 100}ms` }}
+                          className="h-full flex flex-col overflow-hidden cursor-pointer bg-gradient-to-br from-white to-blue-50/50 border-0 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-from-bottom"
+                          style={{ animationDelay: `${index * 100}ms`, minHeight: 320 }}
                         >
-                          <CardContent className="p-4">
+                          {/* Thumbnail */}
+                          <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
+                            <img
+                              src={"/placeholder.svg"}
+                              alt={note.title}
+                              className="h-full w-full object-cover transition-transform hover:scale-105"
+                            />
+                          </div>
+                          <CardContent className="flex-1 flex flex-col p-4">
                             <div className="mb-2 flex items-center justify-between">
                               <span className="text-xs text-slate-500 bg-blue-100 px-2 py-1 rounded-full">Recent</span>
-                              <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded-full">
-                                Viewed {formatRelativeTime(note.updatedAt)}
-                              </span>
+                              {note.visibility === "PRIVATE" ? (
+                                <EyeOff className="h-3 w-3 text-slate-400 animate-pulse" />
+                              ) : (
+                                <Eye className="h-3 w-3 text-emerald-500 animate-pulse" />
+                              )}
                             </div>
-                            <h3 className="mb-1 font-medium text-slate-900 hover:text-blue-600 transition-colors duration-300">
+                            <h3 className="mb-1 font-medium text-slate-900 hover:text-blue-600 transition-colors duration-300 line-clamp-2">
                               {note.title}
                             </h3>
-                            <p className="text-sm text-slate-500 bg-gradient-to-r from-blue-100 to-cyan-100 px-2 py-1 rounded-lg">
+                            <div className="flex-1" />
+                            <p className="text-xs text-slate-500 bg-gradient-to-r from-blue-100 to-cyan-100 px-2 py-1 rounded-lg mt-2 mb-1 line-clamp-1 text-center">
                               {note.groupName}
                             </p>
                             {note.rating > 0 && (
@@ -813,7 +836,12 @@ export default function NotesPage() {
         <NewNoteModal
           isOpen={isNewNoteModalOpen}
           onClose={() => setIsNewNoteModalOpen(false)}
-          onSubmit={handleCreateNote}
+          onSubmit={(noteData) =>
+            handleCreateNote({
+              ...noteData,
+              visibility: noteData.visibility.toUpperCase() as "PUBLIC" | "PRIVATE",
+            })
+          }
           groups={myNotesGroups}
         />
       </main>

@@ -405,6 +405,8 @@ export default function DashboardPage() {
               <CardContent>
                 <div className="space-y-4">
                   {dashboardData.feed
+                    .filter(q => q.author.id === dashboardData.currentUser.id)
+                    .slice(0, 5)
                     .map((question, index) => (
                       <Link key={question.id} href={`/qa/${question.id}`}>
                         <div
@@ -512,22 +514,24 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {dashboardData.recentNotes.map((note, index) => (
-                    <Link key={note.id} href={`/notes/${note.id}`}>
-                      <div
-                        className="p-3 bg-gradient-to-r from-white to-pink-50/30 rounded-lg border border-pink-100 hover:border-pink-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
-                        style={{ animationDelay: `${index * 100}ms` }}
-                      >
-                        <h3 className="font-medium text-gray-900 hover:text-pink-600 transition-colors duration-300 mb-1">
-                          {note.title}
-                        </h3>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs text-gray-500">{note.title}</span>
-                          <span className="text-xs text-gray-500">{note.lastViewed}</span>
+                  {dashboardData.recentNotes
+                     .slice(0, 5)
+                     .map((note, index) => (
+                      <Link key={note.id} href={`/notes/${note.id}`}>
+                        <div
+                          className="p-3 bg-gradient-to-r from-white to-pink-50/30 rounded-lg border border-pink-100 hover:border-pink-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
+                          style={{ animationDelay: `${index * 100}ms` }}
+                        >
+                          <h3 className="font-medium text-gray-900 hover:text-pink-600 transition-colors duration-300 mb-1">
+                            {note.title}
+                          </h3>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-500">{note.title}</span>
+                            <span className="text-xs text-gray-500">{note.lastViewed}</span>
+                          </div>
                         </div>
-                      </div>
-                    </Link>
-                  ))}
+                      </Link>
+                    ))}
                 </div>
               </CardContent>
             </Card>

@@ -150,37 +150,6 @@ export function GlobalNoteCard({
               </span>
             </div>
           </div>
-
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-8 px-2 ${userAction === "like" ? "text-emerald-600" : "text-slate-500"}`}
-                onClick={handleLike}
-              >
-                <ThumbsUp className="mr-1 h-3.5 w-3.5" />
-                <span className="text-xs">{likes}</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-8 px-2 ${userAction === "dislike" ? "text-red-600" : "text-slate-500"}`}
-                onClick={handleDislike}
-              >
-                <ThumbsDown className="mr-1 h-3.5 w-3.5" />
-                <span className="text-xs">{dislikes}</span>
-              </Button>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={`h-8 px-2 ${isSaved ? "text-emerald-600" : "text-slate-500"}`}
-              onClick={handleSave}
-            >
-              {isSaved ? <Bookmark className="h-3.5 w-3.5" /> : <BookmarkPlus className="h-3.5 w-3.5" />}
-            </Button>
-          </div>
         </CardContent>
       </Card>
     </Link>
