@@ -182,7 +182,7 @@ export function ContestCard({ contest }: ContestCardProps) {
     if (contest.status === "finished") {
       return (
         <Link href={`/contests/${contest.id}`} className="w-full">
-          <Button variant="outline" className="w-full">
+          <Button variant="outline" className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors">
             View Results
           </Button>
         </Link>
@@ -193,12 +193,12 @@ export function ContestCard({ contest }: ContestCardProps) {
       if (participationStatus === "registered") {
         return (
           <Link href={`/contests/${contest.id}`} className="w-full">
-            <Button className="w-full">Enter Contest</Button>
+            <Button className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors">Enter Contest</Button>
           </Link>
         )
       } else {
         return (
-          <Button onClick={handleRegister} className="w-full" disabled={isLoading || loading || !user}>
+          <Button onClick={handleRegister} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
             {isLoading ? "Registering..." : "Register & Enter"}
           </Button>
         )
@@ -207,13 +207,13 @@ export function ContestCard({ contest }: ContestCardProps) {
 
     if (participationStatus === "registered") {
       return (
-        <Button variant="outline" onClick={handleUnregister} className="w-full" disabled={isLoading || loading || !user}>
+        <Button variant="outline" onClick={handleUnregister} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
           {isLoading ? "Unregistering..." : "Unregister"}
         </Button>
       )
     } else {
       return (
-        <Button onClick={handleRegister} className="w-full" disabled={isLoading || loading || !user}>
+        <Button onClick={handleRegister} className="w-full bg-gradient-to-r from-orange-400 to-red-500 text-white hover:from-red-600 hover:to-orange-500 transition-colors" disabled={isLoading || loading || !user}>
           {isLoading ? "Registering..." : "Register"}
         </Button>
       )
@@ -221,7 +221,7 @@ export function ContestCard({ contest }: ContestCardProps) {
   }
 
   return (
-    <Card className="overflow-hidden flex flex-col min-h-[22rem] h-full">
+    <Card className="overflow-hidden flex flex-col min-h-[22rem] h-full bg-gradient-to-br from-orange-50 via-red-50 to-rose-100 transition-transform duration-200 hover:scale-[1.025] hover:shadow-xl cursor-pointer">
       <CardHeader className="p-4 pb-2 flex flex-row justify-between items-start">
         <div>
           <div className="flex gap-2 mb-1">
