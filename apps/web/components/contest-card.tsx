@@ -221,7 +221,7 @@ export function ContestCard({ contest }: ContestCardProps) {
   }
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden flex flex-col min-h-[22rem] h-full">
       <CardHeader className="p-4 pb-2 flex flex-row justify-between items-start">
         <div>
           <div className="flex gap-2 mb-1">
@@ -238,7 +238,7 @@ export function ContestCard({ contest }: ContestCardProps) {
           <p className="text-sm text-gray-500 mt-1">{getTimeInfo()}</p>
         </div>
       </CardHeader>
-      <CardContent className="p-4 pt-2">
+      <CardContent className="flex-1 flex flex-col p-4 pt-2">
         <p className="text-sm text-gray-700 line-clamp-2 mb-3">{contest.description}</p>
         <div className="flex flex-wrap gap-2 mb-3">
           {contest.topics.map((topic) => (
@@ -247,7 +247,7 @@ export function ContestCard({ contest }: ContestCardProps) {
             </Badge>
           ))}
         </div>
-        <div className="flex items-center gap-4 text-sm text-gray-500">
+        <div className="flex items-center gap-4 text-sm text-gray-500 mt-auto">
           <div className="flex items-center gap-1">
             <Clock className="h-4 w-4" />
             <span>{formatDuration(contest.startTime.toString(), contest.endTime.toString())}</span>
@@ -263,7 +263,7 @@ export function ContestCard({ contest }: ContestCardProps) {
           )}
         </div>
       </CardContent>
-      <CardFooter className="p-4 pt-0 flex justify-between items-center">
+      <CardFooter className="p-4 pt-0 flex justify-between items-center mt-auto">
         <div className="flex items-center gap-2">
           {/* Organizer avatar/name can go here if needed */}
         </div>
