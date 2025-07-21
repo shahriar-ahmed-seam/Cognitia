@@ -44,10 +44,12 @@ export default function CreateContestPage() {
     difficulty: "medium",
     eligibility: "Open for all",
     isVirtual: false,
+    questionCount: "5",
   })
 
   const [topic, setTopic] = useState("")
   const [topics, setTopics] = useState<string[]>([])
+  const [generatedContestId, setGeneratedContestId] = useState<string | null>(null)
 
   const handleAddTopic = () => {
     if (topic && !topics.includes(topic)) {
@@ -84,29 +86,48 @@ export default function CreateContestPage() {
         setGenerationProgress(step.progress)
       }
 
-      // Call API to generate contest
+      // Calculate start and end time
+      const startDateTime = new Date(`${formData.startDate}T${formData.startTime}`)
+      const endDateTime = new Date(startDateTime)
+      endDateTime.setHours(endDateTime.getHours() + Number.parseInt(formData.duration))
+
+      // Call API to generate contest (new endpoint and structure)
       const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/generate`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/create`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...formData,
+          title: formData.title,
+          description: formData.description,
+          startTime: startDateTime.toISOString(),
+          endTime: endDateTime.toISOString(),
+          difficulty: formData.difficulty.toUpperCase(),
           topics: topics.length > 0 ? topics : ["general"],
+          eligibility: formData.eligibility,
+          isVirtual: formData.isVirtual,
+          questionCount: Number.parseInt(formData.questionCount),
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to generate contest")
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error || "Failed to generate contest")
       }
 
+      const result = await response.json()
+      setGeneratedContestId(result.contest.id)
       setIsGenerated(true)
       toast.success("Contest generated successfully!")
     } catch (error) {
       console.error("Error generating contest:", error)
-      toast.error("Failed to generate contest")
+      if (error instanceof Error) {
+        toast.error(error.message)
+      } else {
+        toast.error("Failed to generate contest")
+      }
     } finally {
       setIsGenerating(false)
     }
@@ -287,6 +308,18 @@ export default function CreateContestPage() {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="questionCount">Number of Questions</Label>
+                      <Input
+                        id="questionCount"
+                        type="number"
+                        min={1}
+                        max={100}
+                        placeholder="Enter number of questions"
+                        value={formData.questionCount}
+                        onChange={(e) => setFormData((prev) => ({ ...prev, questionCount: e.target.value }))}
+                      />
+                    </div>
                   </CardContent>
                 </Card>
 
@@ -421,7 +454,7 @@ export default function CreateContestPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Sparkles className="h-4 w-4 text-blue-500" />
-                      <span>Problems: 5 generated</span>
+                      <span>Questions: {formData.questionCount}</span>
                     </div>
                   </div>
                   {topics.length > 0 && (
@@ -440,30 +473,30 @@ export default function CreateContestPage() {
 
                 <div className="flex gap-4">
                   <Button
-                    onClick={handlePublishContest}
+                    onClick={() => generatedContestId && router.push(`/contests/${generatedContestId}`)}
                     disabled={loading}
                     className="flex-1 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
                   >
                     {loading ? (
                       <>
                         <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                        Publishing...
+                        Loading...
                       </>
                     ) : (
                       <>
                         <Play className="mr-2 h-5 w-5" />
-                        Publish Contest
+                        Go to Contest
                       </>
                     )}
                   </Button>
                   <Button
-                    onClick={handleSaveDraft}
+                    onClick={() => router.push("/contests")}
                     disabled={loading}
                     variant="outline"
                     className="flex-1 bg-transparent"
                   >
                     <Save className="mr-2 h-5 w-5" />
-                    Save as Draft
+                    Back to Contests
                   </Button>
                 </div>
               </CardContent>

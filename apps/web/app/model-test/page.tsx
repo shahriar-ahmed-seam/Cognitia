@@ -447,13 +447,13 @@ export default function ModelTestPage() {
                 <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
               </div>
             ) : tests.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3">
                 {tests.map((test, index) => {
                   const progress = getTestProgress(test.id)
                   return (
                     <Card
                       key={test.id}
-                      className="h-full cursor-pointer bg-gradient-to-br from-white to-emerald-50/50 border-0 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
+                      className="flex flex-col h-full cursor-pointer bg-gradient-to-br from-white to-emerald-50/50 border-0 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
                       style={{ animationDelay: `${index * 100}ms` }}
                     >
                       <CardHeader className="pb-3">
@@ -517,7 +517,7 @@ export default function ModelTestPage() {
                           </div>
                         )}
                       </CardContent>
-                      <CardContent className="pt-0">
+                      <CardContent className="pt-0 mt-auto">
                         <Button
                           onClick={() => handleStartTest(test.id)}
                           className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
@@ -545,7 +545,7 @@ export default function ModelTestPage() {
             )}
           </TabsContent>
           <TabsContent value="trending" className="space-y-6">
-            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-2">
+            <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-3">
               {tests
                 .sort((a, b) => b.participants - a.participants)
                 .slice(0, 6)
@@ -554,7 +554,7 @@ export default function ModelTestPage() {
                   return (
                     <Card
                       key={test.id}
-                      className="h-full cursor-pointer bg-gradient-to-br from-white to-orange-50/50 border border-orange-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
+                      className="flex flex-col h-full cursor-pointer bg-gradient-to-br from-white to-orange-50/50 border border-orange-200 shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-up"
                       style={{ animationDelay: `${index * 100}ms` }}
                     >
                       <CardHeader className="pb-3">
@@ -620,7 +620,7 @@ export default function ModelTestPage() {
                         )}
                       </CardContent>
 
-                      <CardContent className="pt-0">
+                      <CardContent className="pt-0 mt-auto">
                         <Button
                           onClick={() => handleStartTest(test.id)}
                           className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"

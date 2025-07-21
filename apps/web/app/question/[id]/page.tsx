@@ -198,8 +198,8 @@ export default function QuestionDetailPage() {
 
       const data = await response.json()
       // Update the specific answer with new vote counts
-      setAnswers(prev => prev.map(answer => 
-        answer.id === answerId 
+      setAnswers(prev => prev.map(answer =>
+        answer.id === answerId
           ? { ...answer, upvotes: data.upVotes, downvotes: data.downVotes }
           : answer
       ))
@@ -356,9 +356,8 @@ export default function QuestionDetailPage() {
               top: `${Math.random() * 100}%`,
               width: `${15 + Math.random() * 25}px`,
               height: `${15 + Math.random() * 25}px`,
-              background: `linear-gradient(135deg, ${
-                ["#3B82F6", "#8B5CF6", "#06B6D4"][i % 3]
-              }, ${["#60A5FA", "#A78BFA", "#67E8F9"][i % 3]})`,
+              background: `linear-gradient(135deg, ${["#3B82F6", "#8B5CF6", "#06B6D4"][i % 3]
+                }, ${["#60A5FA", "#A78BFA", "#67E8F9"][i % 3]})`,
               animationDelay: `${Math.random() * 8}s`,
               animationDuration: `${12 + Math.random() * 8}s`,
             }}
@@ -381,34 +380,44 @@ export default function QuestionDetailPage() {
         </div>
 
         {/* Question Card */}
-        <Card className="mb-8 bg-white/70 backdrop-blur-sm border border-white/20 shadow-xl">
+        <Card className="mb-10 bg-white/80 backdrop-blur-lg border border-blue-100 shadow-2xl rounded-2xl px-2 py-2">
           <CardContent className="p-8">
-            <div className="flex gap-6">
+            <div className="flex items-center gap-5 mb-6">
+              <Avatar className="h-12 w-12 shadow">
+                <AvatarImage src={question.author.avatar || '/placeholder.svg'} alt={question.author.name} />
+                <AvatarFallback className="text-lg">{question.author.name.charAt(0)}</AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="font-semibold text-lg text-slate-900">{question.author.name}</div>
+                <div className="text-sm text-slate-500">asked {formatRelativeTime(question.createdAt)}</div>
+              </div>
+            </div>
+            <Separator className="mb-6" />
+            <div className="flex gap-8">
               {/* Vote Section */}
-              <div className="flex flex-col items-center gap-2 min-w-[80px]">
+              <div className="flex flex-col items-center gap-3 min-w-[80px]">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleQuestionVote("UP")}
+                  onClick={() => handleQuestionVote('UP')}
                   className="p-2 h-10 w-10 hover:bg-green-50 hover:text-green-600"
                 >
                   <ThumbsUp className="h-5 w-5" />
                 </Button>
-                <span className="text-lg font-bold text-slate-700">{question.upvotes}</span>
+                <span className="text-xl font-bold text-slate-700">{question.upvotes}</span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => handleQuestionVote("DOWN")}
+                  onClick={() => handleQuestionVote('DOWN')}
                   className="p-2 h-10 w-10 hover:bg-red-50 hover:text-red-600"
                 >
                   <ThumbsDown className="h-5 w-5" />
                 </Button>
               </div>
-
               {/* Question Content */}
-              <div className="flex-1">
-                <div className="flex items-start justify-between mb-4">
-                  <h1 className="text-2xl font-bold text-slate-900">{question.title}</h1>
+              <div className="flex-1 flex flex-col gap-4">
+                <div className="flex items-start justify-between mb-2">
+                  <h1 className="text-2xl md:text-3xl font-bold text-slate-900 leading-tight">{question.title}</h1>
                   <div className="flex gap-2">
                     {question.isFeatured && <Badge className="bg-yellow-100 text-yellow-800">Featured</Badge>}
                     {question.isAnswered && (
@@ -419,12 +428,10 @@ export default function QuestionDetailPage() {
                     )}
                   </div>
                 </div>
-
-                <div className="prose max-w-none mb-6">
+                <div className="prose max-w-none mb-2">
                   <p className="text-slate-700 whitespace-pre-wrap">{question.content}</p>
                 </div>
-
-                <div className="flex flex-wrap gap-2 mb-6">
+                <div className="flex flex-wrap gap-2 mb-2">
                   <Badge variant="outline" className="bg-blue-50 border-blue-200 text-blue-700">
                     {question.subject}
                   </Badge>
@@ -434,27 +441,14 @@ export default function QuestionDetailPage() {
                     </Badge>
                   ))}
                 </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={question.author.avatar || "/placeholder.svg"} alt={question.author.name} />
-                      <AvatarFallback>{question.author.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium text-slate-900">{question.author.name}</div>
-                      <div className="text-sm text-slate-500">asked {formatRelativeTime(question.createdAt)}</div>
-                    </div>
+                <div className="flex items-center gap-6 text-sm text-slate-500 mt-2">
+                  <div className="flex items-center gap-1">
+                    <Eye className="h-4 w-4" />
+                    <span>{question.views} views</span>
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-slate-500">
-                    <div className="flex items-center gap-1">
-                      <Eye className="h-4 w-4" />
-                      <span>{question.views} views</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <MessageSquare className="h-4 w-4" />
-                      <span>{answers.length} answers</span>
-                    </div>
+                  <div className="flex items-center gap-1">
+                    <MessageSquare className="h-4 w-4" />
+                    <span>{answers.length} answers</span>
                   </div>
                 </div>
               </div>
@@ -476,75 +470,68 @@ export default function QuestionDetailPage() {
                 <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
               </div>
             ) : answers.length > 0 ? (
-              <div className="space-y-6">
+              <div className="space-y-8">
                 {answers.map((answer, index) => (
-                  <div key={answer.id}>
-                    <div className="flex gap-6">
-                      {/* Vote Section */}
-                      <div className="flex flex-col items-center gap-2 min-w-[60px]">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleAnswerVote(answer.id, "UP")}
-                          className="p-1 h-8 w-8 hover:bg-green-50 hover:text-green-600"
-                        >
-                          <ThumbsUp className="h-4 w-4" />
-                        </Button>
-                        <span className="font-medium text-slate-700">{answer.upvotes}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleAnswerVote(answer.id, "DOWN")}
-                          className="p-1 h-8 w-8 hover:bg-red-50 hover:text-red-600"
-                        >
-                          <ThumbsDown className="h-4 w-4" />
-                        </Button>
-                        {answer.isAccepted && <CheckCircle className="h-6 w-6 text-green-500 mt-2" />}
-                      </div>
-
-                      {/* Answer Content */}
-                      <div className="flex-1">
-                        {answer.isAccepted && (
-                          <Badge className="bg-green-100 text-green-800 mb-3">
-                            <CheckCircle className="h-3 w-3 mr-1" />
-                            Accepted Answer
-                          </Badge>
-                        )}
-
-                        <div className="prose max-w-none mb-4">
-                          <p className="text-slate-700 whitespace-pre-wrap">{answer.content}</p>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-6 w-6">
-                              <AvatarImage src={answer.author.avatar || "/placeholder.svg"} alt={answer.author.name} />
-                              <AvatarFallback className="text-xs">{answer.author.name.charAt(0)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <div className="text-sm font-medium text-slate-900">{answer.author.name}</div>
-                              <div className="text-xs text-slate-500">
-                                answered {formatRelativeTime(answer.createdAt)}
-                              </div>
-                            </div>
+                  <div key={answer.id} className="bg-white/90 rounded-2xl shadow-xl px-6 py-6 flex gap-8">
+                    {/* Vote Section */}
+                    <div className="flex flex-col items-center gap-3 min-w-[60px]">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAnswerVote(answer.id, "UP")}
+                        className="p-1 h-8 w-8 hover:bg-green-50 hover:text-green-600"
+                      >
+                        <ThumbsUp className="h-4 w-4" />
+                      </Button>
+                      <span className="font-semibold text-lg text-slate-700">{answer.upvotes}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleAnswerVote(answer.id, "DOWN")}
+                        className="p-1 h-8 w-8 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <ThumbsDown className="h-4 w-4" />
+                      </Button>
+                      {answer.isAccepted && <CheckCircle className="h-6 w-6 text-green-500 mt-2" />}
+                    </div>
+                    {/* Answer Content */}
+                    <div className="flex-1 flex flex-col gap-3">
+                      <div className="flex items-center gap-3 mb-1">
+                        <Avatar className="h-8 w-8 shadow">
+                          <AvatarImage src={answer.author.avatar || "/placeholder.svg"} alt={answer.author.name} />
+                          <AvatarFallback className="text-base">{answer.author.name.charAt(0)}</AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <div className="text-base font-medium text-slate-900">{answer.author.name}</div>
+                          <div className="text-xs text-slate-500">
+                            answered {formatRelativeTime(answer.createdAt)}
                           </div>
-
-                          {/* Accept Answer Button (only for question author) */}
-                          {!answer.isAccepted && question.author.id === localStorage.getItem("userId") && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleAcceptAnswer(answer.id)}
-                              className="text-green-600 border-green-200 hover:bg-green-50"
-                            >
-                              <CheckCircle className="h-4 w-4 mr-1" />
-                              Accept Answer
-                            </Button>
-                          )}
                         </div>
+                      </div>
+                      <div className="prose max-w-none mb-2">
+                        <p className="text-slate-700 whitespace-pre-wrap">{answer.content}</p>
+                      </div>
+                      {answer.isAccepted && (
+                        <Badge className="bg-green-100 text-green-800 mb-2 w-fit">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Accepted Answer
+                        </Badge>
+                      )}
+                      <div className="flex items-center justify-end mt-2">
+                        {/* Accept Answer Button (only for question author) */}
+                        {!answer.isAccepted && question.author.id === localStorage.getItem("userId") && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAcceptAnswer(answer.id)}
+                            className="text-green-600 border-green-200 hover:bg-green-50"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-1" />
+                            Accept Answer
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    {index < answers.length - 1 && <Separator className="mt-6" />}
                   </div>
                 ))}
               </div>
