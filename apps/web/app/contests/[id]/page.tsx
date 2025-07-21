@@ -88,7 +88,10 @@ export default function TakeContestPage() {
       // Start contest attempt (also provides contest details)
       const attemptRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contestId}/start`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
       })
       if (!attemptRes.ok) throw new Error("Failed to start contest attempt")
       const attemptData = await attemptRes.json()

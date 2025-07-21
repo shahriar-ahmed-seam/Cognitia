@@ -20,17 +20,50 @@ export function ContestCard({ contest }: ContestCardProps) {
   const [participationStatus, setParticipationStatus] = useState<ParticipationStatus>("not-registered")
   const [isLoading, setIsLoading] = useState(false)
 
+  // taod 
   // Fetch participation status from backend
   useEffect(() => {
-    if (!user || loading) return;
+    if (!user || loading) {
+      console.log("Waiting for user authentication...");
+      return;
+    }
+    
+    const token = localStorage.getItem("token");
+    if (!token) {
+      console.log("No auth token found");
+      return;
+    }
+    
     const fetchStatus = async () => {
       try {
         const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}`;
         console.log("Fetching contest status from:", url);
-        const res = await fetchWithAuth(url, { method: "GET" });
-        if (!res.ok) throw new Error(`Status fetch failed: ${res.status}`);
+        const res = await fetchWithAuth(url, { 
+          method: "GET",
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!res.ok) {
+          console.error("Failed to fetch contest status:", res.status);
+          setParticipationStatus("not-registered");
+          return;
+        }
         const data = await res.json();
-        const isRegistered = data?.contest?.userStatus?.isRegistered;
+        // Check if user is registered by making another call
+        const regRes = await fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/registered`, { 
+          method: "GET",
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        if (!regRes.ok) {
+          console.error("Failed to fetch registration status:", regRes.status);
+          setParticipationStatus("not-registered");
+          return;
+        }
+        const regData = await regRes.json();
+        const isRegistered = regData.contests.some((c: { id: string }) => c.id === contest.id);
         setParticipationStatus(isRegistered ? "registered" : "not-registered");
         console.log("Fetched participation status:", isRegistered);
       } catch (err) {
@@ -43,20 +76,34 @@ export function ContestCard({ contest }: ContestCardProps) {
 
   const handleRegister = async () => {
     if (!user || loading || !user.id) return
+    const token = localStorage.getItem("token");
+    if (!token) return;
+    
     setIsLoading(true)
     try {
       const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}/register`;
       console.log("Registering at:", url);
-      const res = await fetchWithAuth(url, { method: "POST" });
+      const res = await fetchWithAuth(url, { 
+        method: "POST",
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "Failed to register");
+        throw new Error(data.error || "Failed to register");
       }
-      setParticipationStatus("registered")
-      alert("Successfully registered for contest!");
+
+      if (data.success) {
+        setParticipationStatus("registered");
+        alert("Successfully registered for contest!");
+      } else {
+        throw new Error(data.message || "Failed to register");
+      }
     } catch (error) {
       console.error("Register error:", error);
-      alert("Failed to register for contest. Please try again.")
+      alert(error instanceof Error ? error.message : "Failed to register for contest. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -66,14 +113,24 @@ export function ContestCard({ contest }: ContestCardProps) {
     if (!user || loading || !user.id) return
     setIsLoading(true)
     try {
-      // Try DELETE to /api/contests/register
-      await fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/register`, {
-        method: "DELETE",
-        body: JSON.stringify({ contestId: contest.id, userId: user.id }),
-      })
-      setParticipationStatus("not-registered")
+      // Note: The backend doesn't have an unregister endpoint, so we'll keep this disabled
+      setIsLoading(false)
+      alert("Unregistering from contests is not supported.")
+      return;
+      
+      /* Commented out since backend doesn't support unregistering
+      const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}/unregister`;
+      const res = await fetchWithAuth(url, { method: "DELETE" });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.message || "Failed to unregister");
+      }
+      setParticipationStatus("not-registered");
+      alert("Successfully unregistered from contest!");
+      */
     } catch (error) {
-      alert("Failed to unregister from contest. Please try again.")
+      console.error("Unregister error:", error);
+      alert(error instanceof Error ? error.message : "Failed to unregister from contest. Please try again.")
     } finally {
       setIsLoading(false)
     }
@@ -150,9 +207,8 @@ export function ContestCard({ contest }: ContestCardProps) {
 
     if (participationStatus === "registered") {
       return (
-        <Button variant="outline" /* onClick={handleUnregister} */ className="w-full" disabled={isLoading || loading || !user}>
-          {/* {isLoading ? "Unregistering..." : "Unregister"} */}
-          Registered
+        <Button variant="outline" onClick={handleUnregister} className="w-full" disabled={isLoading || loading || !user}>
+          {isLoading ? "Unregistering..." : "Unregister"}
         </Button>
       )
     } else {

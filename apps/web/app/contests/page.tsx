@@ -269,7 +269,13 @@ export default function ContestsPage() {
                     className="animate-slide-in-from-bottom"
                     style={{ animationDelay: `${index * 100}ms` }}
                   >
-                    <ContestCard contest={contest} />
+                    <ContestCard
+                      contest={{
+                        ...contest,
+                        isVirtual: false,
+                        organizer: contest.createdBy,
+                      }}
+                    />
                   </div>
                 ))}
               </div>

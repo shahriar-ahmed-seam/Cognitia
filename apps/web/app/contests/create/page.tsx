@@ -209,7 +209,7 @@ export default function CreateContestPage() {
 
         {!isGenerated ? (
           <div className="max-w-4xl mx-auto">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
               <div className="md:col-span-2 space-y-6">
                 <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl">
                   <CardHeader className="bg-gradient-to-r from-emerald-500/10 to-teal-500/10">
@@ -345,67 +345,27 @@ export default function CreateContestPage() {
                   </CardContent>
                 </Card>
               </div>
-
-              <div className="space-y-6">
-                <Card className="bg-white/80 backdrop-blur-sm border border-white/20 shadow-xl">
-                  <CardHeader className="bg-gradient-to-r from-cyan-500/10 to-blue-500/10">
-                    <CardTitle className="flex items-center gap-2">
-                      <BookOpen className="h-5 w-5 text-cyan-600" />
-                      Contest Settings
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4 p-6">
-                    <div className="space-y-2">
-                      <Label htmlFor="eligibility">Eligibility</Label>
-                      <Select
-                        value={formData.eligibility}
-                        onValueChange={(value) => setFormData((prev) => ({ ...prev, eligibility: value }))}
-                      >
-                        <SelectTrigger id="eligibility">
-                          <SelectValue placeholder="Select eligibility" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Open for all">Open for all</SelectItem>
-                          <SelectItem value="Beginners only">Beginners only</SelectItem>
-                          <SelectItem value="Experienced programmers only">Experienced programmers only</SelectItem>
-                          <SelectItem value="Students only">Students only</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="virtual"
-                        checked={formData.isVirtual}
-                        onCheckedChange={(checked) =>
-                          setFormData((prev) => ({ ...prev, isVirtual: checked as boolean }))
-                        }
-                      />
-                      <Label htmlFor="virtual" className="cursor-pointer text-sm">
-                        Virtual Contest (participants can start at any time)
-                      </Label>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Button
-                  onClick={handleGenerateContest}
-                  disabled={!isFormValid || isGenerating}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-                >
-                  {isGenerating ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Generating Contest...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="mr-2 h-5 w-5" />
-                      Generate Contest
-                    </>
-                  )}
-                </Button>
-              </div>
+              {/* Removed the right column with the button */}
+            </div>
+            {/* Moved Generate Contest button here, centered */}
+            <div className="mt-8 flex justify-center">
+              <Button
+                onClick={handleGenerateContest}
+                disabled={!isFormValid || isGenerating}
+                className="w-full max-w-md bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Generating Contest...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-5 w-5" />
+                    Generate Contest
+                  </>
+                )}
+              </Button>
             </div>
 
             {/* Generation Progress */}
