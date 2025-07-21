@@ -67,6 +67,11 @@ export default function QAPage() {
   const [filterBy, setFilterBy] = useState("all")
   const [isQuestionModalOpen, setIsQuestionModalOpen] = useState(false)
   const [orbs, setOrbs] = useState<Array<any>>([])
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Fetch questions from API
   const fetchQuestions = async () => {
@@ -266,74 +271,75 @@ export default function QAPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 relative overflow-hidden">
       {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Floating Orbs */}
-        {Array.from({ length: 18 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className={`absolute rounded-full bg-gradient-to-br ${
-              i % 3 === 0
-                ? "from-blue-400/20 to-purple-400/20"
-                : i % 3 === 1
-                  ? "from-indigo-400/20 to-pink-400/20"
-                  : "from-purple-400/20 to-blue-400/20"
-            } blur-xl animate-float-enhanced`}
-            style={{
-              width: `${Math.random() * 200 + 100}px`,
-              height: `${Math.random() * 200 + 100}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${Math.random() * 10 + 15}s`,
-            }}
-          />
-        ))}
-        {/* Particles */}
-        {Array.from({ length: 35 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute w-2 h-2 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full animate-particle-float opacity-60"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 15}s`,
-              animationDuration: `${Math.random() * 8 + 12}s`,
-            }}
-          />
-        ))}
-        {/* Constellation Stars */}
-        {Array.from({ length: 40 }).map((_, i) => (
-          <div
-            key={`star-${i}`}
-            className="absolute w-1 h-1 bg-white rounded-full animate-twinkle-enhanced"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`,
-            }}
-          />
-        ))}
-        {/* Morphing Shapes */}
-        {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={`morph-${i}`}
-            className={`absolute w-32 h-32 ${
-              i % 2 === 0
-                ? "bg-gradient-to-br from-blue-300/10 to-purple-300/10"
-                : "bg-gradient-to-br from-indigo-300/10 to-pink-300/10"
-            } rounded-full animate-morph-enhanced blur-2xl`}
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 10}s`,
-            }}
-          />
-        ))}
-        {/* Aurora Effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-400/5 via-purple-400/5 to-pink-400/5 animate-aurora" />
-        {/* Gradient Flow */}
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-blue-400/5 to-transparent animate-gradient-flow" />
-      </div>
-
+      {mounted && (
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {/* Floating Orbs */}
+          {Array.from({ length: 18 }).map((_, i) => (
+            <div
+              key={`orb-${i}`}
+              className={`absolute rounded-full bg-gradient-to-br ${
+                i % 3 === 0
+                  ? "from-blue-400/20 to-purple-400/20"
+                  : i % 3 === 1
+                    ? "from-indigo-400/20 to-pink-400/20"
+                    : "from-purple-400/20 to-blue-400/20"
+              } blur-xl animate-float-enhanced`}
+              style={{
+                width: `${Math.random() * 200 + 100}px`,
+                height: `${Math.random() * 200 + 100}px`,
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 20}s`,
+                animationDuration: `${Math.random() * 10 + 15}s`,
+              }}
+            />
+          ))}
+          {/* Particles */}
+          {Array.from({ length: 35 }).map((_, i) => (
+            <div
+              key={`particle-${i}`}
+              className="absolute w-2 h-2 bg-gradient-to-r from-blue-400 to-purple-400 rounded-full animate-particle-float opacity-60"
+              style={{
+                left: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 15}s`,
+                animationDuration: `${Math.random() * 8 + 12}s`,
+              }}
+            />
+          ))}
+          {/* Constellation Stars */}
+          {Array.from({ length: 40 }).map((_, i) => (
+            <div
+              key={`star-${i}`}
+              className="absolute w-1 h-1 bg-white rounded-full animate-twinkle-enhanced"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 5}s`,
+              }}
+            />
+          ))}
+          {/* Morphing Shapes */}
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={`morph-${i}`}
+              className={`absolute w-32 h-32 ${
+                i % 2 === 0
+                  ? "bg-gradient-to-br from-blue-300/10 to-purple-300/10"
+                  : "bg-gradient-to-br from-indigo-300/10 to-pink-300/10"
+              } rounded-full animate-morph-enhanced blur-2xl`}
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 10}s`,
+              }}
+            />
+          ))}
+          {/* Aurora Effect */}
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-400/5 via-purple-400/5 to-pink-400/5 animate-aurora" />
+          {/* Gradient Flow */}
+          <div className="absolute inset-0 bg-gradient-to-br from-transparent via-blue-400/5 to-transparent animate-gradient-flow" />
+        </div>
+      )}
       {/* Navigation Bar */}
       <Navbar />
 

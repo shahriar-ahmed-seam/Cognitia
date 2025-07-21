@@ -38,7 +38,7 @@ export function ContestCard({ contest }: ContestCardProps) {
       try {
         const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}`;
         console.log("Fetching contest status from:", url);
-        const res = await fetchWithAuth(url, { 
+        const res = await fetch(url, { 
           method: "GET",
           headers: {
             'Authorization': `Bearer ${token}`
@@ -51,7 +51,7 @@ export function ContestCard({ contest }: ContestCardProps) {
         }
         const data = await res.json();
         // Check if user is registered by making another call
-        const regRes = await fetchWithAuth(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/registered`, { 
+        const regRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/registered`, { 
           method: "GET",
           headers: {
             'Authorization': `Bearer ${token}`
@@ -83,7 +83,7 @@ export function ContestCard({ contest }: ContestCardProps) {
     try {
       const url = `${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contest.id}/register`;
       console.log("Registering at:", url);
-      const res = await fetchWithAuth(url, { 
+      const res = await fetch(url, { 
         method: "POST",
         headers: {
           'Authorization': `Bearer ${token}`

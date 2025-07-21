@@ -39,6 +39,7 @@ export default function ContestsPage() {
   const [status, setStatus] = useState<"upcoming" | "ongoing" | "finished" | "all">("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [selectedTopics, setSelectedTopics] = useState<string[]>([])
+  const [mounted, setMounted] = useState(false)
 
   // Fetch contests from API
   const fetchContests = async () => {
@@ -78,6 +79,10 @@ export default function ContestsPage() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   useEffect(() => {
     const token = localStorage.getItem("token")
@@ -129,45 +134,47 @@ export default function ContestsPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50 to-red-50 relative overflow-hidden">
       {/* Enhanced Live Animated Background */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Dynamic Floating Orbs */}
-        {Array.from({ length: 20 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className="absolute rounded-full animate-float-enhanced opacity-25"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              width: `${18 + Math.random() * 35}px`,
-              height: `${18 + Math.random() * 35}px`,
-              background: `linear-gradient(135deg, ${
-                ["#F59E0B", "#EF4444", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5]
-              }, ${["#FBBF24", "#F87171", "#F472B6", "#A855F7", "#0EA5E9"][i % 5]})`,
-              animationDelay: `${Math.random() * 10}s`,
-              animationDuration: `${14 + Math.random() * 8}s`,
-            }}
-          />
-        ))}
+      {mounted && (
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Dynamic Floating Orbs */}
+          {Array.from({ length: 20 }).map((_, i) => (
+            <div
+              key={`orb-${i}`}
+              className="absolute rounded-full animate-float-enhanced opacity-25"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                width: `${18 + Math.random() * 35}px`,
+                height: `${18 + Math.random() * 35}px`,
+                background: `linear-gradient(135deg, ${
+                  ["#F59E0B", "#EF4444", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5]
+                }, ${["#FBBF24", "#F87171", "#F472B6", "#A855F7", "#0EA5E9"][i % 5]})`,
+                animationDelay: `${Math.random() * 10}s`,
+                animationDuration: `${14 + Math.random() * 8}s`,
+              }}
+            />
+          ))}
 
-        {/* Live Particle System */}
-        {Array.from({ length: 40 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute w-1 h-1 rounded-full animate-particle-float opacity-35"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              background: `${["#F59E0B", "#EF4444", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5]}`,
-              animationDuration: `${9 + Math.random() * 7}s`,
-              animationDelay: `${Math.random() * 5}s`,
-            }}
-          />
-        ))}
+          {/* Live Particle System */}
+          {Array.from({ length: 40 }).map((_, i) => (
+            <div
+              key={`particle-${i}`}
+              className="absolute w-1 h-1 rounded-full animate-particle-float opacity-35"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                background: `${["#F59E0B", "#EF4444", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5]}`,
+                animationDuration: `${9 + Math.random() * 7}s`,
+                animationDelay: `${Math.random() * 5}s`,
+              }}
+            />
+          ))}
 
-        {/* Enhanced Aurora Effects */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/3 to-transparent animate-aurora-enhanced"></div>
-        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-red-500/3 to-transparent animate-aurora-vertical-enhanced delay-4000"></div>
-      </div>
+          {/* Enhanced Aurora Effects */}
+          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/3 to-transparent animate-aurora-enhanced"></div>
+          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-red-500/3 to-transparent animate-aurora-vertical-enhanced delay-4000"></div>
+        </div>
+      )}
 
       <Navbar />
 

@@ -9,9 +9,11 @@ export default function Home() {
   const [isVisible, setIsVisible] = useState(false)
   const [notesCount, setNotesCount] = useState(0)
   const [userCount, setUserCount] = useState(0)
+  const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setIsVisible(true)
+    setMounted(true)
 
     // Fetch the number of notes
     async function fetchNotesCount() {
@@ -40,125 +42,127 @@ export default function Home() {
   return (
     <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-900 via-purple-900 to-indigo-900">
       {/* Enhanced Live Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        {/* Dynamic Floating Orbs with Live Movement */}
-        {Array.from({ length: 25 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className="absolute rounded-full animate-float-enhanced opacity-30"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              width: `${25 + Math.random() * 50}px`,
-              height: `${25 + Math.random() * 50}px`,
-              background: `linear-gradient(135deg, ${
-                ["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"][i % 7]
-              }, ${["#A855F7", "#F472B6", "#0EA5E9", "#34D399", "#FBBF24", "#F87171", "#A855F7"][i % 7]})`,
-              animationDelay: `${Math.random() * 12}s`,
-              animationDuration: `${18 + Math.random() * 12}s`,
-            }}
-          />
-        ))}
-
-        {/* Live Particle System */}
-        {Array.from({ length: 60 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute w-1 h-1 rounded-full animate-particle-float"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              background: `${["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B", "#EF4444"][i % 6]}`,
-              animationDuration: `${12 + Math.random() * 8}s`,
-              animationDelay: `${Math.random() * 6}s`,
-            }}
-          />
-        ))}
-
-        {/* Enhanced Live Constellation Effect */}
-        <svg className="absolute inset-0 w-full h-full opacity-40">
-          {Array.from({ length: 70 }).map((_, i) => (
-            <circle
-              key={`star-${i}`}
-              cx={`${Math.random() * 100}%`}
-              cy={`${Math.random() * 100}%`}
-              r={Math.random() * 2.5 + 0.5}
-              fill="white"
-              className="animate-twinkle-enhanced"
+      {mounted && (
+        <div className="absolute inset-0 overflow-hidden">
+          {/* Dynamic Floating Orbs with Live Movement */}
+          {Array.from({ length: 25 }).map((_, i) => (
+            <div
+              key={`orb-${i}`}
+              className="absolute rounded-full animate-float-enhanced opacity-30"
               style={{
-                animationDelay: `${Math.random() * 6}s`,
-                animationDuration: `${3 + Math.random() * 4}s`,
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                width: `${25 + Math.random() * 50}px`,
+                height: `${25 + Math.random() * 50}px`,
+                background: `linear-gradient(135deg, ${
+                  ["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"][i % 7]
+                }, ${["#A855F7", "#F472B6", "#0EA5E9", "#34D399", "#FBBF24", "#F87171", "#A855F7"][i % 7]})`,
+                animationDelay: `${Math.random() * 12}s`,
+                animationDuration: `${18 + Math.random() * 12}s`,
               }}
             />
           ))}
-          {Array.from({ length: 35 }).map((_, i) => (
-            <line
-              key={`line-${i}`}
-              x1={`${Math.random() * 100}%`}
-              y1={`${Math.random() * 100}%`}
-              x2={`${Math.random() * 100}%`}
-              y2={`${Math.random() * 100}%`}
-              stroke="url(#constellation-gradient)"
-              strokeWidth={Math.random() * 1.5 + 0.5}
-              className="animate-constellation-enhanced"
-              style={{ animationDelay: `${i * 0.2}s` }}
+
+          {/* Live Particle System */}
+          {Array.from({ length: 60 }).map((_, i) => (
+            <div
+              key={`particle-${i}`}
+              className="absolute w-1 h-1 rounded-full animate-particle-float"
+              style={{
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                background: `${["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B", "#EF4444"][i % 6]}`,
+                animationDuration: `${12 + Math.random() * 8}s`,
+                animationDelay: `${Math.random() * 6}s`,
+              }}
             />
           ))}
-          <defs>
-            <linearGradient id="constellation-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.8" />
-              <stop offset="25%" stopColor="#EC4899" stopOpacity="0.6" />
-              <stop offset="50%" stopColor="#06B6D4" stopOpacity="0.8" />
-              <stop offset="75%" stopColor="#10B981" stopOpacity="0.6" />
-              <stop offset="100%" stopColor="#F59E0B" stopOpacity="0.8" />
-            </linearGradient>
-          </defs>
-        </svg>
 
-        {/* Live Gradient Waves with Enhanced Movement */}
-        <div className="absolute inset-0 opacity-25">
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-600/40 via-transparent to-blue-600/40 animate-aurora-enhanced"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tl from-pink-600/30 via-transparent to-cyan-600/30 animate-aurora-enhanced delay-2000"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-emerald-600/25 via-transparent to-purple-600/35 animate-aurora-enhanced delay-4000"></div>
-          <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-bl from-yellow-600/20 via-transparent to-red-600/30 animate-aurora-enhanced delay-6000"></div>
+          {/* Enhanced Live Constellation Effect */}
+          <svg className="absolute inset-0 w-full h-full opacity-40">
+            {Array.from({ length: 70 }).map((_, i) => (
+              <circle
+                key={`star-${i}`}
+                cx={`${Math.random() * 100}%`}
+                cy={`${Math.random() * 100}%`}
+                r={Math.random() * 2.5 + 0.5}
+                fill="white"
+                className="animate-twinkle-enhanced"
+                style={{
+                  animationDelay: `${Math.random() * 6}s`,
+                  animationDuration: `${3 + Math.random() * 4}s`,
+                }}
+              />
+            ))}
+            {Array.from({ length: 35 }).map((_, i) => (
+              <line
+                key={`line-${i}`}
+                x1={`${Math.random() * 100}%`}
+                y1={`${Math.random() * 100}%`}
+                x2={`${Math.random() * 100}%`}
+                y2={`${Math.random() * 100}%`}
+                stroke="url(#constellation-gradient)"
+                strokeWidth={Math.random() * 1.5 + 0.5}
+                className="animate-constellation-enhanced"
+                style={{ animationDelay: `${i * 0.2}s` }}
+              />
+            ))}
+            <defs>
+              <linearGradient id="constellation-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.8" />
+                <stop offset="25%" stopColor="#EC4899" stopOpacity="0.6" />
+                <stop offset="50%" stopColor="#06B6D4" stopOpacity="0.8" />
+                <stop offset="75%" stopColor="#10B981" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#F59E0B" stopOpacity="0.8" />
+              </linearGradient>
+            </defs>
+          </svg>
+
+          {/* Live Gradient Waves with Enhanced Movement */}
+          <div className="absolute inset-0 opacity-25">
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-br from-purple-600/40 via-transparent to-blue-600/40 animate-aurora-enhanced"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tl from-pink-600/30 via-transparent to-cyan-600/30 animate-aurora-enhanced delay-2000"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-emerald-600/25 via-transparent to-purple-600/35 animate-aurora-enhanced delay-4000"></div>
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-bl from-yellow-600/20 via-transparent to-red-600/30 animate-aurora-enhanced delay-6000"></div>
+          </div>
+
+          {/* Live Morphing Geometric Shapes */}
+          <div className="absolute top-20 left-20 w-20 h-20 bg-gradient-to-br from-purple-500/40 to-pink-500/40 animate-morph-enhanced"></div>
+          <div className="absolute bottom-32 right-32 w-16 h-16 bg-gradient-to-br from-cyan-500/35 to-blue-500/35 animate-morph-enhanced-reverse"></div>
+          <div className="absolute top-1/2 right-20 w-24 h-24 bg-gradient-to-br from-emerald-500/30 to-teal-500/30 animate-morph-enhanced delay-3000"></div>
+          <div className="absolute bottom-20 left-1/4 w-12 h-12 bg-gradient-to-br from-yellow-500/45 to-orange-500/45 animate-morph-enhanced-reverse delay-5000"></div>
+          <div className="absolute top-1/4 left-1/3 w-18 h-18 bg-gradient-to-br from-red-500/35 to-pink-500/35 animate-morph-enhanced delay-6000"></div>
+          <div className="absolute bottom-1/3 right-1/4 w-14 h-14 bg-gradient-to-br from-indigo-500/40 to-purple-500/40 animate-morph-enhanced-reverse delay-8000"></div>
+
+          {/* Enhanced Live Floating Geometric Shapes */}
+          <div className="absolute top-32 right-1/4 w-16 h-16 border-2 border-purple-400/60 rotate-45 animate-rotate-enhanced"></div>
+          <div className="absolute bottom-40 left-32 w-12 h-12 bg-gradient-to-br from-pink-400/50 to-purple-400/50 rounded-full animate-pulse-enhanced"></div>
+          <div className="absolute top-2/3 left-20 w-22 h-22 border border-cyan-400/50 rounded-full animate-scale-enhanced"></div>
+          <div className="absolute bottom-32 right-1/3 w-8 h-8 bg-gradient-to-br from-emerald-400/60 to-teal-400/60 animate-bounce-enhanced"></div>
+          <div className="absolute top-1/3 right-32 w-10 h-10 bg-gradient-to-br from-yellow-400/55 to-orange-400/55 rotate-12 animate-spin-enhanced"></div>
+          <div className="absolute top-1/4 right-1/3 w-6 h-6 bg-gradient-to-br from-red-400/50 to-pink-400/50 animate-float-enhanced delay-2000"></div>
+          <div className="absolute bottom-1/4 left-1/3 w-14 h-14 border border-indigo-400/45 rotate-12 animate-rotate-enhanced delay-4000"></div>
+
+          {/* Enhanced Live Large Orbs with Dynamic Pulsing */}
+          <div className="absolute -top-40 -left-40 w-96 h-96 bg-gradient-to-br from-purple-600/30 to-pink-600/30 rounded-full blur-3xl animate-pulse-slow-enhanced"></div>
+          <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-600/25 to-cyan-600/25 rounded-full blur-3xl animate-pulse-slow-enhanced delay-3000"></div>
+          <div className="absolute top-1/3 left-1/3 w-72 h-72 bg-gradient-to-br from-emerald-600/20 to-teal-600/20 rounded-full blur-2xl animate-pulse-slow-enhanced delay-6000"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-gradient-to-br from-yellow-600/23 to-orange-600/23 rounded-full blur-2xl animate-pulse-slow-enhanced delay-8000"></div>
+          <div className="absolute top-1/4 right-1/3 w-56 h-56 bg-gradient-to-br from-red-600/18 to-pink-600/18 rounded-full blur-xl animate-pulse-slow-enhanced delay-5000"></div>
+
+          {/* Live Gradient Flow Effects */}
+          <div className="absolute inset-0 opacity-30">
+            <div className="absolute w-full h-full bg-gradient-to-br from-purple-500/35 via-transparent to-blue-500/35 animate-gradient-flow-enhanced"></div>
+            <div className="absolute w-full h-full bg-gradient-to-tl from-pink-500/30 via-transparent to-cyan-500/30 animate-gradient-flow-reverse-enhanced"></div>
+            <div className="absolute w-full h-full bg-gradient-to-tr from-emerald-500/25 via-transparent to-yellow-500/25 animate-gradient-flow-enhanced delay-4000"></div>
+          </div>
+
+          {/* Live Aurora Vertical Effects */}
+          <div className="absolute left-1/4 top-0 w-1 h-full bg-gradient-to-b from-transparent via-purple-500/40 to-transparent animate-aurora-vertical-enhanced"></div>
+          <div className="absolute right-1/3 top-0 w-1 h-full bg-gradient-to-b from-transparent via-pink-500/35 to-transparent animate-aurora-vertical-enhanced delay-3000"></div>
+          <div className="absolute left-2/3 top-0 w-1 h-full bg-gradient-to-b from-transparent via-cyan-500/30 to-transparent animate-aurora-vertical-enhanced delay-6000"></div>
         </div>
-
-        {/* Live Morphing Geometric Shapes */}
-        <div className="absolute top-20 left-20 w-20 h-20 bg-gradient-to-br from-purple-500/40 to-pink-500/40 animate-morph-enhanced"></div>
-        <div className="absolute bottom-32 right-32 w-16 h-16 bg-gradient-to-br from-cyan-500/35 to-blue-500/35 animate-morph-enhanced-reverse"></div>
-        <div className="absolute top-1/2 right-20 w-24 h-24 bg-gradient-to-br from-emerald-500/30 to-teal-500/30 animate-morph-enhanced delay-3000"></div>
-        <div className="absolute bottom-20 left-1/4 w-12 h-12 bg-gradient-to-br from-yellow-500/45 to-orange-500/45 animate-morph-enhanced-reverse delay-5000"></div>
-        <div className="absolute top-1/4 left-1/3 w-18 h-18 bg-gradient-to-br from-red-500/35 to-pink-500/35 animate-morph-enhanced delay-6000"></div>
-        <div className="absolute bottom-1/3 right-1/4 w-14 h-14 bg-gradient-to-br from-indigo-500/40 to-purple-500/40 animate-morph-enhanced-reverse delay-8000"></div>
-
-        {/* Enhanced Live Floating Geometric Shapes */}
-        <div className="absolute top-32 right-1/4 w-16 h-16 border-2 border-purple-400/60 rotate-45 animate-rotate-enhanced"></div>
-        <div className="absolute bottom-40 left-32 w-12 h-12 bg-gradient-to-br from-pink-400/50 to-purple-400/50 rounded-full animate-pulse-enhanced"></div>
-        <div className="absolute top-2/3 left-20 w-22 h-22 border border-cyan-400/50 rounded-full animate-scale-enhanced"></div>
-        <div className="absolute bottom-32 right-1/3 w-8 h-8 bg-gradient-to-br from-emerald-400/60 to-teal-400/60 animate-bounce-enhanced"></div>
-        <div className="absolute top-1/3 right-32 w-10 h-10 bg-gradient-to-br from-yellow-400/55 to-orange-400/55 rotate-12 animate-spin-enhanced"></div>
-        <div className="absolute top-1/4 right-1/3 w-6 h-6 bg-gradient-to-br from-red-400/50 to-pink-400/50 animate-float-enhanced delay-2000"></div>
-        <div className="absolute bottom-1/4 left-1/3 w-14 h-14 border border-indigo-400/45 rotate-12 animate-rotate-enhanced delay-4000"></div>
-
-        {/* Enhanced Live Large Orbs with Dynamic Pulsing */}
-        <div className="absolute -top-40 -left-40 w-96 h-96 bg-gradient-to-br from-purple-600/30 to-pink-600/30 rounded-full blur-3xl animate-pulse-slow-enhanced"></div>
-        <div className="absolute -bottom-40 -right-40 w-80 h-80 bg-gradient-to-br from-blue-600/25 to-cyan-600/25 rounded-full blur-3xl animate-pulse-slow-enhanced delay-3000"></div>
-        <div className="absolute top-1/3 left-1/3 w-72 h-72 bg-gradient-to-br from-emerald-600/20 to-teal-600/20 rounded-full blur-2xl animate-pulse-slow-enhanced delay-6000"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 bg-gradient-to-br from-yellow-600/23 to-orange-600/23 rounded-full blur-2xl animate-pulse-slow-enhanced delay-8000"></div>
-        <div className="absolute top-1/4 right-1/3 w-56 h-56 bg-gradient-to-br from-red-600/18 to-pink-600/18 rounded-full blur-xl animate-pulse-slow-enhanced delay-5000"></div>
-
-        {/* Live Gradient Flow Effects */}
-        <div className="absolute inset-0 opacity-30">
-          <div className="absolute w-full h-full bg-gradient-to-br from-purple-500/35 via-transparent to-blue-500/35 animate-gradient-flow-enhanced"></div>
-          <div className="absolute w-full h-full bg-gradient-to-tl from-pink-500/30 via-transparent to-cyan-500/30 animate-gradient-flow-reverse-enhanced"></div>
-          <div className="absolute w-full h-full bg-gradient-to-tr from-emerald-500/25 via-transparent to-yellow-500/25 animate-gradient-flow-enhanced delay-4000"></div>
-        </div>
-
-        {/* Live Aurora Vertical Effects */}
-        <div className="absolute left-1/4 top-0 w-1 h-full bg-gradient-to-b from-transparent via-purple-500/40 to-transparent animate-aurora-vertical-enhanced"></div>
-        <div className="absolute right-1/3 top-0 w-1 h-full bg-gradient-to-b from-transparent via-pink-500/35 to-transparent animate-aurora-vertical-enhanced delay-3000"></div>
-        <div className="absolute left-2/3 top-0 w-1 h-full bg-gradient-to-b from-transparent via-cyan-500/30 to-transparent animate-aurora-vertical-enhanced delay-6000"></div>
-      </div>
+      )}
 
       {/* Main Content */}
       <div className="relative z-10 flex items-center justify-center min-h-screen p-4">
