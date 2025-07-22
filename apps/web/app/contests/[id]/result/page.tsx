@@ -110,9 +110,6 @@ export default function ContestResultPage() {
                   }}
                 />
               </motion.div>
-              <div className="text-center text-xs text-gray-500 mt-2">
-                Only your name is shown above your point. Others are anonymous.
-              </div>
             </motion.div>
             <motion.div
               initial={{ opacity: 0, y: 40 }}

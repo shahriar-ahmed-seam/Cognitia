@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { ContestCard } from "@/components/contest-card"
 import { ContestFilters } from "@/components/contest-filters"
-import { PlusCircle, Trophy, Zap, Target, Award, Loader2 } from "lucide-react"
+import { PlusCircle, Trophy, Zap, Target, Award, Loader2, BookOpen } from "lucide-react"
 import Link from "next/link"
 import { Navbar } from "@/components/navbar"
 import { useToast } from "@/hooks/use-toast"
+import { useUser } from "@/contexts/user-context"
 
 interface Contest {
   id: string
@@ -33,6 +34,7 @@ interface Contest {
 export default function ContestsPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const { user, loading: userLoading } = useUser();
 
   const [contests, setContests] = useState<Contest[]>([])
   const [loading, setLoading] = useState(true)
@@ -146,9 +148,8 @@ export default function ContestsPage() {
                 top: `${Math.random() * 100}%`,
                 width: `${18 + Math.random() * 35}px`,
                 height: `${18 + Math.random() * 35}px`,
-                background: `linear-gradient(135deg, ${
-                  ["#F59E0B", "#EF4444", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5]
-                }, ${["#FBBF24", "#F87171", "#F472B6", "#A855F7", "#0EA5E9"][i % 5]})`,
+                background: `linear-gradient(135deg, ${["#F59E0B", "#EF4444", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5]
+                  }, ${["#FBBF24", "#F87171", "#F472B6", "#A855F7", "#0EA5E9"][i % 5]})`,
                 animationDelay: `${Math.random() * 10}s`,
                 animationDuration: `${14 + Math.random() * 8}s`,
               }}
@@ -187,12 +188,27 @@ export default function ContestsPage() {
             </h1>
             <p className="text-slate-600 mt-2 text-lg">Challenge yourself and compete with others</p>
           </div>
-          <Link href="/contests/create">
-            <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-xl hover:shadow-2xl transform hover:scale-110 transition-all duration-300 animate-pulse">
-              <PlusCircle className="mr-2 h-5 w-5" />
-              Create Contest
-            </Button>
-          </Link>
+          {/* Only show My Contest and Create Contest button for admin users */}
+          {!userLoading && user && user.role === "ADMIN" && (
+            <div className="flex gap-4">
+              <Link href="/contests/my-contests">
+                <Button
+                  variant="outline"
+                  className="bg-white/70 backdrop-blur-sm border-orange-200 hover:bg-orange-50 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
+                >
+                  <BookOpen className="mr-2 h-5 w-5" />
+                  My Contests
+                </Button>
+              </Link>
+
+              <Link href="/contests/create">
+                <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-xl hover:shadow-2xl transform hover:scale-110 transition-all duration-300 animate-pulse">
+                  <PlusCircle className="mr-2 h-5 w-5" />
+                  Create Contest
+                </Button>
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Stats Cards */}

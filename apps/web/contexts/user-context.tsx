@@ -15,6 +15,7 @@ interface User {
   grade?: string
   location?: string
   website?: string
+  role?: string
 }
 
 interface UserContextType {
