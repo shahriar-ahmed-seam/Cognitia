@@ -70,11 +70,10 @@ export function Navbar() {
                 <Link key={item.name} href={item.href}>
                   <Button
                     variant={isActive ? "default" : "ghost"}
-                    className={`flex items-center space-x-2 ${
-                      isActive
-                        ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                    }`}
+                    className={`flex items-center space-x-2 ${isActive
+                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                      }`}
                   >
                     <item.icon className="h-4 w-4" />
                     <span>{item.name}</span>
@@ -92,43 +91,80 @@ export function Navbar() {
             {/* User Menu */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                    <AvatarFallback className="bg-purple-500 text-white text-sm">
-                      {user.name.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
+                <Button variant="ghost" className="relative h-10 w-10 p-0 rounded-full">
+                  <div className="p-[2px] rounded-full bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">
+                    <Avatar className="h-8 w-8 rounded-full bg-white">
+                      <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                      <AvatarFallback className="bg-purple-500 text-white text-sm">
+                        {user.name.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user.name}</p>
-                    <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+                  <div className="flex flex-col px-1.5 pt-1 pb-2">
+                    {/* User Name */}
+                    <p className="text-sm font-bold leading-none bg-gradient-to-r from-blue-600 via-purple-700 to-pink-600 bg-clip-text text-transparent animate-gradient">
+                      {user.name}
+                    </p>
+
+                    {/* Divider */}
+                    <div className="border-t border-muted my-1" />
+
+                    {/* Email */}
+                    <p className="text-xs leading-none bg-gradient-to-r from-blue-600 via-purple-700 to-pink-600 bg-clip-text text-transparent animate-gradient">
+                      {user.email}
+                    </p>
+
+                    {/* Optional Institution */}
                     {user.institution && (
-                      <p className="text-xs leading-none text-muted-foreground">{user.institution}</p>
+                      <>
+                        <div className="border-t border-muted my-1" />
+                        <p className="text-xs leading-none bg-gradient-to-r from-blue-600 via-purple-700 to-pink-600 bg-clip-text text-transparent animate-gradient">
+                          {user.institution}
+                        </p>
+                      </>
                     )}
                   </div>
                 </DropdownMenuLabel>
+
                 <DropdownMenuSeparator />
+
+                {/* Profile */}
                 <DropdownMenuItem asChild>
-                  <Link href="/profile" className="flex items-center">
-                    <User className="mr-2 h-4 w-4" />
+                  <Link
+                    href="/profile"
+                    className="flex items-center bg-gradient-to-r from-blue-600 via-purple-700 to-pink-600 bg-clip-text text-transparent animate-gradient"
+                  >
+                    <User className="mr-2 h-4 w-4 text-white" />
                     <span>Profile</span>
                   </Link>
                 </DropdownMenuItem>
+
+                {/* Settings */}
                 <DropdownMenuItem asChild>
-                  <Link href="/settings" className="flex items-center">
-                    <Settings className="mr-2 h-4 w-4" />
+                  <Link
+                    href="/settings"
+                    className="flex items-center bg-gradient-to-r from-blue-600 via-purple-700 to-pink-600 bg-clip-text text-transparent animate-gradient"
+                  >
+                    <Settings className="mr-2 h-4 w-4 text-white" />
                     <span>Settings</span>
                   </Link>
                 </DropdownMenuItem>
+
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout}>
+
+                {/* Logout */}
+                <DropdownMenuItem
+                  onClick={logout}
+                  className="bg-gradient-to-r from-blue-600 via-purple-700 to-pink-600 bg-clip-text text-transparent animate-gradient"
+                >
                   <span>Log out</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
+
             </DropdownMenu>
 
             {/* Mobile menu button */}
@@ -150,11 +186,10 @@ export function Navbar() {
                   <Link key={item.name} href={item.href}>
                     <Button
                       variant={isActive ? "default" : "ghost"}
-                      className={`w-full justify-start ${
-                        isActive
-                          ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
-                          : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
-                      }`}
+                      className={`w-full justify-start ${isActive
+                        ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
+                        }`}
                       onClick={() => setMobileMenuOpen(false)}
                     >
                       <item.icon className="mr-2 h-4 w-4" />
