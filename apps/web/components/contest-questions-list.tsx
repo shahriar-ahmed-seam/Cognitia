@@ -16,19 +16,19 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Edit, Trash2, Clock, Target, List, Trophy, Sparkles } from "lucide-react"
 
-interface Question {
+// Replace the Question interface with the backend-aligned QuestionBank interface
+interface QuestionBank {
   id: string
   title: string
   description: string
-  difficulty: "easy" | "medium" | "hard" | "expert"
+  difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT"
   points: number
   timeLimit: number
   tags: string[]
-  type: "coding" | "mcq" | "short-answer"
 }
 
 interface ContestQuestionsListProps {
-  questions: Question[]
+  questions: QuestionBank[]
   onRemoveQuestion: (questionId: string) => void
   onEditQuestion: (questionId: string) => void
 }
@@ -36,27 +36,14 @@ interface ContestQuestionsListProps {
 export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuestion }: ContestQuestionsListProps) {
   const getDifficultyColor = (difficulty: string) => {
     switch (difficulty) {
-      case "easy":
+      case "EASY":
         return "bg-green-100 text-green-800 border-green-200"
-      case "medium":
+      case "MEDIUM":
         return "bg-yellow-100 text-yellow-800 border-yellow-200"
-      case "hard":
+      case "HARD":
         return "bg-orange-100 text-orange-800 border-orange-200"
-      case "expert":
+      case "EXPERT":
         return "bg-red-100 text-red-800 border-red-200"
-      default:
-        return "bg-gray-100 text-gray-800 border-gray-200"
-    }
-  }
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case "coding":
-        return "bg-blue-100 text-blue-800 border-blue-200"
-      case "mcq":
-        return "bg-purple-100 text-purple-800 border-purple-200"
-      case "short-answer":
-        return "bg-indigo-100 text-indigo-800 border-indigo-200"
       default:
         return "bg-gray-100 text-gray-800 border-gray-200"
     }
@@ -68,7 +55,7 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
 
   const getAverageDifficulty = () => {
     if (questions.length === 0) return "N/A"
-    const difficultyValues = { easy: 1, medium: 2, hard: 3, expert: 4 }
+    const difficultyValues = { EASY: 1, MEDIUM: 2, HARD: 3, EXPERT: 4 }
     const average = questions.reduce((sum, q) => sum + difficultyValues[q.difficulty], 0) / questions.length
     if (average <= 1.5) return "Easy"
     if (average <= 2.5) return "Medium"
@@ -130,8 +117,8 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
                   <stat.icon
                     className={`h-5 w-5 ${stat.color} mx-auto mb-1 group-hover:scale-110 transition-transform`}
                   />
-                  <p className="text-xs text-gray-600 group-hover:font-medium transition-all">{stat.label}</p>
-                  <p className="font-semibold text-sm group-hover:scale-110 transition-transform">{stat.value}</p>
+                  {/* <p className="text-xs text-gray-600 group-hover:font-medium transition-all">{stat.label}</p>
+                  <p className="font-semibold text-sm group-hover:scale-110 transition-transform">{stat.value}</p> */}
                 </div>
               ))}
             </div>
@@ -207,12 +194,6 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
                       >
                         {question.difficulty}
                       </Badge>
-                      <Badge
-                        className={`${getTypeColor(question.type)} transition-all duration-300 hover:scale-105`}
-                        variant="secondary"
-                      >
-                        {question.type}
-                      </Badge>
                     </div>
 
                     <div className="flex items-center gap-3 text-xs text-gray-500">
@@ -228,22 +209,23 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
                   </div>
 
                   <div className="flex flex-wrap gap-1 pl-8">
-                    {question.tags.slice(0, 4).map((tag, tagIndex) => (
+                    {Array.isArray(question.tags) && question.tags.slice(0, 4).map((tag, tagIndex) => (
                       <Badge
-                        key={tag}
+                        key={`${question.id}-tag-${encodeURIComponent(String(tag))}-${tagIndex}`}
                         variant="outline"
                         className="text-xs hover:bg-purple-50 hover:border-purple-300 hover:scale-105 transition-all duration-300"
                         style={{ animationDelay: `${tagIndex * 25}ms` }}
                       >
-                        {tag}
+                        {String(tag)}
                       </Badge>
                     ))}
-                    {question.tags.length > 4 && (
+                    {Array.isArray(question.tags) && question.tags.length > 4 && (
                       <Badge
+                        key={`${question.id}-more-tags-${question.tags.length}`}
                         variant="outline"
                         className="text-xs hover:bg-purple-50 hover:border-purple-300 hover:scale-105 transition-all duration-300"
                       >
-                        +{question.tags.length - 4}
+                        {String(question.tags.length - 4)}
                       </Badge>
                     )}
                   </div>

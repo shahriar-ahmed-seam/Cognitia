@@ -272,6 +272,24 @@ export default function CreateContestPage() {
                         />
                       </div>
 
+                      <div className="space-y-2">
+                        <Label htmlFor="eligibility">Eligibility</Label>
+                        <Select
+                          value={formData.eligibility}
+                          onValueChange={(value) => setFormData((prev) => ({ ...prev, eligibility: value }))}
+                        >
+                          <SelectTrigger id="eligibility">
+                            <SelectValue placeholder="Select eligibility" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Open for all">Open for all</SelectItem>
+                            <SelectItem value="Beginners only">Beginners only</SelectItem>
+                            <SelectItem value="Experienced programmers only">Experienced programmers only</SelectItem>
+                            <SelectItem value="Students only">Students only</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="start-date" className="flex items-center gap-2">

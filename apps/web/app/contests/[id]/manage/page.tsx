@@ -31,26 +31,41 @@ interface Contest {
   id: string
   title: string
   description: string
-  difficulty: "easy" | "medium" | "hard" | "expert"
-  status: "draft" | "upcoming" | "ongoing" | "finished"
+  difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT"
+  status: "DRAFT" | "UPCOMING" | "ONGOING" | "FINISHED"
   startTime: string
   endTime: string
   participants: number
   topics: string[]
   eligibility: string
   isVirtual: boolean
-  questions: ContestQuestion[]
+  questions: QuestionAssignment[]
 }
 
-interface ContestQuestion {
+interface QuestionAssignment {
+  id: string
+  question: QuestionBank
+}
+
+interface QuestionBank {
   id: string
   title: string
   description: string
-  difficulty: "easy" | "medium" | "hard" | "expert"
+  difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT"
   points: number
   timeLimit: number
   tags: string[]
-  type: "coding" | "mcq" | "short-answer"
+}
+
+// Define FormData type outside useState
+interface ContestFormData {
+  title: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT";
+  eligibility: string;
+  //isVirtual: boolean;
 }
 
 export default function ContestManagePage() {
@@ -65,14 +80,14 @@ export default function ContestManagePage() {
   const [activeTab, setActiveTab] = useState("overview")
 
   // Form state
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<ContestFormData>({
     title: "",
     description: "",
     startTime: "",
     endTime: "",
-    difficulty: "medium" as const,
+    difficulty: "MEDIUM",
     eligibility: "Open for all",
-    isVirtual: false,
+    //isVirtual: false,
   })
 
   useEffect(() => {
@@ -88,57 +103,29 @@ export default function ContestManagePage() {
   const fetchContest = async () => {
     try {
       setLoading(true)
+      const token = localStorage.getItem("token")
 
-      // Mock contest data
-      const mockContest: Contest = {
-        id: contestId,
-        title: "Advanced Data Structures Challenge",
-        description:
-          "Test your knowledge of advanced data structures including trees, graphs, and heaps. This comprehensive contest covers various algorithms and their implementations.",
-        difficulty: "hard",
-        status: "draft",
-        startTime: new Date(Date.now() + 86400000).toISOString(),
-        endTime: new Date(Date.now() + 90000000).toISOString(),
-        participants: 45,
-        topics: ["Data Structures", "Algorithms", "Trees", "Graphs", "Dynamic Programming"],
-        eligibility: "Open for all",
-        isVirtual: true,
-        questions: [
-          {
-            id: "q1",
-            title: "Binary Tree Traversal",
-            description: "Implement in-order traversal of a binary tree",
-            difficulty: "medium",
-            points: 150,
-            timeLimit: 30,
-            tags: ["tree", "traversal", "recursion"],
-            type: "coding",
-          },
-          {
-            id: "q2",
-            title: "Graph Shortest Path",
-            description: "Find the shortest path between two nodes in a weighted graph",
-            difficulty: "hard",
-            points: 250,
-            timeLimit: 45,
-            tags: ["graph", "dijkstra", "shortest-path"],
-            type: "coding",
-          },
-        ],
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/contests/${contestId}/manage`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch contest")
       }
 
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1200))
-
-      setContest(mockContest)
+      const data = await response.json()
+      setContest(data.contest)
       setFormData({
-        title: mockContest.title,
-        description: mockContest.description,
-        startTime: new Date(mockContest.startTime).toISOString().slice(0, 16),
-        endTime: new Date(mockContest.endTime).toISOString().slice(0, 16),
-        difficulty: "medium" as const,
-        eligibility: mockContest.eligibility,
-        isVirtual: mockContest.isVirtual,
+        title: data.contest.title,
+        description: data.contest.description,
+        startTime: new Date(data.contest.startTime).toISOString().slice(0, 16),
+        endTime: new Date(data.contest.endTime).toISOString().slice(0, 16),
+        difficulty: data.contest.difficulty,
+        eligibility: data.contest.eligibility,
+        //isVirtual: data.contest.isVirtual,
       })
     } catch (error) {
       console.error("Error fetching contest:", error)
@@ -156,20 +143,27 @@ export default function ContestManagePage() {
   const handleSaveContest = async () => {
     try {
       setSaving(true)
+      const token = localStorage.getItem("token")
 
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1500))
-
-      if (contest) {
-        const updatedContest = {
-          ...contest,
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/contests/${contestId}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           ...formData,
           startTime: new Date(formData.startTime).toISOString(),
           endTime: new Date(formData.endTime).toISOString(),
-        }
-        setContest(updatedContest)
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to save contest")
       }
 
+      const updatedContest = await response.json()
+      setContest(updatedContest.contest)
       toast({
         title: "Success",
         description: "Contest saved successfully.",
@@ -189,15 +183,22 @@ export default function ContestManagePage() {
   const handlePublishContest = async () => {
     try {
       setSaving(true)
+      const token = localStorage.getItem("token")
 
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 2000))
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/contests/${contestId}/publish`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
 
-      if (contest) {
-        const updatedContest = { ...contest, status: "upcoming" as const }
-        setContest(updatedContest)
+      if (!response.ok) {
+        throw new Error("Failed to publish contest")
       }
 
+      const updatedContest = await response.json()
+      setContest(updatedContest.contest)
       toast({
         title: "Success",
         description: "Contest published successfully.",
@@ -214,48 +215,98 @@ export default function ContestManagePage() {
     }
   }
 
-  const handleAddQuestion = (question: ContestQuestion) => {
-    if (contest) {
-      const updatedContest = {
-        ...contest,
-        questions: [...contest.questions, question],
+  const handleAddQuestion = async (question: QuestionBank) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/contests/${contestId}/questions`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ questionId: question.id }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to add question")
       }
-      setContest(updatedContest)
+
+      if (contest) {
+        const updatedContest = {
+          ...contest,
+          questions: [...contest.questions, { id: question.id, question: question }],
+        }
+        setContest(updatedContest)
+        toast({
+          title: "Question Added",
+          description: `"${question.title}" has been added to the contest.`,
+        })
+      }
+    } catch (error) {
+      console.error("Error adding question:", error)
       toast({
-        title: "Question Added",
-        description: `"${question.title}" has been added to the contest.`,
+        title: "Error",
+        description: "Failed to add question. Please try again.",
+        variant: "destructive",
       })
     }
   }
 
-  const handleRemoveQuestion = (questionId: string) => {
-    if (contest) {
-      const removedQuestion = contest.questions.find((q) => q.id === questionId)
-      const updatedContest = {
-        ...contest,
-        questions: contest.questions.filter((q) => q.id !== questionId),
+  const handleRemoveQuestion = async (questionId: string) => {
+    try {
+      const token = localStorage.getItem("token")
+
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/contests/${contestId}/questions/${questionId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      )
+
+      if (!response.ok) {
+        throw new Error("Failed to remove question")
       }
-      setContest(updatedContest)
+
+      if (contest) {
+        const removedQuestion = contest.questions.find((q) => q.question.id === questionId)
+        const updatedContest = {
+          ...contest,
+          questions: contest.questions.filter((q) => q.question.id !== questionId),
+        }
+        setContest(updatedContest)
+        toast({
+          title: "Question Removed",
+          description: `"${removedQuestion?.question.title}" has been removed from the contest.`,
+        })
+      }
+    } catch (error) {
+      console.error("Error removing question:", error)
       toast({
-        title: "Question Removed",
-        description: `"${removedQuestion?.title}" has been removed from the contest.`,
+        title: "Error",
+        description: "Failed to remove question. Please try again.",
+        variant: "destructive",
       })
     }
   }
 
   const getTotalMarks = () => {
-    return contest?.questions.reduce((total, question) => total + question.points, 0) || 0
+    return contest?.questions.reduce((total, question) => total + question.question.points, 0) || 0
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "draft":
+      case "DRAFT":
         return "bg-gray-100 text-gray-800 border-gray-200"
-      case "upcoming":
+      case "UPCOMING":
         return "bg-blue-100 text-blue-800 border-blue-200"
-      case "ongoing":
+      case "ONGOING":
         return "bg-emerald-100 text-emerald-800 border-emerald-200"
-      case "finished":
+      case "FINISHED":
         return "bg-red-100 text-red-800 border-red-200"
       default:
         return "bg-gray-100 text-gray-800 border-gray-200"
@@ -374,7 +425,7 @@ export default function ContestManagePage() {
                 </>
               )}
             </Button>
-            {contest.status === "draft" && (
+            {contest.status === "DRAFT" && (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 hover:shadow-xl transform hover:scale-105 transition-all duration-300">
@@ -415,7 +466,7 @@ export default function ContestManagePage() {
               className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 transition-all duration-300 hover:bg-purple-50"
             >
               <BookOpen className="mr-2 h-4 w-4" />
-              Questions ({contest.questions.length})
+              Questions ({contest.questions ? contest.questions.length : 0})
             </TabsTrigger>
             <TabsTrigger
               value="settings"
@@ -444,7 +495,7 @@ export default function ContestManagePage() {
                     <Input
                       id="title"
                       value={formData.title}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, title: e.target.value }))}
+                      onChange={(e) => setFormData((prev: ContestFormData) => ({ ...prev, title: e.target.value }))}
                       placeholder="Enter contest title"
                       className="transition-all duration-300 focus:scale-[1.02] hover:shadow-md"
                     />
@@ -456,7 +507,7 @@ export default function ContestManagePage() {
                     <Textarea
                       id="description"
                       value={formData.description}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+                      onChange={(e) => setFormData((prev: ContestFormData) => ({ ...prev, description: e.target.value }))}
                       placeholder="Enter contest description"
                       className="min-h-24 transition-all duration-300 focus:scale-[1.02] hover:shadow-md"
                     />
@@ -470,7 +521,7 @@ export default function ContestManagePage() {
                         id="start-time"
                         type="datetime-local"
                         value={formData.startTime}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, startTime: e.target.value }))}
+                        onChange={(e) => setFormData((prev: ContestFormData) => ({ ...prev, startTime: e.target.value }))}
                         className="transition-all duration-300 focus:scale-[1.02] hover:shadow-md"
                       />
                     </div>
@@ -482,7 +533,7 @@ export default function ContestManagePage() {
                         id="end-time"
                         type="datetime-local"
                         value={formData.endTime}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, endTime: e.target.value }))}
+                        onChange={(e) => setFormData((prev: ContestFormData) => ({ ...prev, endTime: e.target.value }))}
                         className="transition-all duration-300 focus:scale-[1.02] hover:shadow-md"
                       />
                     </div>
@@ -534,7 +585,7 @@ export default function ContestManagePage() {
                   </CardHeader>
                   <CardContent className="p-6">
                     <div className="flex flex-wrap gap-2">
-                      {contest.topics.map((topic, index) => (
+                      {(contest.topics ? contest.topics : []).map((topic, index) => (
                         <Badge
                           key={topic}
                           variant="outline"
@@ -555,7 +606,7 @@ export default function ContestManagePage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Current Questions */}
               <ContestQuestionsList
-                questions={contest.questions}
+                questions={contest.questions ? contest.questions.map(q => q.question) : []}
                 onRemoveQuestion={handleRemoveQuestion}
                 onEditQuestion={(questionId) => {
                   console.log("Edit question:", questionId)
@@ -563,7 +614,7 @@ export default function ContestManagePage() {
               />
 
               {/* Question Bank */}
-              <QuestionBankPanel onAddQuestion={handleAddQuestion} contestQuestions={contest.questions} />
+              <QuestionBankPanel onAddQuestion={handleAddQuestion} contestQuestions={contest.questions ? contest.questions.map(q => q.question) : []} />
             </div>
           </TabsContent>
 
@@ -580,21 +631,16 @@ export default function ContestManagePage() {
                     </Label>
                     <Select
                       value={formData.difficulty}
-                      onValueChange={(value) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          difficulty: value as typeof prev.difficulty
-                        }))
-                      }
+                      onValueChange={(value) => setFormData((prev: ContestFormData) => ({ ...prev, difficulty: value as "EASY" | "MEDIUM" | "HARD" | "EXPERT" }))}
                     >
                       <SelectTrigger className="transition-all duration-300 hover:shadow-md focus:scale-[1.02]">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="easy">Easy</SelectItem>
-                        <SelectItem value="medium">Medium</SelectItem>
-                        <SelectItem value="hard">Hard</SelectItem>
-                        <SelectItem value="expert">Expert</SelectItem>
+                        <SelectItem value="EASY">Easy</SelectItem>
+                        <SelectItem value="MEDIUM">Medium</SelectItem>
+                        <SelectItem value="HARD">Hard</SelectItem>
+                        <SelectItem value="EXPERT">Expert</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -604,7 +650,7 @@ export default function ContestManagePage() {
                     </Label>
                     <Select
                       value={formData.eligibility}
-                      onValueChange={(value) => setFormData((prev) => ({ ...prev, eligibility: value }))}
+                      onValueChange={(value) => setFormData((prev: ContestFormData) => ({ ...prev, eligibility: value }))}
                     >
                       <SelectTrigger className="transition-all duration-300 hover:shadow-md focus:scale-[1.02]">
                         <SelectValue />

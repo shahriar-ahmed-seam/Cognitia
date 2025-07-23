@@ -23,9 +23,10 @@ interface Contest {
   topics: string[]
   maxParticipants?: number
   prizes: string[]
-  createdBy: {
-    id: string
-    name: string
+  createdBy: string
+  organizer?: {
+    id?: string
+    name?: string
     avatar?: string
   }
   createdAt: string
@@ -296,10 +297,8 @@ export default function ContestsPage() {
                     <ContestCard
                       contest={{
                         ...contest,
-                        organizer: contest.createdBy,
                       }}
-                    />
-                  </div>
+                    />                  </div>
                 ))}
               </div>
             )}
@@ -309,3 +308,4 @@ export default function ContestsPage() {
     </div>
   )
 }
+

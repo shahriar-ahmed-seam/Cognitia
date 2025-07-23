@@ -244,6 +244,11 @@ export function ContestCard({ contest }: ContestCardProps) {
             <Badge className={getDifficultyColor(contest.difficulty)} variant="secondary">
               {contest.difficulty.charAt(0).toUpperCase() + contest.difficulty.slice(1)}
             </Badge>
+            {contest.eligibility && (
+              <Badge className="bg-blue-100 text-blue-800" variant="secondary">
+                {contest.eligibility}
+              </Badge>
+            )}
           </div>
           <Link href={`/contests/${contest.id}`}>
             <h3 className="text-lg font-semibold hover:text-emerald-600 transition-colors">{contest.title}</h3>

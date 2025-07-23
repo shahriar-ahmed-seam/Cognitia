@@ -25,7 +25,7 @@ interface Contest {
   title: string
   description: string
   difficulty: "easy" | "medium" | "hard" | "expert"
-  status: "draft" | "upcoming" | "ongoing" | "finished"
+  status: "DRAFT" | "UPCOMING" | "ONGOING" | "FINISHED"
   startTime: string
   endTime: string
   participants: number
@@ -57,56 +57,19 @@ export default function MyContestsPage() {
       setLoading(true)
       const token = localStorage.getItem("token")
 
-      // Mock data for demonstration
-      const mockContests: Contest[] = [
-        {
-          id: "contest-1",
-          title: "Advanced Data Structures Challenge",
-          description: "Test your knowledge of advanced data structures including trees, graphs, and heaps.",
-          difficulty: "hard",
-          status: "upcoming",
-          startTime: new Date(Date.now() + 86400000).toISOString(),
-          endTime: new Date(Date.now() + 90000000).toISOString(),
-          participants: 45,
-          totalQuestions: 8,
-          totalMarks: 800,
-          topics: ["Data Structures", "Algorithms", "Trees", "Graphs"],
-          createdAt: new Date(Date.now() - 172800000).toISOString(),
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/contests/my-contests`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
-        {
-          id: "contest-2",
-          title: "JavaScript Fundamentals Quiz",
-          description:
-            "A comprehensive quiz covering JavaScript basics, ES6 features, and modern development practices.",
-          difficulty: "medium",
-          status: "draft",
-          startTime: new Date(Date.now() + 259200000).toISOString(),
-          endTime: new Date(Date.now() + 262800000).toISOString(),
-          participants: 0,
-          totalQuestions: 12,
-          totalMarks: 600,
-          topics: ["JavaScript", "ES6", "Web Development"],
-          createdAt: new Date(Date.now() - 86400000).toISOString(),
-        },
-        {
-          id: "contest-3",
-          title: "Machine Learning Basics",
-          description: "Introduction to machine learning concepts, algorithms, and practical applications.",
-          difficulty: "expert",
-          status: "finished",
-          startTime: new Date(Date.now() - 604800000).toISOString(),
-          endTime: new Date(Date.now() - 601200000).toISOString(),
-          participants: 128,
-          totalQuestions: 15,
-          totalMarks: 1200,
-          topics: ["Machine Learning", "AI", "Python", "Statistics"],
-          createdAt: new Date(Date.now() - 1209600000).toISOString(),
-        },
-      ]
+      })
 
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      setContests(mockContests)
+      if (!response.ok) {
+        throw new Error("Failed to fetch contests")
+      }
+
+      const data = await response.json()
+      setContests(data.contests || [])
     } catch (error) {
       console.error("Error fetching contests:", error)
       toast({
@@ -122,9 +85,19 @@ export default function MyContestsPage() {
   const handleDeleteContest = async (contestId: string) => {
     try {
       setDeletingId(contestId)
+      const token = localStorage.getItem("token")
 
-      // Simulate API delay
-      await new Promise((resolve) => setTimeout(resolve, 1500))
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/admin/contests/delete/${contestId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete contest")
+      }
 
       setContests(contests.filter((contest) => contest.id !== contestId))
       toast({
@@ -248,14 +221,14 @@ export default function MyContestsPage() {
             },
             {
               title: "Draft Contests",
-              value: contests.filter((c) => c.status === "draft").length,
+              value: contests.filter((c) => c.status === "DRAFT").length,
               icon: Edit,
               gradient: "from-gray-500 to-slate-500",
               bgGradient: "from-gray-50 to-slate-50",
             },
             {
               title: "Active Contests",
-              value: contests.filter((c) => c.status === "upcoming" || c.status === "ongoing").length,
+              value: contests.filter((c) => c.status === "UPCOMING" || c.status === "ONGOING").length,
               icon: Target,
               gradient: "from-green-500 to-emerald-500",
               bgGradient: "from-green-50 to-emerald-50",
@@ -321,15 +294,14 @@ export default function MyContestsPage() {
             {contests.map((contest, index) => (
               <Card
                 key={contest.id}
-                className="bg-white/90 backdrop-blur-sm border border-white/30 shadow-xl hover:shadow-2xl transition-all duration-500 cursor-pointer group relative overflow-hidden animate-slide-in-from-bottom hover:scale-105 hover:-translate-y-2"
+                className="bg-white/90 backdrop-blur-sm border border-white/30 shadow-xl hover:shadow-2xl transition-all duration-500 group relative overflow-hidden animate-slide-in-from-bottom hover:scale-105 hover:-translate-y-2"
                 style={{ animationDelay: `${index * 100}ms` }}
-                onClick={() => router.push(`/contests/${contest.id}/manage`)}
               >
                 {/* Hover Gradient Overlay */}
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-indigo-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
 
                 {/* Delete Button */}
-                <div className="absolute top-4 right-4 z-10 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
+                <div className="absolute top-4 right-4 z-10 opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0">
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
                       <Button
@@ -366,28 +338,18 @@ export default function MyContestsPage() {
                   </AlertDialog>
                 </div>
 
-                <CardHeader className="pb-4 relative z-10">
-                  <div className="flex gap-2 mb-3">
-                    <Badge
-                      className={`${getStatusColor(contest.status)} transition-all duration-300 hover:scale-105`}
-                      variant="secondary"
-                    >
-                      {contest.status.charAt(0).toUpperCase() + contest.status.slice(1)}
-                    </Badge>
-                    <Badge
-                      className={`${getDifficultyColor(contest.difficulty)} transition-all duration-300 hover:scale-105`}
-                      variant="secondary"
-                    >
-                      {contest.difficulty.charAt(0).toUpperCase() + contest.difficulty.slice(1)}
-                    </Badge>
-                  </div>
-                  <CardTitle className="text-xl line-clamp-2 group-hover:text-blue-600 transition-colors duration-300">
+                {/* Card content, title is clickable */}
+                <div className="p-4">
+                  <h3
+                    className="text-lg font-semibold hover:text-emerald-600 transition-colors cursor-pointer"
+                    onClick={() => router.push(`/contests/${contest.id}/manage`)}
+                  >
                     {contest.title}
-                  </CardTitle>
+                  </h3>
                   <p className="text-sm text-slate-600 line-clamp-2 group-hover:text-slate-700 transition-colors">
                     {contest.description}
                   </p>
-                </CardHeader>
+                </div>
 
                 <CardContent className="space-y-5 relative z-10">
                   <div className="flex flex-wrap gap-2">

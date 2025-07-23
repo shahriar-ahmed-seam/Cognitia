@@ -1,4 +1,4 @@
-export type ContestStatus = "UPCOMING" | "ONGOING" | "FINISHED";
+export type ContestStatus = "UPCOMING" | "ONGOING" | "FINISHED" | "DRAFT";
 export type ContestDifficulty = "easy" | "medium" | "hard" | "expert";
 
 export interface Contest {
@@ -11,11 +11,13 @@ export interface Contest {
   endTime: string;
   topics: string[];
   participants: number;
-  organizer: {
-    id: string;
-    name: string;
+  createdBy?: string;
+  organizer?: {
+    id?: string;
+    name?: string;
     avatar?: string;
   };
+  eligibility?: string;
 }
 
 export type ParticipationStatus = "registered" | "not-registered";
