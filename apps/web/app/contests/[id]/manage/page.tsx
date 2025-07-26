@@ -466,7 +466,7 @@ export default function ContestManagePage() {
               className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 transition-all duration-300 hover:bg-purple-50"
             >
               <BookOpen className="mr-2 h-4 w-4" />
-              Questions ({contest.questions ? contest.questions.length : 0})
+              Questions ({contest.questions.length})
             </TabsTrigger>
             <TabsTrigger
               value="settings"
@@ -585,7 +585,7 @@ export default function ContestManagePage() {
                   </CardHeader>
                   <CardContent className="p-6">
                     <div className="flex flex-wrap gap-2">
-                      {(contest.topics ? contest.topics : []).map((topic, index) => (
+                      {contest.topics.map((topic, index) => (
                         <Badge
                           key={topic}
                           variant="outline"
@@ -606,7 +606,7 @@ export default function ContestManagePage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Current Questions */}
               <ContestQuestionsList
-                questions={contest.questions ? contest.questions.map(q => q.question) : []}
+                questions={contest.questions.map(q => q.question)}
                 onRemoveQuestion={handleRemoveQuestion}
                 onEditQuestion={(questionId) => {
                   console.log("Edit question:", questionId)
@@ -614,7 +614,7 @@ export default function ContestManagePage() {
               />
 
               {/* Question Bank */}
-              <QuestionBankPanel onAddQuestion={handleAddQuestion} contestQuestions={contest.questions ? contest.questions.map(q => q.question) : []} />
+              <QuestionBankPanel onAddQuestion={handleAddQuestion} contestQuestions={contest.questions.map(q => q.question)} />
             </div>
           </TabsContent>
 

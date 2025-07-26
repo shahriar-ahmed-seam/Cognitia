@@ -410,3 +410,174 @@
   background-size: 200% 200%;
   animation: gradient-text 4s ease infinite;
 }
+
+@property --rotate {
+  syntax: "<angle>";
+  initial-value: 132deg;
+  inherits: false;
+}
+
+.card-border {
+  --card-size: 150px; /* avatar size */
+  width: var(--card-size);
+  height: var(--card-size);
+  padding: 4px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-border::before {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background-image: linear-gradient(var(--rotate), #5ddcff, #3c67e3 43%, #4e00c2);
+  animation: spin 2.5s linear infinite;
+  z-index: -1;
+}
+
+.card-border::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background-image: linear-gradient(var(--rotate), #5ddcff, #3c67e3 43%, #4e00c2);
+  filter: blur(20px);
+  opacity: 0.6;
+  animation: spin 2.5s linear infinite;
+  z-index: -2;
+}
+
+@keyframes spin {
+  0% { --rotate: 0deg; }
+  100% { --rotate: 360deg; }
+}
+
+.card-border-md {
+  --card-size: 48px; /* matches h-12 w-12 */
+  width: var(--card-size);
+  height: var(--card-size);
+  padding: 3px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-border-md::before,
+.card-border-md::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background-image: linear-gradient(var(--rotate), #5ddcff, #3c67e3 43%, #4e00c2);
+  animation: spin 2.5s linear infinite;
+}
+
+.card-border-md::after {
+  filter: blur(12px);
+  opacity: 0.6;
+  z-index: -1;
+}
+
+
+.card-border-sm {
+  --card-size: 40px; /* match the avatar size */
+  width: var(--card-size);
+  height: var(--card-size);
+  padding: 2px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-border-sm::before,
+.card-border-sm::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background-image: linear-gradient(var(--rotate), #5ddcff, #3c67e3 43%, #4e00c2);
+  animation: spin 2.5s linear infinite;
+}
+
+.card-border-sm::after {
+  filter: blur(10px);
+  opacity: 0.5;
+  z-index: -1;
+}
+
+.card-border-xs {
+  --card-size-xs: 32px;
+  width: var(--card-size-xs);
+  height: var(--card-size-xs);
+  padding: 2px;                  /* space for border */
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.3s ease;
+  overflow: visible;             /* ensures glow isn’t clipped */
+}
+
+/* 🔥 Always-on animated gradient */
+.card-border-xs::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background-image: linear-gradient(
+    var(--rotate),
+    #5ddcff,
+    #3c67e3 43%,
+    #4e00c2
+  );
+  animation: spin 2.5s linear infinite;
+  z-index: -1;                   /* stays behind avatar */
+}
+
+.card-border-xs::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  background-image: linear-gradient(
+    var(--rotate),
+    #5ddcff,
+    #3c67e3 43%,
+    #4e00c2
+  );
+  filter: blur(6px);
+  opacity: 0.5;
+  animation: spin 2.5s linear infinite;
+  z-index: -2;                   /* blurred glow behind */
+}
+
+/* ✅ No hover opacity change – only scaling */
+.card-border-xs:hover {
+  transform: scale(1.1);
+}
+
+/* Keep spinning animation */
+@property --rotate {
+  syntax: "<angle>";
+  initial-value: 132deg;
+  inherits: false;
+}
+
+@keyframes spin {
+  0% {
+    --rotate: 0deg;
+  }
+  100% {
+    --rotate: 360deg;
+  }
+}

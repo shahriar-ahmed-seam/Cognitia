@@ -91,8 +91,8 @@ export default function QAPage() {
       })
 
       // Determine which endpoint to use based on active tab
-      const endpoint = filterBy === "my-questions" 
-        ? `${process.env.NEXT_PUBLIC_API_URL}/api/qa/my-questions` 
+      const endpoint = filterBy === "my-questions"
+        ? `${process.env.NEXT_PUBLIC_API_URL}/api/qa/my-questions`
         : `${process.env.NEXT_PUBLIC_API_URL}/api/qa/questions`
 
       const response = await fetch(`${endpoint}?${params}`, {
@@ -239,9 +239,8 @@ export default function QAPage() {
       top: `${Math.random() * 100}%`,
       width: `${15 + Math.random() * 35}px`,
       height: `${15 + Math.random() * 35}px`,
-      background: `linear-gradient(135deg, ${
-        ["#3B82F6", "#8B5CF6", "#06B6D4", "#10B981"][i % 4]
-      }, ${["#60A5FA", "#A78BFA", "#67E8F9", "#34D399"][i % 4]})`,
+      background: `linear-gradient(135deg, ${["#3B82F6", "#8B5CF6", "#06B6D4", "#10B981"][i % 4]
+        }, ${["#60A5FA", "#A78BFA", "#67E8F9", "#34D399"][i % 4]})`,
       animationDelay: `${Math.random() * 8}s`,
       animationDuration: `${12 + Math.random() * 8}s`,
     }))
@@ -277,13 +276,12 @@ export default function QAPage() {
           {Array.from({ length: 18 }).map((_, i) => (
             <div
               key={`orb-${i}`}
-              className={`absolute rounded-full bg-gradient-to-br ${
-                i % 3 === 0
-                  ? "from-blue-400/20 to-purple-400/20"
-                  : i % 3 === 1
-                    ? "from-indigo-400/20 to-pink-400/20"
-                    : "from-purple-400/20 to-blue-400/20"
-              } blur-xl animate-float-enhanced`}
+              className={`absolute rounded-full bg-gradient-to-br ${i % 3 === 0
+                ? "from-blue-400/20 to-purple-400/20"
+                : i % 3 === 1
+                  ? "from-indigo-400/20 to-pink-400/20"
+                  : "from-purple-400/20 to-blue-400/20"
+                } blur-xl animate-float-enhanced`}
               style={{
                 width: `${Math.random() * 200 + 100}px`,
                 height: `${Math.random() * 200 + 100}px`,
@@ -322,11 +320,10 @@ export default function QAPage() {
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={`morph-${i}`}
-              className={`absolute w-32 h-32 ${
-                i % 2 === 0
-                  ? "bg-gradient-to-br from-blue-300/10 to-purple-300/10"
-                  : "bg-gradient-to-br from-indigo-300/10 to-pink-300/10"
-              } rounded-full animate-morph-enhanced blur-2xl`}
+              className={`absolute w-32 h-32 ${i % 2 === 0
+                ? "bg-gradient-to-br from-blue-300/10 to-purple-300/10"
+                : "bg-gradient-to-br from-indigo-300/10 to-pink-300/10"
+                } rounded-full animate-morph-enhanced blur-2xl`}
               style={{
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
@@ -413,8 +410,8 @@ export default function QAPage() {
           {/* ...You can add stats cards here if you have stats data... */}
         </div>
 
-        <Tabs 
-          defaultValue="all" 
+        <Tabs
+          defaultValue="all"
           className="space-y-6"
           onValueChange={(value) => setFilterBy(value)} // Add this line
         >
@@ -467,12 +464,14 @@ export default function QAPage() {
                       <div className="p-6">
                         <div className="mb-4 flex items-center justify-between">
                           <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10 ring-2 ring-blue-100 hover:ring-blue-300 transition-all duration-300">
-                              <AvatarImage src={question.author.avatar || "/placeholder.svg"} alt={question.author.name} />
-                              <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
-                                {question.author.name.charAt(0)}
-                              </AvatarFallback>
-                            </Avatar>
+                            <div className="card-border-sm hover:scale-110 transition-transform duration-300">
+                              <Avatar className="h-full w-full rounded-full border-2 border-white bg-white shadow-md">
+                                <AvatarImage src={question.author.avatar || "/placeholder.svg"} alt={question.author.name} />
+                                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white">
+                                  {question.author.name.charAt(0)}
+                                </AvatarFallback>
+                              </Avatar>
+                            </div>
                             <div>
                               <p className="font-semibold text-slate-800 hover:text-blue-600 transition-colors duration-300">
                                 {question.author.name}

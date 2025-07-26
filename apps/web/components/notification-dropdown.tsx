@@ -6,33 +6,80 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
 import { Bell, Loader2, Settings, CheckCheck, Trash2 } from "lucide-react"
-import {
-  NOTIFICATIONS,
-  markAllAsRead,
-  markAsRead,
-  getNotificationMessage,
-  getUnreadCount,
-} from "@/lib/notification-data"
-import { formatRelativeTime } from "@/lib/mock-data"
+
+// Notification type matching backend
+export type Notification = {
+  id: string
+  type: string
+  title: string
+  message: string
+  isRead: boolean
+  userId: string
+  createdAt: string
+  // Optionally add more fields if needed
+}
+
+// Helper to format relative time
+function formatRelativeTime(dateString: string) {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
+  if (diff < 60) return `${diff}s ago`
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return date.toLocaleDateString()
+}
+
+// Fetch notifications from backend
+async function fetchNotifications(): Promise<Notification[]> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications`, {
+    headers: {
+      Authorization: token ? `Bearer ${token}` : '',
+    },
+  })
+  if (!res.ok) throw new Error("Failed to fetch notifications")
+  return res.json()
+}
+
+// Mark a notification as read
+async function markAsRead(id: string) {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/notifications/read`, {
+    method: "POST",
+    headers: {
+      Authorization: token ? `Bearer ${token}` : '',
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ notificationId: id }),
+  })
+}
+
+// Mark all as read (client-side only, for now)
+async function markAllAsRead(notifications: Notification[]) {
+  await Promise.all(
+    notifications.filter((n) => !n.isRead).map((n) => markAsRead(n.id))
+  )
+}
 
 export function NotificationDropdown() {
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
-  const [unreadCount, setUnreadCount] = useState(getUnreadCount())
-  const [displayedNotifications, setDisplayedNotifications] = useState([])
-  const [page, setPage] = useState(1)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
-  const [hasMore, setHasMore] = useState(true)
-  const ITEMS_PER_PAGE = 5
 
-  // Load initial notifications
+  // Load notifications from backend
   useEffect(() => {
     if (isOpen) {
-      loadNotifications(1)
-    } else {
-      // Reset pagination when dropdown is closed
-      setPage(1)
-      setHasMore(true)
+      setIsLoading(true)
+      fetchNotifications()
+        .then((data) => {
+          setNotifications(data)
+          setUnreadCount(data.filter((n) => !n.isRead).length)
+        })
+        .catch(() => { })
+        .finally(() => setIsLoading(false))
     }
   }, [isOpen])
 
@@ -43,61 +90,33 @@ export function NotificationDropdown() {
         setIsOpen(false)
       }
     }
-
     document.addEventListener("mousedown", handleClickOutside)
     return () => {
       document.removeEventListener("mousedown", handleClickOutside)
     }
   }, [])
 
-  // Load notifications with pagination
-  const loadNotifications = (pageNum: number) => {
-    setIsLoading(true)
-
-    // Simulate API call with setTimeout
-    setTimeout(() => {
-      const start = (pageNum - 1) * ITEMS_PER_PAGE
-      const end = start + ITEMS_PER_PAGE
-      const newNotifications = NOTIFICATIONS.slice(start, end)
-
-      if (pageNum === 1) {
-        setDisplayedNotifications(newNotifications)
-      } else {
-        setDisplayedNotifications((prev) => [...prev, ...newNotifications])
-      }
-
-      setPage(pageNum)
-      setHasMore(end < NOTIFICATIONS.length)
-      setIsLoading(false)
-    }, 500) // Simulate network delay
-  }
-
-  // Handle loading more notifications
-  const handleLoadMore = () => {
-    if (!isLoading && hasMore) {
-      loadNotifications(page + 1)
-    }
-  }
-
   // Handle marking a notification as read
-  const handleMarkAsRead = (id: string) => {
-    markAsRead(id)
-    setDisplayedNotifications((prev) =>
-      prev.map((notification) => (notification.id === id ? { ...notification, isRead: true } : notification)),
+  const handleMarkAsRead = async (id: string) => {
+    await markAsRead(id)
+    setNotifications((prev) =>
+      prev.map((notification) =>
+        notification.id === id ? { ...notification, isRead: true } : notification
+      )
     )
-    setUnreadCount(getUnreadCount())
+    setUnreadCount((prev) => Math.max(0, prev - 1))
   }
 
   // Handle marking all notifications as read
-  const handleMarkAllAsRead = () => {
-    markAllAsRead()
-    setDisplayedNotifications((prev) => prev.map((notification) => ({ ...notification, isRead: true })))
+  const handleMarkAllAsRead = async () => {
+    await markAllAsRead(notifications)
+    setNotifications((prev) => prev.map((notification) => ({ ...notification, isRead: true })))
     setUnreadCount(0)
   }
 
-  // Handle clearing all notifications
+  // Handle clearing all notifications (client-side only)
   const handleClearAll = () => {
-    setDisplayedNotifications([])
+    setNotifications([])
     setUnreadCount(0)
   }
 
@@ -155,32 +174,37 @@ export function NotificationDropdown() {
 
           {/* Notifications List */}
           <div className="max-h-[500px] overflow-y-auto">
-            {displayedNotifications.length > 0 ? (
+            {isLoading ? (
+              <div className="p-8 text-center">
+                <Loader2 className="h-8 w-8 animate-spin text-slate-400 mx-auto mb-4" />
+                <p className="text-slate-500 font-medium">Loading notifications...</p>
+              </div>
+            ) : notifications.length > 0 ? (
               <>
-                {displayedNotifications.map((notification, index) => (
+                {notifications.map((notification, index) => (
                   <div key={notification.id} className="relative group">
-                    <Link
-                      href={`/question/${notification.questionId}`}
-                      className={`block p-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200 ${
-                        !notification.isRead ? "bg-gradient-to-r from-blue-50/50 to-purple-50/50" : ""
-                      }`}
+                    <div
+                      className={`block p-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200 ${!notification.isRead ? "bg-gradient-to-r from-blue-50/50 to-purple-50/50" : ""
+                        }`}
                       onClick={() => handleMarkAsRead(notification.id)}
+                      style={{ cursor: "pointer" }}
                     >
                       <div className="flex gap-3">
                         <Avatar className="h-10 w-10 ring-2 ring-white shadow-sm">
                           <AvatarImage
-                            src={notification.actorAvatar || "/placeholder.svg"}
-                            alt={notification.actorName}
+                            src={"/placeholder.svg"}
+                            alt={notification.title}
                           />
                           <AvatarFallback className="bg-gradient-to-r from-blue-500 to-purple-500 text-white">
-                            {notification.actorName.charAt(0)}
+                            {notification.title.charAt(0)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-slate-900 mb-1">
-                            {getNotificationMessage(notification)}
+                            {notification.title}
                           </p>
-                          <p className="text-xs text-slate-500">{formatRelativeTime(notification.createdAt)}</p>
+                          <p className="text-xs text-slate-500">{notification.message}</p>
+                          <p className="text-xs text-slate-400 mt-1">{formatRelativeTime(notification.createdAt)}</p>
                         </div>
                       </div>
                       {!notification.isRead && (
@@ -188,31 +212,10 @@ export function NotificationDropdown() {
                           <div className="h-2 w-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse"></div>
                         </div>
                       )}
-                    </Link>
-                    {index < displayedNotifications.length - 1 && <Separator />}
+                    </div>
+                    {index < notifications.length - 1 && <Separator />}
                   </div>
                 ))}
-
-                {hasMore && (
-                  <div className="p-3 border-t bg-gradient-to-r from-slate-50 to-slate-100">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="w-full justify-center text-sm text-blue-600 hover:bg-blue-50 hover:text-blue-700 transition-all duration-200"
-                      onClick={handleLoadMore}
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        "Load more notifications"
-                      )}
-                    </Button>
-                  </div>
-                )}
               </>
             ) : (
               <div className="p-8 text-center">

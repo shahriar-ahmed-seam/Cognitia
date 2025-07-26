@@ -383,10 +383,14 @@ export default function QuestionDetailPage() {
         <Card className="mb-10 bg-white/80 backdrop-blur-lg border border-blue-100 shadow-2xl rounded-2xl px-2 py-2">
           <CardContent className="p-8">
             <div className="flex items-center gap-5 mb-6">
-              <Avatar className="h-12 w-12 shadow">
-                <AvatarImage src={question.author.avatar || '/placeholder.svg'} alt={question.author.name} />
-                <AvatarFallback className="text-lg">{question.author.name.charAt(0)}</AvatarFallback>
-              </Avatar>
+              <div className="card-border-md hover:scale-110 transition-transform duration-300">
+                <Avatar className="h-full w-full rounded-full border-2 border-white bg-white shadow-lg">
+                  <AvatarImage src={question.author.avatar || '/placeholder.svg'} alt={question.author.name} />
+                  <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white text-lg">
+                    {question.author.name.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
               <div>
                 <div className="font-semibold text-lg text-slate-900">{question.author.name}</div>
                 <div className="text-sm text-slate-500">asked {formatRelativeTime(question.createdAt)}</div>
@@ -497,10 +501,15 @@ export default function QuestionDetailPage() {
                     {/* Answer Content */}
                     <div className="flex-1 flex flex-col gap-3">
                       <div className="flex items-center gap-3 mb-1">
-                        <Avatar className="h-8 w-8 shadow">
-                          <AvatarImage src={answer.author.avatar || "/placeholder.svg"} alt={answer.author.name} />
-                          <AvatarFallback className="text-base">{answer.author.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
+                        <div className="card-border-xs">
+                          <Avatar className="h-full w-full rounded-full border-2 border-white bg-white shadow">
+                            <AvatarImage src={answer.author.avatar || "/placeholder.svg"} alt={answer.author.name} />
+                            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-500 text-white text-base">
+                              {answer.author.name.charAt(0)}
+                            </AvatarFallback>
+                          </Avatar>
+                        </div>
+
                         <div>
                           <div className="text-base font-medium text-slate-900">{answer.author.name}</div>
                           <div className="text-xs text-slate-500">
