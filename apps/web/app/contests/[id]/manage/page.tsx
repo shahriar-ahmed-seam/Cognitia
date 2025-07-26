@@ -173,6 +173,7 @@ export default function ContestManagePage() {
         title: "Success",
         description: "Contest saved successfully.",
       })
+      router.push("/contests/my-contests")
     } catch (error) {
       console.error("Error saving contest:", error)
       toast({
@@ -471,7 +472,8 @@ export default function ContestManagePage() {
               className="data-[state=active]:bg-purple-100 data-[state=active]:text-purple-700 transition-all duration-300 hover:bg-purple-50"
             >
               <BookOpen className="mr-2 h-4 w-4" />
-              Questions ({contest.questions.length})
+              {/* Questions ({contest.questions.length}) */}
+              Questions
             </TabsTrigger>
             <TabsTrigger
               value="settings"
@@ -557,7 +559,7 @@ export default function ContestManagePage() {
                       {
                         icon: BookOpen,
                         label: "Total Questions",
-                        value: contest.questions.length,
+                        value: contest?.questions?.length ?? 0,
                         color: "text-purple-500",
                       },
                       // { icon: Target, label: "Total Marks", value: getTotalMarks(), color: "text-pink-500" },
@@ -611,7 +613,7 @@ export default function ContestManagePage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Current Questions */}
               <ContestQuestionsList
-                questions={contest.questions}
+                questions={contest?.questions ?? []}
                 onRemoveQuestion={handleRemoveQuestion}
                 onEditQuestion={(questionId) => {
                   console.log("Edit question:", questionId)
@@ -619,7 +621,7 @@ export default function ContestManagePage() {
               />
 
               {/* Question Bank */}
-              <QuestionBankPanel onAddQuestion={handleAddQuestion} contestQuestions={contest.questions} />
+              <QuestionBankPanel onAddQuestion={handleAddQuestion} contestQuestions={contest?.questions ?? []} />
             </div>
           </TabsContent>
 

@@ -134,7 +134,7 @@ export default function ContestResultPage() {
                     <tbody>
                       {rankings.map((r, i) => (
                         <motion.tr
-                          key={r.userId ? `${r.userId}-${i}` : `row-${i}`}
+                          key={r.userId && r.userId !== '' ? `row-${r.userId}-${r.rank}-${i}` : `row-anon-${r.rank}-${i}`}
                           className={r.isCurrentUser ? "bg-orange-50 font-bold" : ""}
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
