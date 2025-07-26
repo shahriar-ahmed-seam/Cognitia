@@ -39,7 +39,7 @@ interface Contest {
   topics: string[]
   eligibility: string
   isVirtual: boolean
-  questions: QuestionAssignment[]
+  questions: QuestionBank[]
 }
 
 interface QuestionAssignment {
@@ -49,8 +49,8 @@ interface QuestionAssignment {
 
 interface QuestionBank {
   id: string
-  title: string
-  description: string
+  question: string
+  explanation: string
   difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT"
   points: number
   timeLimit: number
@@ -117,6 +117,9 @@ export default function ContestManagePage() {
       }
 
       const data = await response.json()
+
+      console.log("Fetched contest:", data.contest);
+      
       setContest(data.contest)
       setFormData({
         title: data.contest.title,
@@ -139,6 +142,8 @@ export default function ContestManagePage() {
       setLoading(false)
     }
   }
+
+  
 
   const handleSaveContest = async () => {
     try {
@@ -235,12 +240,12 @@ export default function ContestManagePage() {
       if (contest) {
         const updatedContest = {
           ...contest,
-          questions: [...contest.questions, { id: question.id, question: question }],
+          questions: [...contest.questions, question],
         }
         setContest(updatedContest)
         toast({
           title: "Question Added",
-          description: `"${question.title}" has been added to the contest.`,
+          description: `"${question.question}" has been added to the contest.`,
         })
       }
     } catch (error) {
@@ -273,15 +278,15 @@ export default function ContestManagePage() {
       }
 
       if (contest) {
-        const removedQuestion = contest.questions.find((q) => q.question.id === questionId)
+        const removedQuestion = contest.questions.find((q) => q.id === questionId)
         const updatedContest = {
           ...contest,
-          questions: contest.questions.filter((q) => q.question.id !== questionId),
+          questions: contest.questions.filter((q) => q.id !== questionId),
         }
         setContest(updatedContest)
         toast({
           title: "Question Removed",
-          description: `"${removedQuestion?.question.title}" has been removed from the contest.`,
+          description: `"${removedQuestion?.question}" has been removed from the contest.`,
         })
       }
     } catch (error) {
@@ -294,9 +299,9 @@ export default function ContestManagePage() {
     }
   }
 
-  const getTotalMarks = () => {
-    return contest?.questions.reduce((total, question) => total + question.question.points, 0) || 0
-  }
+  // const getTotalMarks = () => {
+  //   return contest?.questions.reduce((total, question) => total + question.question.points, 0) || 0
+  // }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -402,7 +407,7 @@ export default function ContestManagePage() {
           <div className="flex gap-3 animate-slide-in-from-right">
             <Button
               variant="outline"
-              onClick={() => router.push(`/contests/${contestId}`)}
+              onClick={() => router.push(`/contests/my-contests`)}
               className="bg-white/80 backdrop-blur-sm hover:bg-white hover:shadow-lg transform hover:scale-105 transition-all duration-300 group"
             >
               <Eye className="mr-2 h-4 w-4 transition-transform group-hover:scale-110" />
@@ -555,7 +560,7 @@ export default function ContestManagePage() {
                         value: contest.questions.length,
                         color: "text-purple-500",
                       },
-                      { icon: Target, label: "Total Marks", value: getTotalMarks(), color: "text-pink-500" },
+                      // { icon: Target, label: "Total Marks", value: getTotalMarks(), color: "text-pink-500" },
                       { icon: Users, label: "Participants", value: contest.participants, color: "text-blue-500" },
                       {
                         icon: Clock,
@@ -606,7 +611,7 @@ export default function ContestManagePage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Current Questions */}
               <ContestQuestionsList
-                questions={contest.questions.map(q => q.question)}
+                questions={contest.questions}
                 onRemoveQuestion={handleRemoveQuestion}
                 onEditQuestion={(questionId) => {
                   console.log("Edit question:", questionId)
@@ -614,7 +619,7 @@ export default function ContestManagePage() {
               />
 
               {/* Question Bank */}
-              <QuestionBankPanel onAddQuestion={handleAddQuestion} contestQuestions={contest.questions.map(q => q.question)} />
+              <QuestionBankPanel onAddQuestion={handleAddQuestion} contestQuestions={contest.questions} />
             </div>
           </TabsContent>
 

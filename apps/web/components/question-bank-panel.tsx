@@ -10,8 +10,8 @@ import { Search, Filter, Plus, BookOpen, Clock, Target, Sparkles } from "lucide-
 
 interface QuestionBank {
   id: string
-  title: string
-  description: string
+  question: string
+  explanation: string
   difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT"
   points: number
   timeLimit: number
@@ -72,8 +72,8 @@ export function QuestionBankPanel({ onAddQuestion, contestQuestions }: QuestionB
     // Search filter
     if (
       searchQuery &&
-      !((question.title || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
-        (question.description || "").toLowerCase().includes(searchQuery.toLowerCase()))
+      !((question.question || "").toLowerCase().includes(searchQuery.toLowerCase()) &&
+        (question.explanation || "").toLowerCase().includes(searchQuery.toLowerCase()))
     ) {
       return false
     }
@@ -160,7 +160,7 @@ export function QuestionBankPanel({ onAddQuestion, contestQuestions }: QuestionB
         </div>
 
         {/* Questions List */}
-        <div className="space-y-3 max-h-96 overflow-y-auto">
+        <div className="space-y-3 max-h-100 overflow-y-auto">
           {isLoading ? (
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -191,8 +191,8 @@ export function QuestionBankPanel({ onAddQuestion, contestQuestions }: QuestionB
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex flex-col flex-1">
-                    <h3 className="font-bold text-lg text-blue-700 group-hover:text-blue-900 transition-colors mb-1">
-                      {question.title}
+                    <h3 className="font-bold text-lg text-blue-700">
+                      {question.question}
                     </h3>
                   </div>
                   <Button
@@ -206,7 +206,7 @@ export function QuestionBankPanel({ onAddQuestion, contestQuestions }: QuestionB
                 </div>
 
                 <p className="text-xs text-gray-600 mb-3 line-clamp-2 group-hover:text-gray-700 transition-colors">
-                  {question.description}
+                  {question.explanation}
                 </p>
 
                 <div className="flex items-center justify-between mb-3">

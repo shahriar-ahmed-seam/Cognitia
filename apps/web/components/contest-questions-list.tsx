@@ -19,8 +19,8 @@ import { Edit, Trash2, Clock, Target, List, Trophy, Sparkles } from "lucide-reac
 // Replace the Question interface with the backend-aligned QuestionBank interface
 interface QuestionBank {
   id: string
-  title: string
-  description: string
+  question: string
+  explanation: string
   difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT"
   points: number
   timeLimit: number
@@ -76,14 +76,6 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
             </div>
             Contest Questions ({questions.length})
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="animate-pulse">
-              {getTotalPoints()} points
-            </Badge>
-            <Badge variant="outline" className="animate-pulse">
-              {getAverageDifficulty()}
-            </Badge>
-          </div>
         </CardTitle>
       </CardHeader>
       <CardContent className="p-6">
@@ -97,34 +89,10 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
           </div>
         ) : (
           <>
-            {/* Summary Stats */}
-            <div className="grid grid-cols-3 gap-4 mb-6 p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg">
-              {[
-                { icon: Trophy, label: "Total Points", value: getTotalPoints(), color: "text-purple-500" },
-                {
-                  icon: Clock,
-                  label: "Avg Time",
-                  value: `${Math.round(questions.reduce((sum, q) => sum + q.timeLimit, 0) / questions.length)}min`,
-                  color: "text-blue-500",
-                },
-                { icon: Target, label: "Difficulty", value: getAverageDifficulty(), color: "text-pink-500" },
-              ].map((stat, index) => (
-                <div
-                  key={stat.label}
-                  className="text-center group hover:bg-white/50 p-2 rounded-lg transition-all duration-300 hover:scale-105"
-                  style={{ animationDelay: `${index * 100}ms` }}
-                >
-                  <stat.icon
-                    className={`h-5 w-5 ${stat.color} mx-auto mb-1 group-hover:scale-110 transition-transform`}
-                  />
-                  {/* <p className="text-xs text-gray-600 group-hover:font-medium transition-all">{stat.label}</p>
-                  <p className="font-semibold text-sm group-hover:scale-110 transition-transform">{stat.value}</p> */}
-                </div>
-              ))}
-            </div>
+            
 
             {/* Questions List */}
-            <div className="space-y-4 max-h-96 overflow-y-auto">
+            <div className="space-y-4 max-h-94 overflow-y-auto">
               {questions.map((question, index) => (
                 <div
                   key={question.id}
@@ -136,9 +104,9 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
                       <div className="flex items-center justify-center w-6 h-6 bg-purple-100 text-purple-600 rounded-full text-xs font-bold group-hover:bg-purple-200 group-hover:scale-110 transition-all">
                         {index + 1}
                       </div>
-                      <h4 className="font-medium text-sm group-hover:text-purple-700 transition-colors">
-                        {question.title}
-                      </h4>
+                      <h3 className="font-medium text-sm group-hover:text-purple-700 transition-colors">
+                        {question.question}
+                      </h3>
                     </div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-1 group-hover:translate-y-0">
                       <Button
@@ -163,7 +131,7 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
                           <AlertDialogHeader>
                             <AlertDialogTitle>Remove Question</AlertDialogTitle>
                             <AlertDialogDescription>
-                              Are you sure you want to remove "{question.title}" from this contest?
+                              Are you sure you want to remove "{question.question}" from this contest?
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
@@ -183,7 +151,7 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
                   </div>
 
                   <p className="text-xs text-gray-600 mb-3 line-clamp-2 group-hover:text-gray-700 transition-colors pl-8">
-                    {question.description}
+                    {question.explanation}
                   </p>
 
                   <div className="flex items-center justify-between mb-3 pl-8">
@@ -194,17 +162,6 @@ export function ContestQuestionsList({ questions, onRemoveQuestion, onEditQuesti
                       >
                         {question.difficulty}
                       </Badge>
-                    </div>
-
-                    <div className="flex items-center gap-3 text-xs text-gray-500">
-                      <div className="flex items-center gap-1 group-hover:text-purple-600 transition-colors">
-                        <Target className="h-3 w-3 group-hover:scale-110 transition-transform" />
-                        <span className="font-medium">{question.points}pts</span>
-                      </div>
-                      <div className="flex items-center gap-1 group-hover:text-green-600 transition-colors">
-                        <Clock className="h-3 w-3 group-hover:scale-110 transition-transform" />
-                        <span className="font-medium">{question.timeLimit}min</span>
-                      </div>
                     </div>
                   </div>
 
