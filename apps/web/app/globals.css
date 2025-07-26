@@ -581,3 +581,7 @@
     --rotate: 360deg;
   }
 }
+
+.text-outline-black {
+  -webkit-text-stroke: 1px rgb(252, 249, 249);
+}

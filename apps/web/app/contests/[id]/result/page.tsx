@@ -60,13 +60,13 @@ export default function ContestResultPage() {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50 to-red-50">
+    <div className="min-h-screen bg-gradient-to-t from-white via-blue-100 to-blue-400">
       <Navbar />
       <div className="container mx-auto py-8">
         <Button variant="outline" onClick={() => router.back()} className="mb-4">
           ← Back
         </Button>
-        <h1 className="text-3xl font-bold mb-6 text-center">Results: {contestTitle}</h1>
+        <h1 className="text-3xl font-bold mb-7 text-black text-center text-outline-black">Results: {contestTitle}</h1>
         {loading ? (
           <div className="flex justify-center items-center py-12">
             <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
@@ -122,7 +122,7 @@ export default function ContestResultPage() {
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="bg-orange-100">
+                      <tr className="bg-blue-400">
                         <th className="px-4 py-2">Rank</th>
                         <th className="px-4 py-2">Name</th>
                         <th className="px-4 py-2">Institution</th>
@@ -135,7 +135,7 @@ export default function ContestResultPage() {
                       {rankings.map((r, i) => (
                         <motion.tr
                           key={r.userId && r.userId !== '' ? `row-${r.userId}-${r.rank}-${i}` : `row-anon-${r.rank}-${i}`}
-                          className={r.isCurrentUser ? "bg-orange-50 font-bold" : ""}
+                          className={r.isCurrentUser ? "bg-blue-50 font-bold" : ""}
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.5 + i * 0.05, duration: 0.4 }}
