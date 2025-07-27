@@ -408,7 +408,7 @@ export default function DashboardPage() {
                     .filter(q => q.author.id === dashboardData.currentUser.id)
                     .slice(0, 5)
                     .map((question, index) => (
-                      <Link key={question.id} href={`/qa/${question.id}`}>
+                      <Link key={question.id} href={`/question/${question.id}`}>
                         <div
                           className="p-4 bg-gradient-to-r from-white to-purple-50/30 rounded-lg border border-purple-100 hover:border-purple-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
                           style={{ animationDelay: `${index * 100}ms` }}
