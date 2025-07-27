@@ -145,7 +145,7 @@ export default function ContestResultPage() {
                           <td className="px-4 py-2">{r.institution}</td>
                           <td className="px-4 py-2 text-center">{r.score}</td>
                           <td className="px-4 py-2 text-center">{r.correctAnswers}/{r.totalQuestions}</td>
-                          <td className="px-4 py-2 text-center">{r.timeSpent} s</td>
+                          <td className="px-4 py-2 text-center">{r.timeSpent} m</td>
                         </motion.tr>
                       ))}
                     </tbody>

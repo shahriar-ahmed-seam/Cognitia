@@ -137,7 +137,7 @@ export default function TakeContestPage() {
   }
 
   const handleAnswer = async (value: string) => {
-    if (!contest || !attempt) return
+    if (!contest || !attempt) return  
     const currentQuestion = contest.questions[currentQuestionIndex]
     const newAnswers = { ...answers, [currentQuestion.id]: value }
     setAnswers(newAnswers)
@@ -154,9 +154,10 @@ export default function TakeContestPage() {
       toast({
         title: "Warning",
         description: "Answer saved locally but failed to sync with server. It will be saved when you submit the contest.",
-        variant: "destructive",
+        variant: "destructive", 
+        // 
       })
-    }
+    } 
   }
 
   const handleFlagQuestion = () => {
@@ -196,7 +197,7 @@ export default function TakeContestPage() {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          timeSpent: (contest?.questions.length ? (contest.questions.length * 60) : 0) - timeRemaining
+          timeSpent: Math.floor((new Date().getTime() - new Date(attempt.startTime).getTime()) / (1000 * 60))
         }),
       })
       toast({ title: "Success", description: "Contest submitted successfully!" })
