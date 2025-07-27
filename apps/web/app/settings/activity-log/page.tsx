@@ -29,7 +29,7 @@ export default function ActivityLogPage() {
   const [filterDate, setFilterDate] = useState("all")
   const [sortBy, setSortBy] = useState("date-desc")
 
-  const activityLog: ActivityLogItem[] = getActivityLog().entries.map((item: any) => ({
+  const activityLog: ActivityLogItem[] = getActivityLog().map((item: any) => ({
     ...item,
     timestamp: item.timestamp instanceof Date ? item.timestamp : new Date(item.timestamp),
   }))

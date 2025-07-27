@@ -1,84 +1,33 @@
-import { generateId } from "@/lib/mock-data"
+// Placeholder saved items data - replace with actual implementation
 
 export interface SavedItem {
   id: string
-  userId: string
-  itemId: string
-  itemType: "question" | "note"
+  type: "question" | "note"
+  title: string
   savedAt: Date
 }
 
-// Mock saved items
-export const SAVED_ITEMS: SavedItem[] = [
-  // Initial saved items can be empty
-]
-
-// Function to save a question
-export function saveQuestion(userId: string, questionId: string): SavedItem {
-  // Check if already saved
-  const existingSave = SAVED_ITEMS.find(
-    (item) => item.userId === userId && item.itemId === questionId && item.itemType === "question",
-  )
-
-  if (existingSave) {
-    return existingSave
-  }
-
-  const newSavedItem: SavedItem = {
-    id: generateId(),
-    userId,
-    itemId: questionId,
-    itemType: "question",
-    savedAt: new Date(),
-  }
-
-  SAVED_ITEMS.push(newSavedItem)
-  return newSavedItem
+export function saveNote(noteId: string): void {
+  // Placeholder implementation
+  console.log("Saving note:", noteId)
 }
 
-// Function to save a note
-export function saveNote(userId: string, noteId: string): SavedItem {
-  // Check if already saved
-  const existingSave = SAVED_ITEMS.find(
-    (item) => item.userId === userId && item.itemId === noteId && item.itemType === "note",
-  )
-
-  if (existingSave) {
-    return existingSave
-  }
-
-  const newSavedItem: SavedItem = {
-    id: generateId(),
-    userId,
-    itemId: noteId,
-    itemType: "note",
-    savedAt: new Date(),
-  }
-
-  SAVED_ITEMS.push(newSavedItem)
-  return newSavedItem
+export function isItemSaved(itemId: string): boolean {
+  // Placeholder implementation
+  return false
 }
 
-// Function to unsave an item
-export function unsaveItem(userId: string, itemId: string): void {
-  const index = SAVED_ITEMS.findIndex((item) => item.userId === userId && item.itemId === itemId)
-
-  if (index !== -1) {
-    SAVED_ITEMS.splice(index, 1)
-  }
+export function unsaveItem(itemId: string): void {
+  // Placeholder implementation
+  console.log("Unsaving item:", itemId)
 }
 
-// Function to check if an item is saved
-export function isItemSaved(userId: string, itemId: string): boolean {
-  return SAVED_ITEMS.some((item) => item.userId === userId && item.itemId === itemId)
+export function getSavedQuestions(): SavedItem[] {
+  // Placeholder implementation
+  return []
 }
 
-// Function to get saved questions for a user
-export function getSavedQuestions(userId: string): SavedItem[] {
-  return SAVED_ITEMS.filter((item) => item.userId === userId && item.itemType === "question")
-}
-
-// Function to get saved notes for a user
-export function getSavedNotes(userId: string): SavedItem[] {
-  return SAVED_ITEMS.filter((item) => item.userId === userId && item.itemType === "note")
-}
+export function getSavedNotes(): SavedItem[] {
+  // Placeholder implementation
+  return []
+} 

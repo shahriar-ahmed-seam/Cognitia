@@ -9,10 +9,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ThumbsUp, ThumbsDown, Eye, BookmarkPlus, Bookmark } from "lucide-react"
-import { formatRelativeTime } from "@/lib/mock-data"
+import { formatRelativeTime, CURRENT_USER } from "@/lib/utils"
 import { StarRating } from "@/components/star-rating"
 import { saveNote, isItemSaved, unsaveItem } from "@/lib/saved-items-data"
-import { CURRENT_USER } from "@/lib/mock-data"
 import { toast } from "@/components/ui/use-toast"
 
 interface GlobalNoteCardProps {

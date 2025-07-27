@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useCallback, memo } from "react"
 import { ChevronRight, ChevronDown, FileText, Folder, FolderOpen } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { type NoteFile, formatFileSize } from "@/lib/mock-data"
+import { type NoteFile, formatFileSize } from "@/lib/utils"
 import { FileContextMenu } from "./file-context-menu"
 
 interface FileTreeProps {

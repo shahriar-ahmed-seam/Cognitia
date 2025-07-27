@@ -1,12 +1,26 @@
-version: '3'
+version: '3.8'
 
 services:
   study-platform:
     image: cognitia-frontend:latest
+    container_name: cognitia-frontend
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
-    restart: always
+      - NEXT_TELEMETRY_DISABLED=1
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
     volumes:
-      - ./public:/app/public
+      - ./public:/app/public:ro
+    networks:
+      - cognitia-network
+
+networks:
+  cognitia-network:
+    driver: bridge
