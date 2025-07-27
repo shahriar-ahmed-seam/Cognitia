@@ -5,21 +5,15 @@ FROM node:18-alpine AS base
 FROM base AS deps
 WORKDIR /app
 
-# Install pnpm
-RUN npm install -g pnpm@8
-
 # Copy package files
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json package-lock.json ./
 
 # Install dependencies
-RUN pnpm install --frozen-lockfile --prod=false
+RUN npm ci
 
 # Rebuild the source code only when needed
 FROM base AS builder
 WORKDIR /app
-
-# Install pnpm
-RUN npm install -g pnpm@8
 
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -29,7 +23,7 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
 # Build the Next.js application
-RUN pnpm run build
+RUN npm run build
 
 # Production image, copy all the files and run next
 FROM base AS runner
