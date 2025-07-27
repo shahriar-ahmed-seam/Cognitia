@@ -50,12 +50,12 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
-        env:
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
         with:
           context: .
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/cognitia-frontend:latest
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
       - name: Deploy to Azure VM
         uses: appleboy/ssh-action@v1.0.0
         with:
