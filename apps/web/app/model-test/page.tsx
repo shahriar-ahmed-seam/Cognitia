@@ -296,13 +296,13 @@ export default function ModelTestPage() {
               <Plus className="mr-2 h-5 w-5" />
               Create Model Test
             </Button>
-            <Button
+            {/* <Button
               onClick={() => router.push("/model-test/ai-generate")}
               className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-xl hover:shadow-2xl transform hover:scale-110 transition-all duration-300"
             >
               <Sparkles className="mr-2 h-5 w-5" />
               AI Gen Model Test
-            </Button>
+            </Button> */}
             <Button
               onClick={() => router.push("/model-test/history")}
               className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-xl hover:shadow-2xl transform hover:scale-110 transition-all duration-300"

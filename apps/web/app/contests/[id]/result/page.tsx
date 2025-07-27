@@ -49,15 +49,20 @@ export default function ContestResultPage() {
   const plotData = [
     {
       id: "Participants",
-      data: rankings.map((r, i) => ({
-        x: r.rank,
-        y: r.score,
-        userId: r.userId,
-        name: r.name,
-        isCurrentUser: r.isCurrentUser,
-      })),
+      data: rankings
+        .map((r, i) => ({
+          x: Math.round(r.rank),
+          y: Math.round(r.score),
+          userId: r.userId,
+          name: r.name,
+          isCurrentUser: r.isCurrentUser,
+        }))
+        .filter(r => Number.isInteger(r.x) && Number.isInteger(r.y)),
     },
   ];
+
+  // Get unique integer ranks for x-axis ticks
+  const rankTicks = Array.from(new Set(plotData[0].data.map(d => d.x))).sort((a, b) => a - b);
 
   return (
     <div className="min-h-screen bg-gradient-to-t from-white via-blue-100 to-blue-400">
@@ -91,7 +96,13 @@ export default function ContestResultPage() {
                   margin={{ top: 40, right: 40, bottom: 60, left: 60 }}
                   xScale={{ type: "linear", min: "auto", max: "auto" }}
                   yScale={{ type: "linear", min: "auto", max: "auto" }}
-                  axisBottom={{ legend: "Rank", legendOffset: 36, legendPosition: "middle" }}
+                  axisBottom={{
+                    legend: "Rank",
+                    legendOffset: 36,
+                    legendPosition: "middle",
+                    tickValues: rankTicks,
+                    format: v => Number.isInteger(v) ? v : ""
+                  }}
                   axisLeft={{ legend: "Score", legendOffset: -40, legendPosition: "middle" }}
                   pointSize={12}
                   pointColor={{ theme: "background" }}
