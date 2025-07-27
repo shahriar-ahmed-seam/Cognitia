@@ -2,9 +2,7 @@ version: '3'
 
 services:
   study-platform:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: cognitia-frontend:latest
     ports:
       - "3000:3000"
     environment:
