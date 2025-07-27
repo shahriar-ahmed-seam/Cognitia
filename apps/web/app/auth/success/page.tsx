@@ -1,9 +1,9 @@
-// pages/auth/success.tsx
 "use client";
-import { useEffect } from "react";
+
+import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function SuccessPage() {
+function SuccessPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
@@ -18,4 +18,12 @@ export default function SuccessPage() {
   }, [token]);
 
   return <p>Redirecting...</p>;
+}
+
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={<p>Loading...</p>}>
+      <SuccessPageContent />
+    </Suspense>
+  );
 }
