@@ -84,6 +84,7 @@ export default function RegisterPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -158,6 +159,7 @@ export default function RegisterPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify-otp`, {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -182,7 +184,7 @@ export default function RegisterPage() {
 
         // Navigate after success animation
         setTimeout(() => {
-          router.push("/dashboard")
+          router.push("/")
         }, 1500)
       } else {
         toast({
@@ -212,6 +214,7 @@ export default function RegisterPage() {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/resend-otp`, {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
