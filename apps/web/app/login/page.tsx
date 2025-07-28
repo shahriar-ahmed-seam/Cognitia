@@ -10,7 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Separator } from "@/components/ui/separator"
 import { Eye, EyeOff, Mail, Lock, Sparkles, Zap, ArrowLeft, Star, Heart, Lightbulb } from "lucide-react"
 import Link from "next/link"
+
 import { useToast } from "@/components/ui/use-toast"
+import { useUser } from "@/contexts/user-context"
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false)
@@ -21,6 +23,7 @@ export default function LoginPage() {
   const router = useRouter()
   const { toast } = useToast()
   const [mounted, setMounted] = useState(false)
+  const { refreshUser } = useUser();
 
   useEffect(() => {
     setIsVisible(true)
@@ -47,6 +50,9 @@ export default function LoginPage() {
         // Store token in localStorage
         localStorage.setItem("token", data.token)
         localStorage.setItem("user", JSON.stringify(data.user))
+
+        // Refresh user context so navbar sees the user
+        await refreshUser();
 
         toast({
           title: "Login successful",
