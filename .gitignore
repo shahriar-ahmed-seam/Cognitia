@@ -1,0 +1,23 @@
+# Old standalone repos kept locally for reference only
+_legacy/
+
+# Dependencies and build output
+node_modules/
+.next/
+out/
+dist/
+coverage/
+.venv/
+__pycache__/
+*.pyc
+
+# Environment files (commit only .env.example)
+.env
+.env.*
+!.env.example
+
+# Logs and OS noise
+*.log
+.DS_Store
+.vscode/
+.idea/
