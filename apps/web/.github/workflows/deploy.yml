@@ -1,0 +1,92 @@
+name: Build and Deploy Frontend to Azure VM
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Run linting
+        run: npm run lint
+      - name: Build application
+        run: npm run build
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-files
+          path: |
+            .next/standalone
+            .next/static
+
+  deploy:
+    needs: test-and-build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-files
+          path: .next/
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/cognitia-frontend:latest
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}
+      - name: Deploy to Azure VM
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: swarup
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /home/swarup/Cognitia/Cognitia-Frontend
+            # Create directory if it doesn't exist
+            mkdir -p /home/swarup/Cognitia/Cognitia-Frontend
+            cd /home/swarup/Cognitia/Cognitia-Frontend
+            # Copy docker-compose.yml if it doesn't exist
+            if [ ! -f docker-compose.yml ]; then
+              wget -O docker-compose.yml https://raw.githubusercontent.com/Shahriar-0017/Cognitia_Frontend/main/docker-compose.yml
+            fi
+            # Copy .env file if it doesn't exist (you'll need to create this manually on the VM)
+            if [ ! -f .env ]; then
+              echo "Warning: .env file not found. Please create it manually with your environment variables."
+            fi
+            # Pull latest image
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/cognitia-frontend:latest
+            docker tag ${{ secrets.DOCKERHUB_USERNAME }}/cognitia-frontend:latest cognitia-frontend:latest
+            # Stop and remove existing containers
+            docker-compose down
+            # Start the application
+            docker-compose up -d --force-recreate study-platform
+            # Health check
+            sleep 10
+            if curl -f http://localhost:3000 > /dev/null 2>&1; then
+              echo "Deployment successful! Application is running on port 3000"
+            else
+              echo "Warning: Application might not be responding on port 3000"
+              exit 1
+            fi
