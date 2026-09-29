@@ -6,7 +6,13 @@ const prisma = new PrismaClient();
 async function main() {
   console.log("🌱 Starting database seeding...");
 
-  // Clear existing data (optional - be careful in production!)
+  // Clear existing data (in reverse dependency order)
+  await prisma.sessionFeedback.deleteMany({});
+  await prisma.answerVote.deleteMany({});
+  await prisma.questionVote.deleteMany({});
+  await prisma.answer.deleteMany({});
+  await prisma.question.deleteMany({});
+  await prisma.availability.deleteMany({});
   await prisma.testAttempt.deleteMany({});
   await prisma.contestAttempt.deleteMany({});
   await prisma.questionAssignment.deleteMany({});
@@ -71,7 +77,23 @@ async function main() {
     },
   });
 
-  console.log("✅ Users created");
+  const student3 = await prisma.user.create({
+    data: {
+      email: "shahriar@cognitia.edu.bd",
+      name: "Shahriar",
+      password: hashedPassword,
+      role: "STUDENT",
+      bio: "Software Engineering Undergrad & AI Enthusiast",
+      institution: "Department of Computer Science & Engineering",
+      graduationYear: 2026,
+      major: "Software Engineering",
+      grade: "Senior",
+      location: "Dhaka, Bangladesh",
+      verified: true,
+    },
+  });
+
+  console.log("✅ Users created (including Shahriar)");
 
   // Create Question Bank (Math & CS focused for Bangladesh)
   const questions = await Promise.all([
@@ -584,6 +606,21 @@ async function main() {
     },
   });
 
+  const contest3 = await prisma.contest.create({
+    data: {
+      title: "National Speedrun DSA Contest 2026",
+      description:
+        "Live 3-hour speedrun coding contest focusing on tree traversals, shortest paths, and greedy strategies. Real-time scoreboard active!",
+      startTime: new Date(now.getTime() - 1 * 60 * 60 * 1000), // Started 1 hour ago
+      endTime: new Date(now.getTime() + 2 * 60 * 60 * 1000),   // Ends in 2 hours
+      status: "ONGOING",
+      difficulty: "MEDIUM",
+      topics: ["Data Structures", "Greedy", "Trees", "Shortest Path"],
+      eligibility: "All university students",
+      participants: 142,
+    },
+  });
+
   // Assign questions to contests
   await prisma.questionAssignment.createMany({
     data: [
@@ -859,21 +896,142 @@ async function main() {
 
   console.log("✅ Contest attempts updated with correct answers");
 
-  console.log("🎉 Database seeded successfully with Bangladesh context!");
+  // Create Availability slots for students
+  await prisma.availability.createMany({
+    data: [
+      {
+        userId: student1.id,
+        startTime: new Date(now.getTime() + 1 * 60 * 60 * 1000),
+        endTime: new Date(now.getTime() + 4 * 60 * 60 * 1000),
+      },
+      {
+        userId: student1.id,
+        startTime: new Date(now.getTime() + 24 * 60 * 60 * 1000 + 9 * 60 * 60 * 1000),
+        endTime: new Date(now.getTime() + 24 * 60 * 60 * 1000 + 13 * 60 * 60 * 1000),
+      },
+      {
+        userId: student3.id,
+        startTime: new Date(now.getTime() + 2 * 60 * 60 * 1000),
+        endTime: new Date(now.getTime() + 6 * 60 * 60 * 1000),
+      },
+    ],
+  });
+  console.log("✅ Availabilities created");
+
+  // Create SessionFeedback on past study session
+  const pastSession = await prisma.studySession.findFirst({
+    where: { completed: true },
+  });
+  if (pastSession) {
+    await prisma.sessionFeedback.create({
+      data: {
+        sessionId: pastSession.id,
+        userId: pastSession.userId,
+        confidenceScore: 5,
+        feedbackAt: new Date(),
+      },
+    });
+    console.log("✅ Session feedback created");
+  }
+
+  // Create Q&A Forum Questions and Answers
+  const qaQ1 = await prisma.question.create({
+    data: {
+      title: "What is the key difference between optimistic and pessimistic concurrency control in distributed databases?",
+      body: "In high-throughput distributed transaction systems, when should we favor optimistic concurrency control (OCC) over two-phase locking (2PL) or strict serialization? How do abort rates affect latency under peak load?",
+      subject: "Distributed Systems",
+      tags: ["Distributed Systems", "Databases", "Concurrency", "Transactions"],
+      views: 184,
+      authorId: student1.id,
+    },
+  });
+
+  const qaQ2 = await prisma.question.create({
+    data: {
+      title: "Why does min-heap extraction require down-heapify rather than up-heapify?",
+      body: "When deleting the root of a binary min-heap, we swap the last leaf to the root and bubble it down. Why can't we simply shift children upward from the empty slot to fill the gap?",
+      subject: "Computer Science",
+      tags: ["Data Structures", "Heaps", "Binary Trees", "Algorithms"],
+      views: 126,
+      authorId: student2.id,
+    },
+  });
+
+  const qaQ3 = await prisma.question.create({
+    data: {
+      title: "How to eliminate React SSR hydration mismatches in dynamic canvas animations?",
+      body: "When building live canvas backgrounds with particle physics and floating orbs, differences in viewport dimensions between server and client cause hydration mismatches. What is the most reliable architectural pattern?",
+      subject: "Web Engineering",
+      tags: ["Next.js", "React", "Canvas", "Performance", "Frontend"],
+      views: 290,
+      authorId: student3.id,
+    },
+  });
+
+  const qaA1 = await prisma.answer.create({
+    data: {
+      content: "Optimistic Concurrency Control (OCC) operates under the assumption that transaction conflicts are rare. Transactions execute locally and only validate locks at commit time. It shines when conflict probability is < 5-10%. However, under write-heavy workloads, OCC cascades aborts and wastes compute, where pessimistic 2PL with deadlock detection is vastly superior.",
+      questionId: qaQ1.id,
+      authorId: admin.id,
+    },
+  });
+
+  const qaA2 = await prisma.answer.create({
+    data: {
+      content: "Down-heapify preserves the complete binary tree invariant. A binary heap array representation requires that every level except possibly the last is completely filled from left to right. Shifting children upward leaves arbitrary gaps at the bottom, breaking the standard index arithmetic (2i+1, 2i+2).",
+      questionId: qaQ2.id,
+      authorId: student1.id,
+    },
+  });
+
+  const qaA3 = await prisma.answer.create({
+    data: {
+      content: "Isolate the canvas into a dedicated Client Component ('use client') with an internal mounted guard (`useEffect(() => setMounted(true), [])`). Do not render randomized DOM nodes during SSR; let the canvas initialize its double-buffered render loop via `requestAnimationFrame` strictly after client mount.",
+      questionId: qaQ3.id,
+      authorId: student2.id,
+    },
+  });
+
+  // Question votes
+  await prisma.questionVote.create({
+    data: { questionId: qaQ1.id, userId: student2.id, voteType: "UP" },
+  });
+  await prisma.questionVote.create({
+    data: { questionId: qaQ3.id, userId: student1.id, voteType: "UP" },
+  });
+
+  // Answer votes
+  await prisma.answerVote.create({
+    data: { answerId: qaA1.id, userId: student1.id, voteType: "UP" },
+  });
+  await prisma.answerVote.create({
+    data: { answerId: qaA3.id, userId: student3.id, voteType: "UP" },
+  });
+
+  console.log("✅ Q&A Questions, Answers, and Votes created");
+
+  console.log("🎉 All 19 schema models seeded successfully with complete relational data!");
   console.log("\n📊 Summary:");
-  console.log(`👥 Users: 3 (1 admin from BUET, 2 students from BUET & DU)`);
-  console.log(`❓ Questions: ${questions.length} (Math & CS focused)`);
-  console.log(`📝 Model Tests: 2 (Data Structures & Advanced Math)`);
-  console.log(`🏆 Contests: 2 (Programming Contest & Math Olympiad)`);
-  console.log(`📚 Tasks: 3 (CS assignments & Math problems)`);
-  console.log(`📖 Notes Groups: 2 (ICPC prep & Advanced Math)`);
-  console.log(`📄 Notes: 4 (With sample file attachments)`);
-  console.log(`📚 Study Sessions: 3 (Past and future sessions)`);
-  console.log(`🔔 Notifications: 3 (Including Bengali welcome message)`);
-  console.log(`🎯 Contest Attempts: 2 (Math Olympiad results)`);
-  console.log(`📊 Test Attempts: 2 (Model test completions)`);
+  console.log(`👥 Users: 4 (Admin Dr. Rahman, Fahim Ahmed, Rashida Khan, Shahriar)`);
+  console.log(`❓ Question Bank: ${questions.length} MCQs`);
+  console.log(`📝 Model Tests: 2`);
+  console.log(`🏆 Contests: 3 (Upcoming, Ongoing, Finished)`);
+  console.log(`📚 Tasks: 3`);
+  console.log(`📖 Notes Groups: 2`);
+  console.log(`📄 Notes: 4`);
+  console.log(`📚 Study Sessions: 3`);
+  console.log(`🕒 Availabilities: 3`);
+  console.log(`💬 Session Feedback: 1`);
+  console.log(`❓ Q&A Questions: 3`);
+  console.log(`💡 Q&A Answers: 3`);
+  console.log(`👍 Question & Answer Votes: 4`);
+  console.log(`🔔 Notifications: 3`);
+  console.log(`🎯 Contest Attempts & Registrations: active`);
+  console.log(`📊 Test Attempts: active`);
   console.log("\n👤 Login Credentials:");
   console.log("📧 Email: dr.rahman@cognitia.edu.bd (Admin)");
+  console.log("🔑 Password: password123");
+  console.log("📧 Email: shahriar@cognitia.edu.bd (Student)");
   console.log("🔑 Password: password123");
   console.log("📧 Email: fahim.ahmed@student.buet.ac.bd (Student)");
   console.log("🔑 Password: password123");

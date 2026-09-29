@@ -8,7 +8,12 @@ router.get("/", async (req, res, next) => {
   try {
     const { subjects, difficulty } = req.query;
 
-    const filters = { userId: req.user.id };
+    const filters = {
+      OR: [
+        { userId: req.user.id },
+        { isCustom: false },
+      ],
+    };
     if (subjects) filters.subjects = { hasSome: subjects.split(",") };
     if (difficulty) filters.difficulty = difficulty;
 
