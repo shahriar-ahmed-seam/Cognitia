@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Separator } from "@/components/ui/separator"
 import { ThumbsUp, ThumbsDown, MessageSquare, Eye, CheckCircle, ArrowLeft, Loader2, Send } from "lucide-react"
 import { Navbar } from "@/components/navbar"
+import { CosmicBackground } from "@/components/cosmic-background"
 import { useToast } from "@/hooks/use-toast"
 
 interface Question {
@@ -345,25 +346,8 @@ export default function QuestionDetailPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 overflow-hidden">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className="absolute rounded-full animate-float-enhanced opacity-15"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              width: `${15 + Math.random() * 25}px`,
-              height: `${15 + Math.random() * 25}px`,
-              background: `linear-gradient(135deg, ${["#3B82F6", "#8B5CF6", "#06B6D4"][i % 3]
-                }, ${["#60A5FA", "#A78BFA", "#67E8F9"][i % 3]})`,
-              animationDelay: `${Math.random() * 8}s`,
-              animationDuration: `${12 + Math.random() * 8}s`,
-            }}
-          />
-        ))}
-      </div>
+      {/* Canvas-accelerated Cosmic Background */}
+      <CosmicBackground variant="light" />
 
       <Navbar />
 

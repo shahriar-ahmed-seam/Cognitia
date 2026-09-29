@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Navbar } from "@/components/navbar"
+import { CosmicBackground } from "@/components/cosmic-background"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -158,26 +159,8 @@ export default function MyContestsPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden">
-        {Array.from({ length: 15 }).map((_, i) => (
-          <div
-            key={`bg-orb-${i}`}
-            className="absolute rounded-full animate-float opacity-20"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              width: `${20 + Math.random() * 40}px`,
-              height: `${20 + Math.random() * 40}px`,
-              background: `linear-gradient(135deg, ${
-                ["#3B82F6", "#6366F1", "#8B5CF6", "#06B6D4", "#10B981"][i % 5]
-              }, ${["#60A5FA", "#818CF8", "#A78BFA", "#22D3EE", "#34D399"][i % 5]})`,
-              animationDelay: `${Math.random() * 8}s`,
-              animationDuration: `${12 + Math.random() * 6}s`,
-            }}
-          />
-        ))}
-      </div>
+      {/* Canvas-accelerated Cosmic Background */}
+      <CosmicBackground variant="light" />
 
       <Navbar />
 

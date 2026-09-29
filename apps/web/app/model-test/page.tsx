@@ -30,6 +30,7 @@ import {
   Loader2,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { CosmicBackground } from "@/components/cosmic-background"
 
 interface ModelTest {
   id: string
@@ -235,39 +236,7 @@ export default function ModelTestPage() {
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 relative overflow-hidden">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Floating Orbs */}
-        {Array.from({ length: 20 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className={`absolute rounded-full bg-gradient-to-br ${i % 3 === 0
-              ? "from-emerald-400/20 to-teal-400/20"
-              : i % 3 === 1
-                ? "from-teal-400/20 to-cyan-400/20"
-                : "from-cyan-400/20 to-blue-400/20"
-              } blur-xl animate-float-enhanced`}
-            style={{
-              width: `${Math.random() * 200 + 100}px`,
-              height: `${Math.random() * 200 + 100}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${Math.random() * 10 + 15}s`,
-            }}
-          />
-        ))}
-
-        {/* Particles */}
-        {Array.from({ length: 40 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute w-2 h-2 bg-gradient-to-r from-emerald-400 to-teal-400 rounded-full animate-particle-float opacity-60"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 15}s`,
-              animationDuration: `${Math.random() * 8 + 12}s`,
-            }}
-          />
-        ))}
+        <CosmicBackground variant="light" />
 
         {/* Aurora Effect */}
         <div className="absolute inset-0 bg-gradient-to-r from-emerald-400/5 via-teal-400/5 to-cyan-400/5 animate-aurora" />

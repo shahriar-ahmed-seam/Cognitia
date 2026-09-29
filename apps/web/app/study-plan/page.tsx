@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Navbar } from "@/components/navbar"
+import { CosmicBackground } from "@/components/cosmic-background"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -423,74 +424,8 @@ export default function StudyPlanPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 relative overflow-hidden">
-      {/* Animated Background Elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Floating Orbs */}
-        {Array.from({ length: 22 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className={`absolute rounded-full bg-gradient-to-br ${
-              i % 3 === 0
-                ? "from-violet-400/20 to-purple-400/20"
-                : i % 3 === 1
-                  ? "from-purple-400/20 to-indigo-400/20"
-                  : "from-indigo-400/20 to-blue-400/20"
-            } blur-xl animate-float-enhanced`}
-            style={{
-              width: `${Math.random() * 200 + 100}px`,
-              height: `${Math.random() * 200 + 100}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${Math.random() * 10 + 15}s`,
-            }}
-          />
-        ))}
-        {/* Particles */}
-        {Array.from({ length: 45 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className="absolute w-2 h-2 bg-gradient-to-r from-violet-400 to-purple-400 rounded-full animate-particle-float opacity-60"
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 15}s`,
-              animationDuration: `${Math.random() * 8 + 12}s`,
-            }}
-          />
-        ))}
-        {/* Constellation Stars */}
-        {Array.from({ length: 50 }).map((_, i) => (
-          <div
-            key={`star-${i}`}
-            className="absolute w-1 h-1 bg-white rounded-full animate-twinkle-enhanced"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 5}s`,
-            }}
-          />
-        ))}
-        {/* Morphing Shapes */}
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div
-            key={`morph-${i}`}
-            className={`absolute w-32 h-32 ${
-              i % 2 === 0
-                ? "bg-gradient-to-br from-violet-300/10 to-purple-300/10"
-                : "bg-gradient-to-br from-purple-300/10 to-indigo-300/10"
-            } rounded-full animate-morph-enhanced blur-2xl`}
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 10}s`,
-            }}
-          />
-        ))}
-        {/* Aurora Effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-400/5 via-purple-400/5 to-indigo-400/5 animate-aurora" />
-        {/* Gradient Flow */}
-        <div className="absolute inset-0 bg-gradient-to-br from-transparent via-violet-400/5 to-transparent animate-gradient-flow" />
-      </div>
+      {/* Canvas-accelerated Cosmic Background */}
+      <CosmicBackground variant="light" />
 
       <Navbar />
 

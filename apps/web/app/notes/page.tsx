@@ -14,6 +14,7 @@ import { MyNotesFilter } from "@/components/my-notes-filter"
 import { NewGroupModal } from "@/components/new-group-modal"
 import { NewNoteModal } from "@/components/new-note-modal"
 import { Navbar } from "@/components/navbar"
+import { CosmicBackground } from "@/components/cosmic-background"
 import { useToast } from "@/hooks/use-toast"
 
 interface Note {
@@ -51,35 +52,10 @@ interface NotesGroup {
 }
 
 export default function NotesPage() {
-  // Animated orb state to avoid hydration mismatch
-  const [orbs, setOrbs] = useState<Array<{
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-    background: string;
-    animationDelay: number;
-    animationDuration: number;
-  }>>([]);
   const router = useRouter()
   const { toast } = useToast()
 
   // State for My Notes section
-  // Generate orbs only on client to avoid SSR hydration mismatch
-  useEffect(() => {
-    const orbData = Array.from({ length: 18 }).map((_, i) => ({
-      left: Math.random() * 100,
-      top: Math.random() * 100,
-      width: 15 + Math.random() * 35,
-      height: 15 + Math.random() * 35,
-      background: `linear-gradient(135deg, ${
-        ["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B"][i % 5]
-      }, ${["#A855F7", "F472B6", "#0EA5E9", "#34D399", "#FBBF24"][i % 5]})`,
-      animationDelay: Math.random() * 8,
-      animationDuration: 12 + Math.random() * 8,
-    }));
-    setOrbs(orbData);
-  }, []);
   const [myNotes, setMyNotes] = useState<Note[]>([])
   const [myNotesGroups, setMyNotesGroups] = useState<NotesGroup[]>([])
   const [myNotesSearchTerm, setMyNotesSearchTerm] = useState("")
@@ -463,24 +439,8 @@ export default function NotesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50 relative overflow-hidden">
-      {/* Enhanced Live Animated Background */}
-      <div className="absolute inset-0 overflow-hidden">
-        {orbs.map((orb, i) => (
-          <div
-            key={`orb-${i}`}
-            className="absolute rounded-full animate-float-enhanced opacity-20"
-            style={{
-              left: `${orb.left}%`,
-              top: `${orb.top}%`,
-              width: `${orb.width}px`,
-              height: `${orb.height}px`,
-              background: orb.background,
-              animationDelay: `${orb.animationDelay}s`,
-              animationDuration: `${orb.animationDuration}s`,
-            }}
-          />
-        ))}
-      </div>
+      {/* Canvas-accelerated Cosmic Background */}
+      <CosmicBackground variant="light" />
 
       <Navbar />
 

@@ -21,6 +21,7 @@ import { Navbar } from "@/components/navbar"
 import Link from "next/link"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
+import { CosmicBackground } from "@/components/cosmic-background"
 
 interface DashboardData {
   feed: Array<{
@@ -199,48 +200,7 @@ export default function DashboardPage() {
     <div className="min-h-screen bg-white relative overflow-hidden">
       {/* Animated Background Elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {/* Floating Orbs */}
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div
-            key={`orb-${i}`}
-            className={`absolute rounded-full bg-gradient-to-br ${
-              i % 4 === 0
-                ? "from-blue-200/30 to-purple-200/30"
-                : i % 4 === 1
-                  ? "from-emerald-200/30 to-teal-200/30"
-                  : i % 4 === 2
-                    ? "from-orange-200/30 to-pink-200/30"
-                    : "from-purple-200/30 to-indigo-200/30"
-            } blur-xl animate-float-enhanced`}
-            style={{
-              width: `${Math.random() * 150 + 80}px`,
-              height: `${Math.random() * 150 + 80}px`,
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 20}s`,
-              animationDuration: `${Math.random() * 15 + 20}s`,
-            }}
-          />
-        ))}
-
-        {/* Animated Particles */}
-        {Array.from({ length: 20 }).map((_, i) => (
-          <div
-            key={`particle-${i}`}
-            className={`absolute w-2 h-2 rounded-full bg-gradient-to-r ${
-              i % 3 === 0
-                ? "from-blue-400/40 to-purple-400/40"
-                : i % 3 === 1
-                  ? "from-emerald-400/40 to-teal-400/40"
-                  : "from-orange-400/40 to-pink-400/40"
-            } animate-particle-float`}
-            style={{
-              left: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 15}s`,
-              animationDuration: `${Math.random() * 10 + 15}s`,
-            }}
-          />
-        ))}
+        <CosmicBackground variant="light" />
 
         {/* Geometric Shapes */}
         <div className="absolute top-20 right-20 w-16 h-16 border-2 border-blue-200/40 transform rotate-45 animate-rotate-enhanced"></div>
@@ -250,30 +210,6 @@ export default function DashboardPage() {
         {/* Background Orbs */}
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-gradient-to-br from-blue-100/20 to-purple-100/20 rounded-full blur-3xl animate-pulse-slow-enhanced"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-br from-emerald-100/20 to-teal-100/20 rounded-full blur-3xl animate-pulse-slow-enhanced delay-3000"></div>
-
-        {/* Floating Lines */}
-        <svg className="absolute inset-0 w-full h-full opacity-20">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <line
-              key={`line-${i}`}
-              x1={`${Math.random() * 100}%`}
-              y1={`${Math.random() * 100}%`}
-              x2={`${Math.random() * 100}%`}
-              y2={`${Math.random() * 100}%`}
-              stroke="url(#gradient)"
-              strokeWidth="1"
-              className="animate-constellation-enhanced"
-              style={{ animationDelay: `${i * 0.5}s` }}
-            />
-          ))}
-          <defs>
-            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
-              <stop offset="50%" stopColor="#8B5CF6" stopOpacity="0.2" />
-              <stop offset="100%" stopColor="#EC4899" stopOpacity="0.3" />
-            </linearGradient>
-          </defs>
-        </svg>
 
         {/* Subtle Gradient Overlay */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50/30 via-transparent to-purple-50/30 animate-gradient-flow"></div>

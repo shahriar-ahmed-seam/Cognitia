@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
 import { Navbar } from "@/components/navbar"
+import { CosmicBackground } from "@/components/cosmic-background"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -356,26 +357,8 @@ export default function ContestManagePage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-purple-50 to-pink-50 relative overflow-hidden">
-      {/* Animated Background */}
-      <div className="absolute inset-0 overflow-hidden">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div
-            key={`bg-element-${i}`}
-            className="absolute rounded-full animate-float opacity-15"
-            style={{
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              width: `${25 + Math.random() * 50}px`,
-              height: `${25 + Math.random() * 50}px`,
-              background: `linear-gradient(135deg, ${
-                ["#8B5CF6", "#EC4899", "#F59E0B", "#10B981", "#3B82F6"][i % 5]
-              }, ${["#A78BFA", "#F472B6", "#FBBF24", "#34D399", "#60A5FA"][i % 5]})`,
-              animationDelay: `${Math.random() * 10}s`,
-              animationDuration: `${15 + Math.random() * 10}s`,
-            }}
-          />
-        ))}
-      </div>
+      {/* Canvas-accelerated Cosmic Background */}
+      <CosmicBackground variant="light" />
 
       <Navbar />
 

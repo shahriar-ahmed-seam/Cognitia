@@ -5,6 +5,8 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ArrowRight, BookOpen, Users, Trophy, Sparkles, Star, Rocket } from "lucide-react"
 
+import { CosmicBackground } from "@/components/cosmic-background"
+
 export default function Home() {
   const [isVisible, setIsVisible] = useState(false)
   const [notesCount, setNotesCount] = useState(0)
@@ -44,79 +46,8 @@ export default function Home() {
       {/* Enhanced Live Animated Background Elements */}
       {mounted && (
         <div className="absolute inset-0 overflow-hidden">
-          {/* Dynamic Floating Orbs with Live Movement */}
-          {Array.from({ length: 25 }).map((_, i) => (
-            <div
-              key={`orb-${i}`}
-              className="absolute rounded-full animate-float-enhanced opacity-30"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                width: `${25 + Math.random() * 50}px`,
-                height: `${25 + Math.random() * 50}px`,
-                background: `linear-gradient(135deg, ${
-                  ["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6"][i % 7]
-                }, ${["#A855F7", "#F472B6", "#0EA5E9", "#34D399", "#FBBF24", "#F87171", "#A855F7"][i % 7]})`,
-                animationDelay: `${Math.random() * 12}s`,
-                animationDuration: `${18 + Math.random() * 12}s`,
-              }}
-            />
-          ))}
-
-          {/* Live Particle System */}
-          {Array.from({ length: 60 }).map((_, i) => (
-            <div
-              key={`particle-${i}`}
-              className="absolute w-1 h-1 rounded-full animate-particle-float"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                background: `${["#8B5CF6", "#EC4899", "#06B6D4", "#10B981", "#F59E0B", "#EF4444"][i % 6]}`,
-                animationDuration: `${12 + Math.random() * 8}s`,
-                animationDelay: `${Math.random() * 6}s`,
-              }}
-            />
-          ))}
-
-          {/* Enhanced Live Constellation Effect */}
-          <svg className="absolute inset-0 w-full h-full opacity-40">
-            {Array.from({ length: 70 }).map((_, i) => (
-              <circle
-                key={`star-${i}`}
-                cx={`${Math.random() * 100}%`}
-                cy={`${Math.random() * 100}%`}
-                r={Math.random() * 2.5 + 0.5}
-                fill="white"
-                className="animate-twinkle-enhanced"
-                style={{
-                  animationDelay: `${Math.random() * 6}s`,
-                  animationDuration: `${3 + Math.random() * 4}s`,
-                }}
-              />
-            ))}
-            {Array.from({ length: 35 }).map((_, i) => (
-              <line
-                key={`line-${i}`}
-                x1={`${Math.random() * 100}%`}
-                y1={`${Math.random() * 100}%`}
-                x2={`${Math.random() * 100}%`}
-                y2={`${Math.random() * 100}%`}
-                stroke="url(#constellation-gradient)"
-                strokeWidth={Math.random() * 1.5 + 0.5}
-                className="animate-constellation-enhanced"
-                style={{ animationDelay: `${i * 0.2}s` }}
-              />
-            ))}
-            <defs>
-              <linearGradient id="constellation-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#8B5CF6" stopOpacity="0.8" />
-                <stop offset="25%" stopColor="#EC4899" stopOpacity="0.6" />
-                <stop offset="50%" stopColor="#06B6D4" stopOpacity="0.8" />
-                <stop offset="75%" stopColor="#10B981" stopOpacity="0.6" />
-                <stop offset="100%" stopColor="#F59E0B" stopOpacity="0.8" />
-              </linearGradient>
-            </defs>
-          </svg>
+          {/* Live Floating Orbs, Particle System & Constellations */}
+          <CosmicBackground variant="dark" />
 
           {/* Live Gradient Waves with Enhanced Movement */}
           <div className="absolute inset-0 opacity-25">

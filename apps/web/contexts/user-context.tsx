@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
-interface User {
+export interface User {
   id?: string
   name: string
   email: string
@@ -16,6 +16,20 @@ interface User {
   location?: string
   website?: string
   role?: string
+}
+
+export const DEFAULT_MOCK_USER: User = {
+  id: "user-1",
+  name: "Shahriar",
+  email: "shahriar@example.com",
+  role: "STUDENT",
+  bio: "Software Engineering Undergrad & AI Enthusiast",
+  institution: "Department of Computer Science & Engineering",
+  graduationYear: 2026,
+  major: "Software Engineering",
+  grade: "Senior",
+  location: "Dhaka, Bangladesh",
+  website: "https://github.com/shahriar",
 }
 
 interface UserContextType {
@@ -37,41 +51,55 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
+  const arrayBufferToBase64 = (buffer: number[]) => {
+    try {
+      const binary = Buffer.from(buffer).toString('base64')
+      return binary
+    } catch {
+      return ""
+    }
+  }
+
   const fetchUser = async () => {
     try {
+      if (typeof window === "undefined") return
+
       const token = localStorage.getItem("token")
-      if (!token) {
+      if (!token || token === "mock-auth-token" || token === "mock-auth-token-disabled") {
+        localStorage.removeItem("token")
+        localStorage.removeItem("user")
+        setUser(null)
         setLoading(false)
         return
       }
 
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/dashboard/me`, {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || ""
+      const response = await fetch(`${apiUrl}/api/dashboard/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to fetch user")
+      if (response.ok) {
+        const data = await response.json()
+        setUser({
+          ...data,
+          avatar: data.avatar
+            ? (typeof data.avatar === "string" ? data.avatar : `data:image/jpeg;base64,${arrayBufferToBase64(data.avatar)}`)
+            : undefined,
+        })
+      } else {
+        // Token expired or invalid
+        localStorage.removeItem("token")
+        localStorage.removeItem("user")
+        setUser(null)
       }
-
-      const data = await response.json()
-      setUser({
-        ...data,
-        avatar: data.avatar ? `data:image/jpeg;base64,${arrayBufferToBase64(data.avatar)}` : undefined,
-      })
     } catch (error) {
-      console.error("Error fetching user:", error)
-      localStorage.removeItem("token")
-      //router.push("/login")
+      console.error("Failed to fetch current user session:", error)
+      setUser(null)
     } finally {
       setLoading(false)
     }
-  }
-
-  const arrayBufferToBase64 = (buffer: number[]) => {
-    const binary = Buffer.from(buffer).toString('base64')
-    return binary
   }
 
   useEffect(() => {
@@ -79,10 +107,12 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const logout = () => {
-    localStorage.removeItem("token")
-    console.log(localStorage.getItem("token"))
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token")
+      localStorage.removeItem("user")
+    }
     setUser(null)
-    router.push("/")
+    router.push("/login")
   }
 
   return (
