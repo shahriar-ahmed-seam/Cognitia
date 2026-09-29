@@ -44,7 +44,7 @@ This repo containts the ExpressJS backend code for our CSE406 Software Developme
 
 6. **(Optional) Seed the database:**
    ```bash
-   node src/seed.js
+   npm run db:seed
    ```
 
 7. **Start the development server:**
