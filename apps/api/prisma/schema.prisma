@@ -1,0 +1,406 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   String                @id @default(cuid())
+  email                String                @unique
+  name                 String
+  password             String
+  role                 UserRole              @default(STUDENT)
+  bio                  String?
+  institution          String?
+  location             String?
+  website              String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  otp                  String?
+  otpExpires           DateTime?
+  verified             Boolean               @default(false)
+  grade                String?
+  graduationYear       Int?
+  major                String?
+  avatar               Bytes?
+  answerVotes          AnswerVote[]
+  answers              Answer[]
+  availabilities       Availability[]
+  contestAttempts      ContestAttempt[]
+  contestRegistrations ContestRegistration[]
+  contests             Contest[]
+  modelTests           ModelTest[]
+  notes                Note[]
+  notesGroups          NotesGroup[]
+  notifications        Notification[]
+  questionVotes        QuestionVote[]
+  questions            Question[]
+  sessionFeedbacks     SessionFeedback[]
+  sessions             StudySession[]
+  tasks                Task[]
+  testAttempts         TestAttempt[]
+
+  @@map("users")
+}
+
+model Question {
+  id        String         @id @default(cuid())
+  title     String
+  body      String
+  tags      String[]
+  views     Int            @default(0)
+  subject   String?
+  authorId  String
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  answers   Answer[]
+  votes     QuestionVote[]
+  author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@map("questions")
+}
+
+model Answer {
+  id         String       @id @default(cuid())
+  content    String
+  questionId String
+  authorId   String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @default(now())
+  votes      AnswerVote[]
+  author     User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  question   Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("answers")
+}
+
+model QuestionVote {
+  id         String   @id @default(cuid())
+  voteType   VoteType
+  questionId String
+  userId     String
+  createdAt  DateTime @default(now())
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, userId])
+  @@map("question_votes")
+}
+
+model AnswerVote {
+  id        String   @id @default(cuid())
+  voteType  VoteType
+  answerId  String
+  userId    String
+  createdAt DateTime @default(now())
+  answer    Answer   @relation(fields: [answerId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([answerId, userId])
+  @@map("answer_votes")
+}
+
+model NotesGroup {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  userId      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now())
+  notes       Note[]
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notes_groups")
+}
+
+model Note {
+  id           String     @id @default(cuid())
+  title        String
+  visibility   Visibility @default(PRIVATE)
+  authorId     String
+  notesGroupId String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @default(now())
+  tags         String[]   @default([])
+  file         Bytes
+  author       User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  notesGroup   NotesGroup @relation(fields: [notesGroupId], references: [id], onDelete: Cascade)
+
+  @@map("notes")
+}
+
+model Task {
+  id            String         @id @default(cuid())
+  title         String
+  description   String?
+  dueDate       DateTime
+  status        TaskStatus     @default(NOT_STARTED)
+  priority      Priority       @default(MEDIUM)
+  subjectArea   String
+  estimatedTime Int?
+  completedAt   DateTime?
+  userId        String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @default(now())
+  tags          String[]       @default([])
+  file          Bytes?
+  sessions      StudySession[]
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("tasks")
+}
+
+model StudySession {
+  id              String           @id @default(cuid())
+  startTime       DateTime
+  endTime         DateTime
+  goal            String?
+  completed       Boolean          @default(false)
+  userId          String
+  taskId          String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @default(now())
+  notes           String?
+  sessionFeedback SessionFeedback?
+  task            Task?            @relation(fields: [taskId], references: [id])
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("study_sessions")
+}
+
+model Availability {
+  id        String   @id @default(cuid())
+  startTime DateTime
+  endTime   DateTime
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("availabilities")
+}
+
+model SessionFeedback {
+  id              String       @id @default(cuid())
+  userId          String
+  sessionId       String       @unique
+  confidenceScore Int
+  feedbackAt      DateTime
+  studysession    StudySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("session_feedback")
+}
+
+model ModelTest {
+  id           String               @id @default(cuid())
+  title        String
+  description  String
+  timeLimit    Int
+  subjects     String[]             @default([])
+  topics       String[]             @default([])
+  difficulty   Difficulty           @default(MEDIUM)
+  isCustom     Boolean              @default(false)
+  passingScore Int
+  totalPoints  Int
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  userId       String
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments  QuestionAssignment[]
+  attempts     TestAttempt[]
+
+  @@map("model_tests")
+}
+
+model TestAttempt {
+  id             String        @id @default(cuid())
+  status         AttemptStatus @default(IN_PROGRESS)
+  startTime      DateTime      @default(now())
+  endTime        DateTime?
+  timeSpent      Int?
+  score          Int?
+  correctAnswers Int?
+  totalQuestions Int
+  answers        Json          @default("{}")
+  userId         String
+  testId         String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now())
+  autoSubmitted  Boolean       @default(false)
+  lastActivity   DateTime?
+  test           ModelTest     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("test_attempts")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  userId    String
+  createdAt DateTime         @default(now())
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+model QuestionBank {
+  id            String               @id @default(cuid())
+  question      String
+  explanation   String?
+  options       Json
+  correctAnswer Int
+  subject       String
+  topics        String[]             @default([])
+  difficulty    Difficulty           @default(MEDIUM)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @default(now())
+  assignments   QuestionAssignment[]
+
+  @@map("question_banks")
+}
+
+model QuestionAssignment {
+  id          String       @id @default(cuid())
+  questionId  String
+  modelTestId String?
+  contestId   String?
+  points      Int          @default(5)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  contest     Contest?     @relation(fields: [contestId], references: [id])
+  modelTest   ModelTest?   @relation(fields: [modelTestId], references: [id], onDelete: Cascade)
+  question    QuestionBank @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@map("question_assignments")
+}
+
+model Contest {
+  id            String                @id @default(cuid())
+  title         String
+  description   String
+  startTime     DateTime
+  endTime       DateTime
+  status        ContestStatus         @default(UPCOMING)
+  difficulty    Difficulty            @default(MEDIUM)
+  participants  Int                   @default(0)
+  topics        String[]              @default([])
+  eligibility   String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @default(now())
+  createdBy     String?
+  attempts      ContestAttempt[]
+  registrations ContestRegistration[]
+  creator       User?                 @relation(fields: [createdBy], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "Contest_createdBy_fkey")
+  assignments   QuestionAssignment[]
+
+  @@map("contests")
+}
+
+model ContestRegistration {
+  id               String   @id @default(cuid())
+  contestId        String
+  userId           String
+  registrationTime DateTime @default(now())
+  contest          Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, userId])
+  @@map("contest_registrations")
+}
+
+model ContestAttempt {
+  id             String        @id @default(cuid())
+  status         AttemptStatus @default(IN_PROGRESS)
+  startTime      DateTime      @default(now())
+  endTime        DateTime?
+  timeSpent      Int?
+  score          Int?
+  correctAnswers Int?
+  totalQuestions Int
+  answers        Json          @default("{}")
+  contestId      String
+  userId         String
+  lastActivity   DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @default(now())
+  contest        Contest       @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, userId])
+  @@map("contest_attempts")
+}
+
+enum UserRole {
+  STUDENT
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+  EXPERT
+}
+
+enum VoteType {
+  UP
+  DOWN
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+  SHARED
+}
+
+enum TaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ContestStatus {
+  UPCOMING
+  ONGOING
+  FINISHED
+}
+
+enum AttemptStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum NotificationType {
+  NOTE_UPLOADED
+  TASK_OVERDUE
+  TASK_STARTED
+  TASK_COMPLETED
+  TASK_ADDED
+  SESSION_STARTED
+  SESSION_ADDED
+  TASK_DEADLINE_SOON
+  CONTEST_REGISTERED
+  CONTEST_UNREGISTERED
+  CONTEST_REMINDER
+  CONTEST_STARTED
+  CONTEST_ENDED
+  CONTEST_RANKING
+  QUESTION_UPVOTED
+  ANSWER_UPVOTED
+  QUESTION_POSTED
+  QUESTION_REPLIED
+  LOGIN
+  PASSWORD_CHANGED
+}
