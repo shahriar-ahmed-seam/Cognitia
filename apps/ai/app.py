@@ -219,5 +219,8 @@ def health_check():
 
 if __name__ == '__main__':
     port = int(os.getenv("PORT", 5000))
-    app.run(debug=False, host='0.0.0.0', port=port)
+    # Localhost only by default: this service has no auth and spends DeepSeek credits.
+    # Set HOST=0.0.0.0 only inside a private network (e.g. a Docker network).
+    host = os.getenv("HOST", "127.0.0.1")
+    app.run(debug=False, host=host, port=port)
 

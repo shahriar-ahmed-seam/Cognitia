@@ -1,8 +1,9 @@
+// Load .env before any other module reads process.env at import time
+import "dotenv/config";
 import express from "express";
 import helmet from "helmet";
 import morgan from "morgan";
 import compression from "compression";
-import dotenv from "dotenv";
 import http from "http";
 import { swaggerSpec, swaggerUi } from "./utils/swagger.js";
 import jwt from "jsonwebtoken";
@@ -36,13 +37,6 @@ import { createClient } from "redis";
 import { parse } from "url";
 import wss from "./notificationSocket.js";
 import notificationsRouter from "./routes/notifications.js";
-// Load environment variables
-
-if (process.env.NODE_ENV == "test") {
-  dotenv.config({ path: ".env.test" });
-} else {
-  dotenv.config({ path: ".env" });
-}
 
 const app = express();
 const PORT = process.env.PORT;

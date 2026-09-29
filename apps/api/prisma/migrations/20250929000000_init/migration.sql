@@ -23,7 +23,7 @@ CREATE TYPE "ContestStatus" AS ENUM ('UPCOMING', 'ONGOING', 'FINISHED');
 CREATE TYPE "AttemptStatus" AS ENUM ('IN_PROGRESS', 'COMPLETED');
 
 -- CreateEnum
-CREATE TYPE "NotificationType" AS ENUM ('ANSWER', 'VOTE', 'ACCEPTANCE', 'COMMENT', 'MENTION', 'SYSTEM');
+CREATE TYPE "NotificationType" AS ENUM ('NOTE_UPLOADED', 'TASK_OVERDUE', 'TASK_STARTED', 'TASK_COMPLETED', 'TASK_ADDED', 'SESSION_STARTED', 'SESSION_ADDED', 'TASK_DEADLINE_SOON', 'CONTEST_REGISTERED', 'CONTEST_UNREGISTERED', 'CONTEST_REMINDER', 'CONTEST_STARTED', 'CONTEST_ENDED', 'CONTEST_RANKING', 'QUESTION_UPVOTED', 'ANSWER_UPVOTED', 'QUESTION_POSTED', 'QUESTION_REPLIED', 'LOGIN', 'PASSWORD_CHANGED');
 
 -- CreateTable
 CREATE TABLE "users" (
@@ -401,7 +401,7 @@ ALTER TABLE "question_assignments" ADD CONSTRAINT "question_assignments_modelTes
 ALTER TABLE "question_assignments" ADD CONSTRAINT "question_assignments_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "question_banks"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "contests" ADD CONSTRAINT "contests_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "contests" ADD CONSTRAINT "Contest_createdBy_fkey" FOREIGN KEY ("createdBy") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE "contest_registrations" ADD CONSTRAINT "contest_registrations_contestId_fkey" FOREIGN KEY ("contestId") REFERENCES "contests"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -414,3 +414,4 @@ ALTER TABLE "contest_attempts" ADD CONSTRAINT "contest_attempts_contestId_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "contest_attempts" ADD CONSTRAINT "contest_attempts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+

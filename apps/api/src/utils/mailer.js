@@ -15,6 +15,11 @@ const transporter = nodemailer.createTransport({
  * @param {string} otp - OTP code
  */
 export async function sendOtpEmail(to, otp) {
+  // Local development without SMTP credentials: print the OTP instead of emailing it
+  if (process.env.NODE_ENV !== "production" && (!process.env.EMAIL_USER || !process.env.EMAIL_PASS)) {
+    console.log(`[dev] Email not configured. OTP for ${to}: ${otp}`);
+    return;
+  }
   const mailOptions = {
     from: `"CognitiaHub" <${process.env.EMAIL_USER}>`,
     to,
