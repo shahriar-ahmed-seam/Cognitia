@@ -7,6 +7,9 @@ const config = {
     "./components/**/*.{ts,tsx}",
     "./app/**/*.{ts,tsx}",
     "./src/**/*.{ts,tsx}",
+    // Class names also live in lib/ (e.g. contest kind and phase colours) and hooks/
+    "./lib/**/*.{ts,tsx}",
+    "./hooks/**/*.{ts,tsx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
   prefix: "",

@@ -2,17 +2,16 @@
 
 import type React from "react"
 import { useMemo, useState } from "react"
-import { Globe2, KeyRound, Loader2, Lock, RefreshCw, ShieldCheck } from "lucide-react"
+import { CalendarClock, ClipboardList, Globe2, KeyRound, Loader2, Lock, RefreshCw, ShieldCheck, Trophy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
-import { cn } from "@/lib/utils"
 import { DIFFICULTY_META, KIND_META, TIMING_META, formatDuration, fromLocalInput, toLocalInput } from "@/lib/contests/format"
-import type { ContestSettings } from "@/lib/contests/types"
-import { ChoiceCards, Field, Section, TagInput } from "./fields"
+import type { ContestAiSummary, ContestSettings } from "@/lib/contests/types"
+import { AiGradingSection, type AiFields } from "./ai-grading-section"
+import { ChoiceCards, Field, Section, SegmentedToggle, TagInput, ToggleRow } from "./fields"
 import { primaryButton } from "../primitives"
 
 type Form = Omit<ContestSettings, "startsAt" | "endsAt" | "registrationClosesAt"> & {
@@ -56,11 +55,17 @@ function defaults(institution?: string | null): ContestSettings {
     liveStandings: true,
     resultsMode: "AUTO",
     isRated: false,
+    writtenGrading: "MANUAL",
+    aiSource: "PLATFORM",
+    aiCredentialId: null,
+    aiInstructions: "",
+    blindGrading: true,
   }
 }
 
 const toForm = (s: ContestSettings): Form => ({
   ...s,
+  aiInstructions: s.aiInstructions ?? "",
   startsAt: toLocalInput(s.startsAt),
   endsAt: toLocalInput(s.endsAt),
   registrationClosesAt: toLocalInput(s.registrationClosesAt),
@@ -79,6 +84,7 @@ function toSettings(form: Form): ContestSettings {
     registrationClosesAt: fromLocalInput(form.registrationClosesAt),
     capacity: form.capacity ? Number(form.capacity) : null,
     durationMinutes: Number(form.durationMinutes) || 0,
+    aiInstructions: form.aiInstructions.trim(),
   }
 }
 
@@ -90,7 +96,7 @@ function randomCode() {
 
 /**
  * Create or edit a contest's settings. In edit mode only changed fields are sent,
- * and fields the current phase doesn't allow are disabled.
+ * and fields the current phase (or the viewer's role) doesn't allow are disabled.
  */
 export function ContestSettingsForm({
   initial,
@@ -98,18 +104,29 @@ export function ContestSettingsForm({
   editable,
   submitLabel,
   onSubmit,
+  readOnly = false,
+  ai,
+  canChooseAiKey = true,
+  writtenCount,
 }: {
   initial?: ContestSettings
   defaultInstitution?: string | null
   editable?: (keyof ContestSettings)[]
   submitLabel: string
   onSubmit: (changes: Partial<ContestSettings>) => Promise<void>
+  /** Show everything disabled with no save bar (e.g. for graders) */
+  readOnly?: boolean
+  /** Saved AI setup (edit mode) */
+  ai?: ContestAiSummary
+  /** Owners and admins pick the AI source and key; others see it read-only */
+  canChooseAiKey?: boolean
+  writtenCount?: number
 }) {
   const start = useMemo(() => initial ?? defaults(defaultInstitution), [initial, defaultInstitution])
   const [form, setForm] = useState<Form>(() => toForm(start))
   const [busy, setBusy] = useState(false)
-  const [preview, setPreview] = useState(false)
-  const allowed = new Set(editable ?? (Object.keys(start) as (keyof ContestSettings)[]))
+  const [preview, setPreview] = useState<"write" | "preview">("write")
+  const allowed = new Set(readOnly ? [] : (editable ?? (Object.keys(start) as (keyof ContestSettings)[])))
   const locked = (key: keyof ContestSettings) => !allowed.has(key)
   const set = <K extends keyof Form>(key: K, value: Form[K]) => setForm((f) => ({ ...f, [key]: value }))
 
@@ -131,18 +148,20 @@ export function ContestSettingsForm({
     for (const key of Object.keys(next) as (keyof ContestSettings)[]) {
       const a = next[key]
       const b = initial[key]
-      const same = key.endsWith("At") ? (a ? new Date(a as string).getTime() : null) === (b ? new Date(b as string).getTime() : null) : JSON.stringify(a) === JSON.stringify(b)
+      const same = key.endsWith("At") ? (a ? new Date(a as string).getTime() : null) === (b ? new Date(b as string).getTime() : null) : JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
       if (!same && allowed.has(key)) (diff as Record<string, unknown>)[key] = a
     }
     return diff
   }, [form, initial]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const dirty = !initial || Object.keys(changes).length > 0
-  const invalid = Object.keys(problems).length > 0
+  // Only problems in fields the user can change should block saving
+  const invalid = Object.keys(problems).some((key) => allowed.has(key as keyof ContestSettings))
+  const showFooter = !readOnly && allowed.size > 0
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
-    if (invalid || !dirty) return
+    if (readOnly || invalid || !dirty) return
     setBusy(true)
     try {
       await onSubmit(changes)
@@ -151,9 +170,17 @@ export function ContestSettingsForm({
     }
   }
 
+  const aiValue: AiFields = {
+    writtenGrading: form.writtenGrading,
+    aiSource: form.aiSource,
+    aiCredentialId: form.aiCredentialId,
+    aiInstructions: form.aiInstructions,
+    blindGrading: form.blindGrading,
+  }
+
   return (
-    <form onSubmit={submit} noValidate>
-      <Section title="Basics" description="What students see on the contest card and page.">
+    <form onSubmit={submit} noValidate aria-label="Contest settings">
+      <Section title="Basics" icon={ClipboardList} description="What students see on the contest card and page.">
         <Field label="Title" htmlFor="title" error={form.title ? problems.title : undefined}>
           <Input id="title" value={form.title} maxLength={120} disabled={locked("title")} onChange={(e) => set("title", e.target.value)} placeholder="e.g. CSE 313 Mock CT-3: Memory Management" />
         </Field>
@@ -163,20 +190,28 @@ export function ContestSettingsForm({
         <div className="grid gap-5 sm:grid-cols-2">
           <Field label="Type" htmlFor="kind">
             <Select value={form.kind} onValueChange={(v) => set("kind", v as Form["kind"])} disabled={locked("kind")}>
-              <SelectTrigger id="kind"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="kind">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {Object.entries(KIND_META).map(([value, meta]) => (
-                  <SelectItem key={value} value={value}>{meta.label} · {meta.description}</SelectItem>
+                  <SelectItem key={value} value={value}>
+                    {meta.label} · {meta.description}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
           <Field label="Difficulty" htmlFor="difficulty">
             <Select value={form.difficulty} onValueChange={(v) => set("difficulty", v as Form["difficulty"])} disabled={locked("difficulty")}>
-              <SelectTrigger id="difficulty"><SelectValue /></SelectTrigger>
+              <SelectTrigger id="difficulty">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {Object.entries(DIFFICULTY_META).map(([value, meta]) => (
-                  <SelectItem key={value} value={value}>{meta.label}</SelectItem>
+                  <SelectItem key={value} value={value}>
+                    {meta.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -193,20 +228,36 @@ export function ContestSettingsForm({
             <TagInput id="topics" value={form.topics} disabled={locked("topics")} onChange={(v) => set("topics", v)} placeholder="Paging, TLB" />
           </Field>
         </div>
-        <Field label="Description" htmlFor="description" hint="Markdown and math ($x^2$) are supported">
-          <div className="mb-2 flex gap-1 text-xs">
-            {(["Write", "Preview"] as const).map((label) => (
-              <button key={label} type="button" onClick={() => setPreview(label === "Preview")} className={cn("rounded-md px-2 py-1 font-medium", preview === (label === "Preview") ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100")}>
-                {label}
-              </button>
-            ))}
-          </div>
-          {preview ? (
-            <div className="min-h-[9rem] rounded-md border border-slate-200 px-4 py-2 text-sm text-slate-700">
+        <Field
+          label="Description"
+          htmlFor="description"
+          hint="Markdown and math ($x^2$) are supported"
+          action={
+            <SegmentedToggle
+              label="Description view"
+              value={preview}
+              onChange={setPreview}
+              options={[
+                { value: "write", label: "Write" },
+                { value: "preview", label: "Preview" },
+              ]}
+            />
+          }
+        >
+          {preview === "preview" ? (
+            <div className="min-h-[9rem] rounded-md border border-slate-200 bg-slate-50/50 px-4 py-2 text-sm text-slate-700">
               {form.description ? <MarkdownRenderer content={form.description} /> : <p className="py-4 text-slate-400">Nothing to preview</p>}
             </div>
           ) : (
-            <Textarea id="description" rows={7} value={form.description} disabled={locked("description")} onChange={(e) => set("description", e.target.value)} placeholder={"## Syllabus\n- Paging and TLBs\n- Page replacement"} className="font-mono text-sm" />
+            <Textarea
+              id="description"
+              rows={7}
+              value={form.description}
+              disabled={locked("description")}
+              onChange={(e) => set("description", e.target.value)}
+              placeholder={"## Syllabus\n- Paging and TLBs\n- Page replacement"}
+              className="font-mono text-sm"
+            />
           )}
         </Field>
         <Field label="Extra rules" htmlFor="rules" hint="Shown under the standard rules generated from these settings">
@@ -214,12 +265,13 @@ export function ContestSettingsForm({
         </Field>
       </Section>
 
-      <Section title="Schedule" description="All times are in your local time zone.">
+      <Section title="Schedule" icon={CalendarClock} description="All times are in your local time zone.">
         <ChoiceCards
           name="Timing"
           value={form.timing}
           onChange={(v) => set("timing", v)}
           disabled={locked("timing")}
+          className="xl:grid-cols-2"
           options={(["FIXED", "FLEXIBLE"] as const).map((value) => ({ value, label: TIMING_META[value].label, description: TIMING_META[value].description, icon: TIMING_META[value].icon }))}
         />
         <div className="grid gap-5 sm:grid-cols-2">
@@ -236,11 +288,18 @@ export function ContestSettingsForm({
           </Field>
         )}
         <Field label="Registration closes (optional)" htmlFor="regClose" error={problems.registrationClosesAt} hint="Leave empty to allow joining until the contest ends">
-          <Input id="regClose" type="datetime-local" value={form.registrationClosesAt} disabled={locked("registrationClosesAt")} onChange={(e) => set("registrationClosesAt", e.target.value)} className="sm:w-64" />
+          <Input
+            id="regClose"
+            type="datetime-local"
+            value={form.registrationClosesAt}
+            disabled={locked("registrationClosesAt")}
+            onChange={(e) => set("registrationClosesAt", e.target.value)}
+            className="sm:w-64"
+          />
         </Field>
       </Section>
 
-      <Section title="Who can join" description="Private contests are hidden from browsing and need an access code.">
+      <Section title="Who can join" icon={ShieldCheck} description="Private contests are hidden from browsing and need an access code.">
         <ChoiceCards
           name="Visibility"
           value={form.visibility}
@@ -264,11 +323,18 @@ export function ContestSettingsForm({
           <Field label="Access code" htmlFor="code" hint="Share it with the students you invite">
             <div className="flex gap-2">
               <div className="relative flex-1 sm:max-w-xs">
-                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                <Input id="code" value={form.accessCode ?? ""} maxLength={32} disabled={locked("accessCode")} onChange={(e) => set("accessCode", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))} className="pl-9 font-mono uppercase tracking-wider" />
+                <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                <Input
+                  id="code"
+                  value={form.accessCode ?? ""}
+                  maxLength={32}
+                  disabled={locked("accessCode")}
+                  onChange={(e) => set("accessCode", e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))}
+                  className="pl-9 font-mono uppercase tracking-wider"
+                />
               </div>
               <Button type="button" variant="outline" disabled={locked("accessCode")} onClick={() => set("accessCode", randomCode())}>
-                <RefreshCw className="h-4 w-4" /> New code
+                <RefreshCw className="h-4 w-4" aria-hidden="true" /> New code
               </Button>
             </div>
           </Field>
@@ -278,54 +344,68 @@ export function ContestSettingsForm({
         </Field>
       </Section>
 
-      <Section title="Scoring and results" description="These can't change once the contest starts, except where noted.">
-        <Field label="Negative marking" htmlFor="negative">
+      <Section title="Scoring and results" icon={Trophy} description="These can't change once the contest starts, except where noted.">
+        <Field label="Negative marking" htmlFor="negative" hint="Never applies to written answers">
           <Select value={String(form.negativeMarking)} onValueChange={(v) => set("negativeMarking", Number(v))} disabled={locked("negativeMarking")}>
-            <SelectTrigger id="negative" className="sm:w-80"><SelectValue /></SelectTrigger>
+            <SelectTrigger id="negative" className="sm:w-80">
+              <SelectValue />
+            </SelectTrigger>
             <SelectContent>
-              {NEGATIVE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              {NEGATIVE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </Field>
         <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
           {(
             [
-              ["shuffleQuestions", "Shuffle question order", "Each student gets a different order"],
+              ["shuffleQuestions", "Shuffle question order", "Each student gets a different order. Questions stay inside their section."],
               ["shuffleOptions", "Shuffle options", "True/false options always stay in order"],
               ["liveStandings", "Live standings", "Show scores of students who've submitted while the contest runs. Can change during the contest."],
               ["isRated", "Rated contest", "Results change students' contest ratings"],
             ] as const
           ).map(([key, label, hint]) => (
-            <label key={key} className={cn("flex items-start justify-between gap-4 px-4 py-3", locked(key) && "opacity-60")}>
-              <span>
-                <span className="block text-sm font-medium text-slate-800">{label}</span>
-                <span className="block text-xs text-slate-500">{hint}</span>
-              </span>
-              <Switch checked={form[key]} disabled={locked(key)} onCheckedChange={(v) => set(key, v)} />
-            </label>
+            <ToggleRow key={key} label={label} hint={hint} checked={form[key]} disabled={locked(key)} onChange={(v) => set(key, v)} />
           ))}
         </div>
         <Field label="Publishing results">
           <ChoiceCards
-            name="Results"
+            name="Publishing results"
             value={form.resultsMode}
             onChange={(v) => set("resultsMode", v)}
             disabled={locked("resultsMode")}
+            className="xl:grid-cols-2"
             options={[
-              { value: "AUTO", label: "Automatically", description: "Standings, solutions and ratings go out when the contest ends" },
+              { value: "AUTO", label: "Automatically", description: "Standings, solutions and ratings go out when the contest ends and every written answer is graded" },
               { value: "MANUAL", label: "After I review", description: "You check the results, fix keys if needed, then publish" },
             ]}
           />
         </Field>
       </Section>
 
-      <div className="sticky bottom-0 flex items-center justify-end gap-3 rounded-b-2xl border-t border-slate-100 bg-white/95 px-6 py-4 backdrop-blur">
-        {invalid && <span className="text-sm text-rose-600">Fix the highlighted fields first.</span>}
-        {initial && !dirty && <span className="text-sm text-slate-500">No unsaved changes</span>}
-        <Button type="submit" className={primaryButton} disabled={busy || invalid || !dirty}>
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />} {submitLabel}
-        </Button>
-      </div>
+      <AiGradingSection
+        value={aiValue}
+        onChange={(key, value) => set(key, value as Form[typeof key])}
+        locked={locked}
+        canChooseAiKey={canChooseAiKey}
+        ai={ai}
+        saved={initial}
+        writtenCount={writtenCount}
+      />
+
+      {showFooter && (
+        <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-3 rounded-b-2xl border-t border-slate-100 bg-white px-6 py-4 shadow-[0_-8px_24px_-18px_rgba(15,23,42,0.35)]">
+          <p className="text-sm" aria-live="polite">
+            {invalid ? <span className="text-rose-600">Fix the highlighted fields first.</span> : initial && !dirty ? <span className="text-slate-500">No unsaved changes</span> : null}
+          </p>
+          <Button type="submit" className={primaryButton} disabled={busy || invalid || !dirty}>
+            {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />} {submitLabel}
+          </Button>
+        </div>
+      )}
     </form>
   )
 }

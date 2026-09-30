@@ -9,12 +9,13 @@ import {
   ListChecks,
   type LucideIcon,
   Medal,
+  PenLine,
   Sigma,
   ToggleLeft,
   Type,
   Zap,
 } from "lucide-react"
-import type { ContestKind, ContestPhase, Difficulty, QuestionType, Verdict } from "./types"
+import type { ContestKind, ContestPhase, ContestRole, Difficulty, GradingStatus, QuestionType, Verdict, WrittenGrading } from "./types"
 
 export const KIND_META: Record<ContestKind, { label: string; description: string; icon: LucideIcon; tint: string; chip: string }> = {
   QUIZ: { label: "Quiz", description: "Short topic quiz", icon: Zap, tint: "from-amber-500 to-orange-500", chip: "bg-amber-50 text-amber-800 ring-amber-200" },
@@ -24,20 +25,20 @@ export const KIND_META: Record<ContestKind, { label: string; description: string
   APTITUDE: { label: "Aptitude test", description: "Club or recruitment screening", icon: Briefcase, tint: "from-emerald-500 to-teal-500", chip: "bg-emerald-50 text-emerald-800 ring-emerald-200" },
 }
 
-export const PHASE_META: Record<ContestPhase, { label: string; badge: string; dot: string }> = {
-  DRAFT: { label: "Draft", badge: "bg-zinc-100 text-zinc-700 ring-zinc-200", dot: "bg-zinc-400" },
-  UPCOMING: { label: "Upcoming", badge: "bg-sky-50 text-sky-700 ring-sky-200", dot: "bg-sky-500" },
-  LIVE: { label: "Live", badge: "bg-emerald-50 text-emerald-700 ring-emerald-200", dot: "bg-emerald-500" },
-  ENDED: { label: "Ended", badge: "bg-amber-50 text-amber-800 ring-amber-200", dot: "bg-amber-500" },
-  RESULTS: { label: "Results out", badge: "bg-slate-100 text-slate-700 ring-slate-200", dot: "bg-slate-500" },
-  CANCELLED: { label: "Cancelled", badge: "bg-rose-50 text-rose-700 ring-rose-200", dot: "bg-rose-500" },
+export const PHASE_META: Record<ContestPhase, { label: string; badge: string; onDark: string; dot: string }> = {
+  DRAFT: { label: "Draft", badge: "bg-zinc-100 text-zinc-700 ring-zinc-200", onDark: "bg-white/10 text-zinc-200 ring-white/15", dot: "bg-zinc-400" },
+  UPCOMING: { label: "Upcoming", badge: "bg-sky-50 text-sky-700 ring-sky-200", onDark: "bg-sky-400/15 text-sky-200 ring-sky-300/30", dot: "bg-sky-400" },
+  LIVE: { label: "Live", badge: "bg-emerald-50 text-emerald-700 ring-emerald-200", onDark: "bg-emerald-400/15 text-emerald-200 ring-emerald-300/30", dot: "bg-emerald-400" },
+  ENDED: { label: "Ended", badge: "bg-amber-50 text-amber-800 ring-amber-200", onDark: "bg-amber-400/15 text-amber-200 ring-amber-300/30", dot: "bg-amber-400" },
+  RESULTS: { label: "Results out", badge: "bg-violet-50 text-violet-700 ring-violet-200", onDark: "bg-violet-400/15 text-violet-200 ring-violet-300/30", dot: "bg-violet-400" },
+  CANCELLED: { label: "Cancelled", badge: "bg-rose-50 text-rose-700 ring-rose-200", onDark: "bg-rose-400/15 text-rose-200 ring-rose-300/30", dot: "bg-rose-400" },
 }
 
-export const DIFFICULTY_META: Record<Difficulty, { label: string; className: string }> = {
-  EASY: { label: "Easy", className: "text-emerald-700" },
-  MEDIUM: { label: "Medium", className: "text-amber-700" },
-  HARD: { label: "Hard", className: "text-orange-700" },
-  EXPERT: { label: "Expert", className: "text-rose-700" },
+export const DIFFICULTY_META: Record<Difficulty, { label: string; className: string; onDark: string }> = {
+  EASY: { label: "Easy", className: "text-emerald-700", onDark: "text-emerald-300" },
+  MEDIUM: { label: "Medium", className: "text-amber-700", onDark: "text-amber-300" },
+  HARD: { label: "Hard", className: "text-orange-700", onDark: "text-orange-300" },
+  EXPERT: { label: "Expert", className: "text-rose-700", onDark: "text-rose-300" },
 }
 
 export const QUESTION_TYPE_META: Record<QuestionType, { label: string; hint: string; icon: LucideIcon }> = {
@@ -46,6 +47,7 @@ export const QUESTION_TYPE_META: Record<QuestionType, { label: string; hint: str
   TRUE_FALSE: { label: "True / False", hint: "Pick true or false", icon: ToggleLeft },
   NUMERIC: { label: "Numeric", hint: "Enter a number", icon: Sigma },
   SHORT_TEXT: { label: "Short answer", hint: "Type a word or short phrase", icon: Type },
+  WRITTEN: { label: "Written", hint: "Type your answer or attach photos of your working", icon: PenLine },
 }
 
 export const VERDICT_META: Record<Verdict, { label: string; className: string; ring: string }> = {
@@ -53,6 +55,37 @@ export const VERDICT_META: Record<Verdict, { label: string; className: string; r
   PARTIAL: { label: "Partly correct", className: "text-amber-800 bg-amber-50", ring: "ring-amber-200" },
   WRONG: { label: "Wrong", className: "text-rose-700 bg-rose-50", ring: "ring-rose-200" },
   UNANSWERED: { label: "Not answered", className: "text-slate-600 bg-slate-100", ring: "ring-slate-200" },
+  PENDING: { label: "Awaiting grade", className: "text-violet-700 bg-violet-50", ring: "ring-violet-200" },
+}
+
+export const GRADING_STATUS_META: Record<GradingStatus, { label: string; className: string }> = {
+  NONE: { label: "Not submitted", className: "bg-slate-100 text-slate-600 ring-slate-200" },
+  QUEUED: { label: "Waiting for AI", className: "bg-sky-50 text-sky-700 ring-sky-200" },
+  RUNNING: { label: "AI grading", className: "bg-indigo-50 text-indigo-700 ring-indigo-200" },
+  NEEDS_REVIEW: { label: "Needs review", className: "bg-amber-50 text-amber-800 ring-amber-200" },
+  GRADED: { label: "Graded", className: "bg-emerald-50 text-emerald-700 ring-emerald-200" },
+}
+
+export const WRITTEN_GRADING_META: Record<WrittenGrading, { label: string; description: string }> = {
+  MANUAL: { label: "Organizers grade", description: "Your team grades every written answer on the grading desk." },
+  AI_ASSISTED: { label: "AI suggests, organizers approve", description: "The AI proposes a grade and feedback for each answer; a team member approves or changes every one." },
+  AI_AUTO: { label: "AI grades, organizers check flagged ones", description: "Confident, unflagged AI grades count straight away. Unsure or flagged answers come to your team." },
+}
+
+export const TEAM_ROLE_META: Record<ContestRole, { label: string; description: string; className: string }> = {
+  OWNER: { label: "Owner", description: "Everything, including the team, the AI key and deleting the contest", className: "bg-violet-50 text-violet-700 ring-violet-200" },
+  EDITOR: { label: "Editor", description: "Questions, settings, participants, announcements and grading", className: "bg-sky-50 text-sky-700 ring-sky-200" },
+  GRADER: { label: "Grader", description: "Grading desk and clarifications only", className: "bg-amber-50 text-amber-800 ring-amber-200" },
+  ADMIN: { label: "Admin", description: "Platform admin with full access", className: "bg-slate-900 text-white ring-slate-900" },
+}
+
+export const AI_FLAG_LABELS: Record<string, string> = {
+  ILLEGIBLE: "Hard to read",
+  BLANK: "Blank",
+  OFF_TOPIC: "Off topic",
+  PROMPT_INJECTION: "Tried to instruct the AI",
+  IMAGE_UNRELATED: "Photo looks unrelated",
+  UNSURE: "AI unsure",
 }
 
 export const TIMING_META = {

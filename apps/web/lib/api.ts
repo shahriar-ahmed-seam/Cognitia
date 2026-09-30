@@ -88,6 +88,48 @@ export async function api<T>(path: string, { method = "GET", body, query, signal
   return data as T
 }
 
+/** Absolute URL for an API path such as "/api/public/contest-assets/:id" (used in Markdown images). */
+export function assetUrl(src: string | undefined | null): string {
+  if (!src) return ""
+  return src.startsWith("/api/") ? `${API_URL}${src}` : src
+}
+
+/** Upload one file as multipart form data (field "file"). */
+export async function uploadFile<T>(path: string, file: Blob, filename = "upload.jpg", signal?: AbortSignal): Promise<T> {
+  const token = getToken()
+  const form = new FormData()
+  form.append("file", file, filename)
+  let response: Response
+  try {
+    response = await fetch(buildUrl(path), {
+      method: "POST",
+      body: form,
+      signal,
+      headers: { Accept: "application/json", ...(token && { Authorization: `Bearer ${token}` }) },
+    })
+  } catch (error) {
+    if ((error as Error).name === "AbortError") throw error
+    throw new ApiError(0, "Upload failed. Check your connection and try again.", "NETWORK")
+  }
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    if (response.status === 401 && token) handleUnauthorized()
+    throw new ApiError(response.status, data.error ?? `Upload failed (${response.status})`, data.code, data.details)
+  }
+  return data as T
+}
+
+/**
+ * Fetch an authenticated file (e.g. a participant's answer photo) and return an object URL.
+ * `path` is a full API path such as "/api/contests/answer-files/:id". Revoke it when done.
+ */
+export async function fetchObjectUrl(path: string, signal?: AbortSignal): Promise<string> {
+  const token = getToken()
+  const response = await fetch(assetUrl(path), { signal, headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  if (!response.ok) throw new ApiError(response.status, "Couldn't load the image")
+  return URL.createObjectURL(await response.blob())
+}
+
 /** Download a file from an authenticated endpoint. */
 export async function downloadFile(path: string, fallbackName: string) {
   const token = getToken()
