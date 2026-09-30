@@ -2,16 +2,26 @@ import express from "express";
 import { prisma } from "../lib/database.js";
 import { authenticateToken } from "../middleware/auth.js";
 import multer from "multer";
+import { assertImage } from "../modules/contests/service.js";
+import { avatarUrl, publicUserSelect } from "../modules/community/serializers.js";
 
 const router = express.Router();
 
-// Configure multer for file uploads
-const upload = multer();
+// Avatars are small (the web app shrinks them first); anything over 2 MB is refused
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 * 1024 * 1024, files: 1 } });
+const meSelect = {
+  ...publicUserSelect,
+  email: true,
+  bio: true,
+  graduationYear: true,
+  location: true,
+  website: true,
+};
+const meView = (user) => ({ ...user, avatarUpdatedAt: undefined, avatar: avatarUrl(user) });
 
 // Get dashboard data
 router.get("/", async (req, res) => {
   try {
-    console.log("req.user", req.user);
     if (!req.user || !req.user.id) {
       return res
         .status(401)
@@ -19,19 +29,17 @@ router.get("/", async (req, res) => {
     }
     const userId = req.user.id;
 
-    // Recent questions (Q&A feed)
-    const recentQuestions = await prisma.question.findMany({
+    // The student's recent community questions
+    const recentQuestions = await prisma.post.findMany({
+      where: { authorId: userId, type: "QUESTION", status: "PUBLISHED" },
       orderBy: { createdAt: "desc" },
       take: 10,
-      include: {
-        answers: { select: { id: true } },
-        author: { select: { id: true, name: true, avatar: true } },
-      },
+      select: { id: true, title: true, tags: true, createdAt: true, answerCount: true, score: true, acceptedReplyId: true },
     });
     const feed = recentQuestions.map((q) => ({
       ...q,
-      answerCount: q.answers.length,
-      answers: undefined,
+      isAnswered: Boolean(q.acceptedReplyId) || q.answerCount > 0,
+      author: { id: userId, name: req.user.name },
     }));
 
     // Recent notes
@@ -139,11 +147,11 @@ router.get("/", async (req, res) => {
       0
     );
 
-    const questionsAsked = await prisma.question.count({
-      where: { authorId: userId },
+    const questionsAsked = await prisma.post.count({
+      where: { authorId: userId, type: "QUESTION" },
     });
-    const questionsAnswered = await prisma.answer.count({
-      where: { authorId: userId },
+    const questionsAnswered = await prisma.reply.count({
+      where: { authorId: userId, isAnswer: true },
     });
 
     const stats = {
@@ -156,7 +164,7 @@ router.get("/", async (req, res) => {
 
     const tasks = await prisma.task.findMany({ where: { userId } });
     const sessions = await prisma.studySession.findMany({ where: { userId } });
-    const currentUser = await prisma.user.findUnique({ where: { id: userId } });
+    const currentUser = meView(await prisma.user.findUnique({ where: { id: userId }, select: meSelect }));
 
     res.json({
       feed,
@@ -210,29 +218,13 @@ function formatRelativeTime(date) {
 router.get("/me", authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        avatar: true,
-        bio: true,
-        institution: true,
-        graduationYear: true,
-        major: true,
-        grade: true,
-        location: true,
-        website: true,
-        role: true,
-      },
-    });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: meSelect });
 
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    res.json(user);
+    res.json(meView(user));
   } catch (error) {
     console.error("Get user data error:", error);
     res.status(500).json({ error: "Failed to fetch user data" });
@@ -258,10 +250,11 @@ router.put(
       } = req.body;
 
       // Prepare update data
+      const year = Number.parseInt(graduationYear, 10);
       const updateData = {
         bio,
         institution,
-        graduationYear,
+        graduationYear: graduationYear === undefined ? undefined : Number.isFinite(year) ? year : null,
         major,
         grade,
         location,
@@ -270,15 +263,18 @@ router.put(
 
       // Handle avatar upload
       if (req.file) {
+        await assertImage(req.file);
         updateData.avatar = req.file.buffer;
+        updateData.avatarUpdatedAt = new Date();
       }
 
       const updatedUser = await prisma.user.update({
         where: { id: userId },
         data: updateData,
+        select: meSelect,
       });
 
-      res.json(updatedUser);
+      res.json(meView(updatedUser));
     } catch (error) {
       console.error("Update user data error:", error);
       res.status(500).json({ error: "Failed to update user data" });

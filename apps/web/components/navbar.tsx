@@ -5,7 +5,6 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { useUser } from "@/contexts/user-context"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,12 +14,13 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { NotificationDropdown } from "@/components/notification-dropdown"
-import { BookOpen, Brain, Home, MessageSquare, Settings, Trophy, User, Menu, X, Target } from "lucide-react"
+import { BookOpen, Brain, Home, MessagesSquare, Settings, Trophy, User, Menu, X, Target } from "lucide-react"
+import { UserAvatar } from "@/components/community/avatar"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Notes", href: "/notes", icon: BookOpen },
-  { name: "Q&A", href: "/qa", icon: MessageSquare },
+  { name: "Community", href: "/community", icon: MessagesSquare },
   { name: "Exam Practice", href: "/model-test", icon: Brain },
   { name: "Contests", href: "/contests", icon: Trophy },
   { name: "Study Plan", href: "/study-plan", icon: Target },
@@ -65,20 +65,22 @@ export function Navbar() {
           </div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden lg:flex items-center space-x-1">
             {navigation.map((item) => {
               const isActive = isSection(pathname, item.href)
               return (
-                <Link key={item.name} href={item.href}>
+                <Link key={item.name} href={item.href} title={item.name} aria-current={isActive ? "page" : undefined}>
                   <Button
                     variant={isActive ? "default" : "ghost"}
+                    tabIndex={-1}
                     className={`flex items-center space-x-2 ${isActive
                       ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white"
                       : "text-gray-600 hover:text-gray-900 hover:bg-gray-100"
                       }`}
                   >
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.name}</span>
+                    <item.icon className="h-4 w-4" aria-hidden="true" />
+                    {/* Icons only between lg and xl so the bar fits */}
+                    <span className="sr-only xl:not-sr-only">{item.name}</span>
                   </Button>
                 </Link>
               )
@@ -95,12 +97,8 @@ export function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-10 w-10 p-0 rounded-full">
                   <div className="p-[2px] rounded-full bg-gradient-to-r from-blue-400 via-purple-500 to-pink-500">
-                    <Avatar className="h-8 w-8 rounded-full bg-white">
-                      <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
-                      <AvatarFallback className="bg-purple-500 text-white text-sm">
-                        {user.name.charAt(0)}
-                      </AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={{ id: user.id ?? user.email, name: user.name, avatarUrl: user.avatar ?? null }} size="sm" className="ring-2 ring-white" />
+                    <span className="sr-only">Account menu for {user.name}</span>
                   </div>
                 </Button>
               </DropdownMenuTrigger>
@@ -137,7 +135,7 @@ export function Navbar() {
                 {/* Profile */}
                 <DropdownMenuItem asChild>
                   <Link
-                    href="/profile"
+                    href={user.username || user.id ? `/profile/${user.username || user.id}` : "/profile"}
                     className="flex items-center bg-gradient-to-r from-blue-600 via-purple-700 to-pink-600 bg-clip-text text-transparent animate-gradient"
                   >
                     <User className="mr-2 h-4 w-4 text-white" />
@@ -170,8 +168,8 @@ export function Navbar() {
             </DropdownMenu>
 
             {/* Mobile menu button */}
-            <div className="md:hidden">
-              <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(!mobileMenuOpen)}>
+            <div className="lg:hidden">
+              <Button variant="ghost" size="sm" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label={mobileMenuOpen ? "Close menu" : "Open menu"} aria-expanded={mobileMenuOpen}>
                 {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
               </Button>
             </div>
@@ -180,7 +178,7 @@ export function Navbar() {
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
               {navigation.map((item) => {
                 const isActive = isSection(pathname, item.href)

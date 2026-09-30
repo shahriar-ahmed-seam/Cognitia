@@ -1,3 +1,4 @@
+import { ensureUsername } from "../modules/profiles/username.js";
 import express from "express";
 import bcrypt from "bcryptjs";
 import { body } from "express-validator";
@@ -45,7 +46,7 @@ router.post(
       const hashedPassword = await bcrypt.hash(password, 12);
 
       // Store user with OTP
-      await prisma.user.create({
+      const created = await prisma.user.create({
         data: {
           name,
           email,
@@ -54,12 +55,14 @@ router.post(
           bio: bio || "",
           institution: institution || "",
           avatar: req.file ? req.file.buffer : null,
+          avatarUpdatedAt: req.file ? new Date() : null,
           otp,
           otpExpires,
           verified: false,
         },
       });
 
+      await ensureUsername(created);
       await sendOtpEmail(email, otp); // ✅ send real email
       res.status(201).json({ message: "OTP sent to email. Please verify to complete registration." });
     } catch (err) {
@@ -126,7 +129,9 @@ router.post("/login", [
     });
 
     const token = generateToken(user);
-    res.json({ message: "Login successful", user: { ...user, password: undefined }, token });
+    // Never send the password hash, the OTP or the avatar bytes
+    const { password: _password, otp: _otp, otpExpires: _otpExpires, avatar: _avatar, ...safeUser } = user;
+    res.json({ message: "Login successful", user: safeUser, token });
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: "Login failed" });

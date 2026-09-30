@@ -2,6 +2,8 @@ import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import { prisma } from "../lib/database.js";
 import bcrypt from "bcryptjs";
+import { randomBytes } from "node:crypto";
+import { ensureUsername } from "../modules/profiles/username.js";
 
 // Ensure environment variables are loaded
 const clientID = process.env.GOOGLE_CLIENT_ID || "test-client-id";
@@ -25,8 +27,9 @@ passport.use(
 
                 // If user not found, create new user
                 if (!user) {
-                    // const avatarBuffer = Buffer.from([]); // empty buffer for avatar
-                    const hashedDummyPassword = await bcrypt.hash("Password123", 12);
+                    // Google accounts sign in through Google. The password column needs a value, so store
+                    // the hash of a random secret nobody knows (a fixed one would let anyone log in as them).
+                    const hashedDummyPassword = await bcrypt.hash(randomBytes(32).toString("base64url"), 12);
 
                     user = await prisma.user.create({
                         data: {
@@ -42,6 +45,7 @@ passport.use(
                             verified: true,                      // already verified on Google signup
                         },
                     });
+                    await ensureUsername(user);
                 }
 
                 return done(null, user);

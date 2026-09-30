@@ -195,8 +195,8 @@ describe("API Route Structure", () => {
     expect(response.status).not.toBe(404);
   });
 
-  it("should have Q&A routes available", async () => {
-    const response = await request(app).get("/api/qa");
+  it("should have community routes available", async () => {
+    const response = await request(app).get("/api/community/feed");
     // Should require authentication, not be 404
     expect(response.status).not.toBe(404);
   });

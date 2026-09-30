@@ -29,10 +29,10 @@ const mockPrisma = {
     findMany: mockStudySessionFindMany,
     aggregate: mockStudySessionAggregate,
   },
-  question: {
+  post: {
     findMany: mockQuestionFindMany,
   },
-  answer: {
+  reply: {
     findMany: mockAnswerFindMany,
     count: mockAnswerCount,
   },

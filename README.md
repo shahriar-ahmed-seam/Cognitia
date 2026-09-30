@@ -25,12 +25,12 @@ Share notes, ask and answer questions, sit practice exams with AI answer checkin
 | Area | What students can do |
 |---|---|
 | **Notes** | Upload PDF notes into groups, keep them private or make them public, browse and read classmates' public notes in the app |
-| **Q&A** | Ask course questions, answer, upvote and downvote, filter by subject |
+| **Community** | Spaces for courses, departments, batches, clubs, topics and private study groups, with roles, join requests and per-type posting rules. Questions with voted answers, accepted answers and reputation; discussions, polls, resources and announcements with photos, video and documents. Events with RSVPs, reminders and one-click "Add to my plan". A ranked "For you" feed plus Following, Latest and Top, full-text search, AI draft answers, thread summaries and event details read from pasted notices, and moderation with reports ([design](docs/product/community.md)) |
 | **Exam practice** | Sit class tests, term final mocks (two sections, answer any N) and topic drills built from a bank of engineering questions, or papers the AI writes from your topics or pasted lecture notes. Exam mode or check-as-you-go practice mode, server-timed with autosave and photo answers. Written answers are checked by AI against a rubric, criterion by criterion, and you can mark them yourself when it's unsure. Results with BUET letter grades, section and topic breakdowns, full answer review, "retry my mistakes", topic mastery, streaks and shareable papers ([design](docs/product/practice.md)) |
 | **Contests** | Quizzes, mock CTs, weekly challenges, aptitude and olympiad rounds with six question types, including written answers (typed or photos of handwritten work), math and images, sections, negative marking and partial credit. Fixed or flexible time windows; public, institution-only or invite-only access. Autosaving contest arena, live and final standings, answer review with feedback, practice mode, certificates, and Elo-style contest ratings with university rankings. Organizers (teachers, CRs, club leads) run contests with a team of editors and graders: authoring, a grading desk with optional AI grading (Cognitia's AI or their own key), clarifications, announcements, integrity checks, rejudging and CSV export ([design](docs/product/contests.md)) |
 | **Study plan** | Track tasks with priorities and due dates, and plan study sessions. AI scheduling is being rebuilt as part of the Study Engine |
 | **Notifications** | Get updates on answers, votes, contests, deadlines and sign-ins |
-| **Profiles** | Manage academic profile details (institution, level and term, major) and avatar |
+| **Profiles** | Public profiles with a username, cover and photo, headline, links and skills; reputation, badges, expertise by tag, contest rating, spaces, posts and answers; follow people and see who follows you |
 
 ## Architecture
 
@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 - **`apps/web`**: Next.js App Router frontend with Tailwind CSS, shadcn/ui (Radix) and Framer Motion.
-- **`apps/api`**: Express REST API, Prisma ORM on PostgreSQL, JWT auth with Google OAuth, email OTP verification, a notification WebSocket endpoint and a per-minute job that runs the contest lifecycle (reminders, auto-submit, finalizing, ratings), submits expired practice papers, and works through the AI queues that grade written contest answers and check written practice answers. Endpoint references are in [`apps/api/docs/api/`](apps/api/docs/api/).
+- **`apps/api`**: Express REST API, Prisma ORM on PostgreSQL, JWT auth with Google OAuth, email OTP verification, a notification WebSocket endpoint and a per-minute job that runs the contest lifecycle (reminders, auto-submit, finalizing, ratings), submits expired practice papers, sends community event reminders, cleans up unattached uploads, and works through the AI queues that grade written contest answers, check written practice answers and draft community answers. Community uploads are stored on disk (`UPLOAD_DIR`). Endpoint references are in [`apps/api/docs/api/`](apps/api/docs/api/).
 - **`apps/ai`**: Flask service that builds study schedules with DeepSeek. It falls back to a local heuristic when no API key is set.
 
 ## Repository layout
@@ -97,7 +97,10 @@ At minimum, set these three:
 For AI features, also set in `apps/api/.env`:
 - `AI_PLATFORM_API_KEY`: a DeepSeek key for Cognitia's own AI (the other `AI_PLATFORM_*` values have working defaults). It grades written contest answers, writes practice papers and checks written practice answers. Without it, contest answers are graded by organizers only (or with organizers' own keys), practice papers come from the bank, and students mark their written practice answers themselves.
 - `AI_PRACTICE_DAILY_PAPERS` (default 8) and `AI_PRACTICE_DAILY_CHECKS` (default 100): AI papers and answer checks per student in any 24 hours.
+- `AI_COMMUNITY_DAILY` (default 20): community AI requests (draft answers, thread summaries, event details) per student per day.
 - `AI_KEY_ENCRYPTION_SECRET` (`openssl rand -hex 32`): encrypts organizers' own AI keys. Without it they can't save keys.
+
+Community uploads go to `apps/api/storage/uploads` unless you set `UPLOAD_DIR` (use a persistent volume in production). Private media links are signed with `MEDIA_URL_SECRET`, or `JWT_SECRET` when it isn't set.
 
 When email isn't configured, OTP codes are printed to the API console in development.
 
@@ -122,7 +125,7 @@ npm run dev
 
 ### Demo accounts
 
-The seed creates a realistic dataset for a Level 3 CSE section. It includes courses, notes (real PDFs), Q&A threads, a question bank of every question type, practice papers and results, past, live and upcoming contests, tasks, study sessions and notifications. All accounts use the password **`Cognitia@123`**.
+The seed creates a realistic dataset for a Level 3 CSE section. It includes courses, notes (real PDFs), community spaces (courses, department, section, clubs, topics and a private study group) with questions, answers, discussions, polls, resources and upcoming events, follows and reputation, a question bank of every question type, practice papers and results, past, live and upcoming contests, tasks, study sessions and notifications. All accounts use the password **`Cognitia@123`**.
 
 | Role | Email |
 |---|---|
@@ -145,6 +148,8 @@ The seed has contests in every state, with times relative to when you seed:
 - one cancelled contest and one draft
 
 The student also has a few weeks of exam practice: an OS class test taken twice (26% then 73%), a term final mock with an AI-checked, a self-marked and an unmarked written answer, practice-mode drills, an AI-written paper from lecture notes and one that failed, a paper in progress, and a Networks set Tasnim shared by link that several classmates took.
+
+In the community, the student is `@nafis`. They're in ten spaces and own the private OS CT-3 study group, which has a join request waiting. Tasnim's announcement in CSE '21 Section A moves CT-3 and comes with an event to add to your plan, and more events are coming up (a distributed systems seminar, an inter-university mock round, an Arduino workshop, a career fair and a scholarship deadline). There are answered and unanswered questions, some with AI draft answers, polls, a formula sheet PDF, anonymous posts, and a spam post in Competitive Programming reported twice for the moderation queue. Profiles are at `/profile/<username>`, for example `/profile/drfarhana` (the OS teacher, `admin@cognitia.test`).
 
 Re-run `npm run db:seed` to reset them.
 

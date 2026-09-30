@@ -16,8 +16,6 @@ import analyticsRoutes from "./routes/analytics.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import tasksRoutes from "./routes/tasks.js";
 import notesRoutes from "./routes/notes.js";
-import qnaRoutes from "./routes/qa.js";
-import profileRoutes from "./routes/profile.js";
 import notificationsRouter from "./routes/notifications.js";
 import contestRoutes from "./modules/contests/participant.routes.js";
 import contestOrganizerRoutes from "./modules/contests/organizer.routes.js";
@@ -25,6 +23,10 @@ import contestAdminRoutes from "./modules/contests/admin.routes.js";
 import aiRoutes from "./modules/ai/routes.js";
 import practiceRoutes from "./modules/practice/routes.js";
 import { getPublicAsset } from "./modules/contests/service.js";
+import communityRoutes from "./modules/community/routes.js";
+import { servePublicMedia, serveSignedMedia } from "./modules/community/media.service.js";
+import { meRouter as profileRoutes, usersRouter } from "./modules/profiles/routes.js";
+import { avatarFile } from "./modules/profiles/service.js";
 
 const app = express();
 
@@ -146,6 +148,20 @@ app.get("/api/public/contest-assets/:id", async (req, res) => {
   res.send(Buffer.from(asset.data));
 });
 
+// Community media: signed links (checked in the handler) so <img> and <video> work without a token
+app.get("/api/media/:id", serveSignedMedia);
+// Profile covers and space images
+app.get("/api/public/media/:id", servePublicMedia);
+app.get("/api/public/avatars/:userId", async (req, res) => {
+  const data = await avatarFile(req.params.userId);
+  res.setHeader("Content-Type", await detectMimeType(data));
+  // The URL carries ?v=<updatedAt>, so a changed avatar gets a new URL
+  res.setHeader("Cache-Control", req.query.v ? "public, max-age=31536000, immutable" : "public, max-age=300");
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(data);
+});
+
 // Authentication routes
 app.use("/api/auth", authRoutes);
 app.use("/api/notifications", authenticateToken, notificationsRouter);
@@ -157,8 +173,9 @@ app.use("/api/tasks", authenticateToken, tasksRoutes);
 app.use("/api/practice", authenticateToken, practiceRoutes);
 app.use("/api/notes", authenticateToken, notesRoutes);
 app.use("/api/contests", authenticateToken, contestRoutes);
-app.use("/api/qa", authenticateToken, qnaRoutes);
+app.use("/api/community", authenticateToken, communityRoutes);
 app.use("/api/profile", authenticateToken, profileRoutes);
+app.use("/api/users", authenticateToken, usersRouter);
 
 // Organizer console (team roles are checked per contest) and admin tools
 app.use("/api/organizer/contests", authenticateToken, contestOrganizerRoutes);

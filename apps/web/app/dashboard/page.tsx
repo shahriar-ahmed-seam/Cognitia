@@ -330,7 +330,7 @@ export default function DashboardPage() {
                     <Brain className="h-6 w-6 text-purple-600 animate-pulse" />
                     Recent Questions
                   </CardTitle>
-                  <Link href="/qa">
+                  <Link href="/community">
                     <Button variant="outline" size="sm" className="hover:bg-purple-50 bg-transparent">
                       View All
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -344,7 +344,7 @@ export default function DashboardPage() {
                     .filter(q => q.author.id === dashboardData.currentUser.id)
                     .slice(0, 5)
                     .map((question, index) => (
-                      <Link key={question.id} href={`/question/${question.id}`}>
+                      <Link key={question.id} href={`/community/post/${question.id}`}>
                         <div
                           className="p-4 bg-gradient-to-r from-white to-purple-50/30 rounded-lg border border-purple-100 hover:border-purple-300 hover:shadow-lg transform hover:scale-[1.02] transition-all duration-300 cursor-pointer animate-slide-in-up"
                           style={{ animationDelay: `${index * 100}ms` }}
@@ -381,7 +381,7 @@ export default function DashboardPage() {
                   {[
                     { title: "Create Study Plan", href: "/study-plan", icon: Target, color: "emerald" },
                     { title: "Join Contest", href: "/contests", icon: Trophy, color: "orange" },
-                    { title: "Ask Question", href: "/qa", icon: Brain, color: "purple" },
+                    { title: "Ask the community", href: "/community", icon: Brain, color: "purple" },
                     { title: "Browse Notes", href: "/notes", icon: BookOpen, color: "blue" },
                   ].map((action, index) => (
                     <Link key={action.title} href={action.href}>

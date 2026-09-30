@@ -7,6 +7,9 @@ import * as engine from "../src/modules/contests/engine.js";
 import * as practice from "../src/modules/practice/engine.js";
 import { applyRatings, computeRanks } from "../src/modules/contests/service.js";
 import { createPdf } from "./seed/pdf.js";
+import { seedCommunity } from "./seed/community.js";
+import { deleteStored } from "../src/lib/storage.js";
+import { ensureUsername } from "../src/modules/profiles/username.js";
 import { questionBank } from "./seed/questions.js";
 import { contestDefinitions, contestQuestions } from "./seed/contests.js";
 import { aiPaperRows, practiceBankRows } from "./seed/practice.js";
@@ -14,7 +17,6 @@ import {
   DEMO_PASSWORD,
   users,
   noteGroups,
-  qaThreads,
   studentTasks,
   classmateTaskTemplates,
   projectBrief,
@@ -59,10 +61,14 @@ function atDay(dayOffset, hour, minute = 0) {
 async function clearDatabase() {
   // Children first
   await prisma.sessionFeedback.deleteMany();
-  await prisma.answerVote.deleteMany();
-  await prisma.questionVote.deleteMany();
-  await prisma.answer.deleteMany();
-  await prisma.question.deleteMany();
+  // Community files live on disk: remove the ones the database knows about
+  for (const media of await prisma.mediaFile.findMany({ select: { storageKey: true } })) await deleteStored(media.storageKey).catch(() => undefined);
+  await prisma.mediaFile.deleteMany();
+  await prisma.contentReport.deleteMany();
+  await prisma.post.deleteMany();
+  await prisma.space.deleteMany();
+  await prisma.follow.deleteMany();
+  await prisma.userInterest.deleteMany();
   await prisma.availability.deleteMany();
   await prisma.questionReport.deleteMany();
   await prisma.practiceAsset.deleteMany();
@@ -115,6 +121,8 @@ async function seedUsers(passwordHash) {
   for (const member of users.community) {
     people[member.key] = await create(member, { createdAt: ago(randomInt(40, 200) * DAY) });
   }
+  // Handles for everyone (the community seed replaces some with nicer ones)
+  for (const person of Object.values(people)) await ensureUsername(person);
   const pending = await create(users.pending, {
     verified: false,
     otp: "482913",
@@ -807,55 +815,6 @@ async function seedNotes(people) {
   return { groups: noteGroups.length, notes: noteCount };
 }
 
-async function seedQa(people) {
-  const everyone = Object.keys(people);
-  const counts = { questions: 0, answers: 0, questionVotes: 0, answerVotes: 0 };
-
-  for (const thread of qaThreads) {
-    const questionCreated = ago(thread.daysAgo * DAY + 6 * HOUR);
-    const question = await prisma.question.create({
-      data: {
-        title: thread.title,
-        body: thread.body,
-        tags: thread.tags,
-        subject: thread.subject,
-        views: thread.views,
-        authorId: people[thread.author].id,
-        createdAt: questionCreated,
-      },
-    });
-    counts.questions++;
-
-    // Upvotes scale with views; a few downvotes for realism
-    const voters = shuffle(everyone.filter((key) => key !== thread.author)).slice(0, Math.min(8, Math.round(thread.views / 18)));
-    for (const key of voters) {
-      await prisma.questionVote.create({
-        data: { questionId: question.id, userId: people[key].id, voteType: random() < 0.88 ? "UP" : "DOWN", createdAt: later(questionCreated, randomInt(1, 20) * HOUR) },
-      });
-      counts.questionVotes++;
-    }
-
-    for (const [index, reply] of thread.answers.entries()) {
-      let answerCreated = ago(reply.daysAgo * DAY + randomInt(0, 4) * HOUR);
-      if (answerCreated <= questionCreated) answerCreated = later(questionCreated, (index + 1) * 40 * MINUTE);
-      if (answerCreated >= now) answerCreated = later(now, -5 * MINUTE);
-      const answer = await prisma.answer.create({
-        data: { content: reply.content, questionId: question.id, authorId: people[reply.author].id, createdAt: answerCreated, updatedAt: answerCreated },
-      });
-      counts.answers++;
-
-      const answerVoters = shuffle(everyone.filter((key) => key !== reply.author)).slice(0, Math.max(0, randomInt(1, 6) - index));
-      for (const key of answerVoters) {
-        await prisma.answerVote.create({
-          data: { answerId: answer.id, userId: people[key].id, voteType: random() < 0.9 ? "UP" : "DOWN", createdAt: later(answerCreated, randomInt(1, 12) * HOUR) },
-        });
-        counts.answerVotes++;
-      }
-    }
-  }
-  return counts;
-}
-
 async function seedStudyPlan(people) {
   const student = people.student;
   const taskIds = {};
@@ -980,7 +939,12 @@ async function seedStudyPlan(people) {
   return { tasks: taskCount, sessions: sessionCount, feedback: feedbackCount, availability: availabilityCount };
 }
 
-async function seedNotifications(people, contests) {
+async function seedNotifications(people, contests, community) {
+  const post = (key) => `/community/post/${community.postIds[key]}`;
+  const thread = async (title) => `/community/post/${(await prisma.post.findFirst({ where: { title }, select: { id: true } })).id}`;
+  const prioritize = await thread("Three chapters, two days until the CT. How do you prioritize?");
+  const belady = await thread("Why does FIFO show Belady's anomaly but LRU never does?");
+  const subnet = await thread("Which subnet mask do I need for 500 hosts?");
   const sprint = contests.osNet;
   const [mine, ranked, change] = await Promise.all([
     prisma.contestParticipant.findUnique({ where: { contestId_userId: { contestId: sprint.id, userId: people.student.id } } }),
@@ -997,16 +961,19 @@ async function seedNotifications(people, contests) {
     { type: "CONTEST_CANCELLED", title: "Contest cancelled", message: "Signals and Systems Quiz was cancelled: The organizing teacher is away this week.", at: 5 * HOUR, read: false, link: link("signals") },
     { type: "TASK_OVERDUE", title: "Past due", message: "OS Lab 4: mini shell with pipes was due yesterday at 11:59 PM.", at: 8 * HOUR, read: false },
     { type: "SESSION_ADDED", title: "Today's plan", message: "3 study sessions are planned for today.", at: 10 * HOUR, read: false },
-    { type: "QUESTION_REPLIED", title: "New answer", message: "Tasnim Akter answered your question \"Three chapters, two days until the CT. How do you prioritize?\"", at: 20 * HOUR, read: false },
-    { type: "QUESTION_POSTED", title: "Question posted", message: "Your question \"Three chapters, two days until the CT. How do you prioritize?\" is live.", at: 1 * DAY + 6 * HOUR, read: true },
+    { type: "COMMUNITY_ANSWER", title: "Tasnim Akter answered your question", message: "Three chapters, two days until the CT. How do you prioritize?", at: 20 * HOUR, read: false, link: prioritize },
+    { type: "COMMUNITY_POST", title: "CSE '21 Section A: Tasnim Akter announced", message: "OS CT-3 moved to Sunday 10 am", at: 5 * HOUR, read: false, link: post("ctMoved") },
+    { type: "COMMUNITY_SPACE", title: "Join request for OS CT-3 Study Group", message: "Tanvir Islam asked to join.", at: 3 * HOUR, read: false, link: "/community/s/os-ct3-study-group?tab=members&status=PENDING" },
+    { type: "COMMUNITY_FOLLOW", title: "Arif Hossain followed you", message: "Competitive programmer, Codeforces Expert. Ask me about DP.", at: 2 * DAY, read: true, link: "/profile/arif" },
+    { type: "COMMUNITY_EVENT", title: "Coming up: Seminar on distributed systems", message: "Seminar room, ECE building, 4th floor", at: 30 * MINUTE, read: false, link: post("seminar") },
     { type: "SESSION_STARTED", title: "Session started", message: "Study session started: Page replacement numericals (FIFO, LRU, OPT).", at: 1 * DAY + 4 * HOUR, read: true },
     { type: "LOGIN", title: "New sign-in", message: "Your account was signed in from Chrome on Linux.", at: 1 * DAY, read: true },
-    { type: "QUESTION_UPVOTED", title: "Upvotes on your question", message: "Your question about Belady's anomaly received new upvotes.", at: 2 * DAY, read: true },
+    { type: "COMMUNITY_VOTE", title: "Your question reached 5 upvotes", message: "Why does FIFO show Belady's anomaly but LRU never does?", at: 2 * DAY, read: true, link: belady },
     { type: "CONTEST_REGISTERED", title: "You're registered", message: "Weekly Algorithms Challenge #12 starts today at 9 PM.", at: 2 * DAY + 5 * HOUR, read: true, link: link("algo12") },
     { type: "TASK_COMPLETED", title: "Task completed", message: "DBMS Lab 3: triggers and stored procedures is marked complete.", at: 3 * DAY, read: true },
     { type: "NOTE_UPLOADED", title: "New note", message: "Mehjabin Chowdhury uploaded \"SQL Joins Quick Reference\" to Database Systems.", at: 4 * DAY, read: true },
     { type: "TASK_STARTED", title: "Task started", message: "You started OS CT-3: Memory management (Ch 8-9).", at: 4 * DAY + 2 * HOUR, read: true },
-    { type: "ANSWER_UPVOTED", title: "Upvotes on your answer", message: "Your answer on \"Which subnet mask do I need for 500 hosts?\" received new upvotes.", at: 5 * DAY, read: true },
+    { type: "COMMUNITY_ACCEPTED", title: "Your answer was accepted", message: "Which subnet mask do I need for 500 hosts? +15 reputation.", at: 5 * DAY, read: true, link: subnet },
     { type: "TASK_ADDED", title: "Task added", message: "DBMS project: booking module API was added to your study plan.", at: 6 * DAY, read: true },
     { type: "CONTEST_RANKING", title: "Results are out", message: `You placed #${mine.rank} of ${ranked} in OS and Networks Sprint.${ratingText}`, at: 7 * DAY - 2 * HOUR, read: true, link: link("osNet", "?tab=results") },
     { type: "CONTEST_UNREGISTERED", title: "Unregistered", message: "You unregistered from Digital Logic Quiz Night.", at: 15 * DAY, read: true, link: link("dlQuiz") },
@@ -1015,7 +982,7 @@ async function seedNotifications(people, contests) {
     { type: "CONTEST_CLARIFICATION", title: "Clarification requested", message: "Zarif Rahman asked about Weekly Algorithms Challenge #12.", at: 7 * MINUTE, read: false, link: `/contests/manage/${contests.algo12.id}?tab=communication` },
     { type: "CONTEST_ENDED", title: "Results waiting for review", message: "Software Engineering Case Quiz has ended. Review the results and publish them when ready.", at: 2 * HOUR, read: false, link: `/contests/manage/${contests.seQuiz.id}?tab=results` },
     { type: "CONTEST_REGISTERED", title: "New registrations", message: "5 students registered for Database Systems Speed Round.", at: 5 * HOUR, read: false, link: `/contests/manage/${contests.dbSpeed.id}?tab=participants` },
-    { type: "QUESTION_POSTED", title: "New question", message: "Anika Sultana asked \"How does Linux clone() decide between a thread and a process?\"", at: 6 * HOUR, read: false },
+    { type: "COMMUNITY_MODERATION", title: "Reports in Competitive Programming", message: "\"Assignment and lab report help, fast delivery, cheap\" was reported twice", at: 2 * HOUR, read: false, link: "/community/s/competitive-programming?tab=moderation" },
     { type: "CONTEST_ENDED", title: "Grading needed", message: "CSE 313 Written Quiz: Deadlocks has ended. The AI suggested grades for most written answers; approve or adjust them on the grading desk.", at: 85 * MINUTE, read: false, link: `/contests/manage/${contests.deadlockCt.id}?tab=grading` },
     { type: "PASSWORD_CHANGED", title: "Password changed", message: "Your password was changed. If this wasn't you, contact support.", at: 30 * DAY, read: true },
   ];
@@ -1052,9 +1019,9 @@ async function main() {
   const practiceCounts = await seedPractice(bank, people, extras);
   const { contests, counts: contestCounts } = await seedContests(mcq, people);
   const notes = await seedNotes(people);
-  const qa = await seedQa(people);
+  const community = await seedCommunity({ prisma, people, contests, h: { ago, later, atDay, random, randomInt, shuffle, MINUTE, HOUR, DAY, now } });
   const studyPlan = await seedStudyPlan(people);
-  const notifications = await seedNotifications(people, contests);
+  const notifications = await seedNotifications(people, contests, community);
 
   console.table({
     users: Object.keys(people).length + 1,
@@ -1071,10 +1038,13 @@ async function main() {
     contestRatings: await prisma.contestRating.count(),
     notesGroups: notes.groups,
     notes: notes.notes,
-    questions: qa.questions,
-    answers: qa.answers,
-    questionVotes: qa.questionVotes,
-    answerVotes: qa.answerVotes,
+    spaces: community.counts.spaces,
+    spaceMembers: community.counts.members,
+    posts: community.counts.posts,
+    replies: community.counts.replies,
+    votes: community.counts.votes,
+    mediaFiles: community.counts.media,
+    follows: community.counts.follows,
     tasks: studyPlan.tasks,
     studySessions: studyPlan.sessions,
     sessionFeedback: studyPlan.feedback,
