@@ -8,40 +8,44 @@ datasource db {
 }
 
 model User {
-  id                   String                @id @default(cuid())
-  email                String                @unique
-  name                 String
-  password             String
-  role                 UserRole              @default(STUDENT)
-  bio                  String?
-  institution          String?
-  location             String?
-  website              String?
-  createdAt            DateTime              @default(now())
-  updatedAt            DateTime              @updatedAt
-  otp                  String?
-  otpExpires           DateTime?
-  verified             Boolean               @default(false)
-  grade                String?
-  graduationYear       Int?
-  major                String?
-  avatar               Bytes?
-  answerVotes          AnswerVote[]
-  answers              Answer[]
-  availabilities       Availability[]
-  contestAttempts      ContestAttempt[]
-  contestRegistrations ContestRegistration[]
-  contests             Contest[]
-  modelTests           ModelTest[]
-  notes                Note[]
-  notesGroups          NotesGroup[]
-  notifications        Notification[]
-  questionVotes        QuestionVote[]
-  questions            Question[]
-  sessionFeedbacks     SessionFeedback[]
-  sessions             StudySession[]
-  tasks                Task[]
-  testAttempts         TestAttempt[]
+  id                     String                 @id @default(cuid())
+  email                  String                 @unique
+  name                   String
+  password               String
+  role                   UserRole               @default(STUDENT)
+  bio                    String?
+  institution            String?
+  location               String?
+  website                String?
+  createdAt              DateTime               @default(now())
+  updatedAt              DateTime               @updatedAt
+  otp                    String?
+  otpExpires             DateTime?
+  verified               Boolean                @default(false)
+  grade                  String?
+  graduationYear         Int?
+  major                  String?
+  avatar                 Bytes?
+  answerVotes            AnswerVote[]
+  answers                Answer[]
+  availabilities         Availability[]
+  contestsCreated        Contest[]              @relation("ContestCreator")
+  contestParticipations  ContestParticipant[]
+  contestAnnouncements   ContestAnnouncement[]
+  clarificationsAsked    ContestClarification[] @relation("ClarificationAsker")
+  clarificationsAnswered ContestClarification[] @relation("ClarificationResponder")
+  contestRating          ContestRating?
+  contestRatingChanges   ContestRatingChange[]
+  modelTests             ModelTest[]
+  notes                  Note[]
+  notesGroups            NotesGroup[]
+  notifications          Notification[]
+  questionVotes          QuestionVote[]
+  questions              Question[]
+  sessionFeedbacks       SessionFeedback[]
+  sessions               StudySession[]
+  tasks                  Task[]
+  testAttempts           TestAttempt[]
 
   @@map("users")
 }
@@ -241,11 +245,14 @@ model Notification {
   type      NotificationType
   title     String
   message   String
+  // Optional in-app path the notification opens, e.g. /contests/abc/results
+  link      String?
   isRead    Boolean          @default(false)
   userId    String
   createdAt DateTime         @default(now())
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([userId, createdAt])
   @@map("notifications")
 }
 
@@ -265,75 +272,241 @@ model QuestionBank {
   @@map("question_banks")
 }
 
+// Links a bank question to a model test
 model QuestionAssignment {
   id          String       @id @default(cuid())
   questionId  String
   modelTestId String?
-  contestId   String?
   points      Int          @default(5)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
-  contest     Contest?     @relation(fields: [contestId], references: [id])
   modelTest   ModelTest?   @relation(fields: [modelTestId], references: [id], onDelete: Cascade)
   question    QuestionBank @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@map("question_assignments")
 }
 
-model Contest {
-  id            String                @id @default(cuid())
-  title         String
-  description   String
-  startTime     DateTime
-  endTime       DateTime
-  status        ContestStatus         @default(UPCOMING)
-  difficulty    Difficulty            @default(MEDIUM)
-  participants  Int                   @default(0)
-  topics        String[]              @default([])
-  eligibility   String?
-  createdAt     DateTime              @default(now())
-  updatedAt     DateTime              @default(now())
-  createdBy     String?
-  attempts      ContestAttempt[]
-  registrations ContestRegistration[]
-  creator       User?                 @relation(fields: [createdBy], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "Contest_createdBy_fkey")
-  assignments   QuestionAssignment[]
+// ---------------------------------------------------------------------------
+// Contests
+// The contest phase (draft, upcoming, live, ended, results, cancelled) is always
+// computed from the timestamps below, never stored.
+// ---------------------------------------------------------------------------
 
+model Contest {
+  id          String      @id @default(cuid())
+  title       String
+  summary     String
+  description String      @default("")
+  rules       String      @default("")
+  kind        ContestKind @default(QUIZ)
+  difficulty  Difficulty  @default(MEDIUM)
+  subjects    String[]    @default([])
+  topics      String[]    @default([])
+  hostName    String?
+
+  timing               ContestTiming @default(FIXED)
+  startsAt             DateTime
+  endsAt               DateTime
+  // FIXED: length of the window. FLEXIBLE: personal time limit once started.
+  durationMinutes      Int
+  registrationClosesAt DateTime?
+
+  visibility  ContestVisibility @default(PUBLIC)
+  institution String?
+  accessCode  String?
+  capacity    Int?
+
+  // Fraction of a question's points deducted for a wrong answer (0.25 = quarter mark)
+  negativeMarking  Float              @default(0)
+  shuffleQuestions Boolean            @default(true)
+  shuffleOptions   Boolean            @default(true)
+  liveStandings    Boolean            @default(true)
+  resultsMode      ContestResultsMode @default(AUTO)
+  isRated          Boolean            @default(false)
+
+  publishedAt        DateTime?
+  cancelledAt        DateTime?
+  cancelReason       String?
+  reminderSentAt     DateTime?
+  startNoticeSentAt  DateTime?
+  finalizedAt        DateTime?
+  resultsPublishedAt DateTime?
+  ratingsAppliedAt   DateTime?
+
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  createdBy      User?                  @relation("ContestCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  questions      ContestQuestion[]
+  participants   ContestParticipant[]
+  announcements  ContestAnnouncement[]
+  clarifications ContestClarification[]
+  ratingChanges  ContestRatingChange[]
+
+  @@index([startsAt])
+  @@index([endsAt])
   @@map("contests")
 }
 
-model ContestRegistration {
-  id               String   @id @default(cuid())
+// A contest's own copy of each question, so later question-bank edits never
+// change a contest that already ran.
+model ContestQuestion {
+  id               String              @id @default(cuid())
   contestId        String
-  userId           String
-  registrationTime DateTime @default(now())
-  contest          Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  order            Int
+  type             ContestQuestionType
+  prompt           String
+  // Choice types: string[] of option texts
+  options          Json?
+  // Answer key, shape depends on type (see modules/contests/engine.js)
+  answer           Json
+  explanation      String?
+  points           Int                 @default(1)
+  partialCredit    Boolean             @default(false)
+  subject          String?
+  topics           String[]            @default([])
+  difficulty       Difficulty          @default(MEDIUM)
+  sourceQuestionId String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
 
-  @@unique([contestId, userId])
-  @@map("contest_registrations")
+  contest        Contest                @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  answers        ContestAnswer[]
+  clarifications ContestClarification[]
+
+  @@index([contestId, order])
+  @@map("contest_questions")
 }
 
-model ContestAttempt {
-  id             String        @id @default(cuid())
-  status         AttemptStatus @default(IN_PROGRESS)
-  startTime      DateTime      @default(now())
-  endTime        DateTime?
-  timeSpent      Int?
-  score          Int?
-  correctAnswers Int?
-  totalQuestions Int
-  answers        Json          @default("{}")
-  contestId      String
-  userId         String
-  lastActivity   DateTime?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @default(now())
-  contest        Contest       @relation(fields: [contestId], references: [id], onDelete: Cascade)
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+// Registration and attempt in one row
+model ContestParticipant {
+  id            String                   @id @default(cuid())
+  contestId     String
+  userId        String
+  status        ContestParticipantStatus @default(REGISTERED)
+  registeredAt  DateTime                 @default(now())
+  startedAt     DateTime?
+  deadlineAt    DateTime?
+  submittedAt   DateTime?
+  autoSubmitted Boolean                  @default(false)
+  // Per-participant seed for question and option order
+  seed          Int                      @default(0)
+
+  score         Float     @default(0)
+  correctCount  Int       @default(0)
+  partialCount  Int       @default(0)
+  wrongCount    Int       @default(0)
+  answeredCount Int       @default(0)
+  lastAnswerAt  DateTime?
+  // Tie-breaker: seconds from start to the last saved answer
+  timeTakenSec  Int?
+  rank          Int?
+
+  focusLossCount   Int       @default(0)
+  disqualifiedAt   DateTime?
+  disqualifyReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  contest Contest         @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers ContestAnswer[]
 
   @@unique([contestId, userId])
-  @@map("contest_attempts")
+  @@index([contestId, status])
+  @@index([userId])
+  @@map("contest_participants")
+}
+
+model ContestAnswer {
+  id            String        @id @default(cuid())
+  participantId String
+  questionId    String
+  // null when the question is only flagged for review
+  response      Json?
+  flagged       Boolean       @default(false)
+  verdict       AnswerVerdict @default(UNANSWERED)
+  score         Float         @default(0)
+  answeredAt    DateTime      @default(now())
+
+  participant ContestParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  question    ContestQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, questionId])
+  @@index([questionId])
+  @@map("contest_answers")
+}
+
+model ContestAnnouncement {
+  id        String   @id @default(cuid())
+  contestId String
+  authorId  String?
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  author  User?   @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([contestId, createdAt])
+  @@map("contest_announcements")
+}
+
+model ContestClarification {
+  id           String    @id @default(cuid())
+  contestId    String
+  questionId   String?
+  askedById    String
+  question     String
+  answer       String?
+  answeredById String?
+  answeredAt   DateTime?
+  // Public answers are shown to every participant
+  isPublic     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+
+  contest         Contest          @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  contestQuestion ContestQuestion? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  askedBy         User             @relation("ClarificationAsker", fields: [askedById], references: [id], onDelete: Cascade)
+  answeredBy      User?            @relation("ClarificationResponder", fields: [answeredById], references: [id], onDelete: SetNull)
+
+  @@index([contestId, createdAt])
+  @@map("contest_clarifications")
+}
+
+// Current contest rating per user
+model ContestRating {
+  userId        String   @id
+  rating        Int      @default(1500)
+  peakRating    Int      @default(1500)
+  contestsRated Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([rating])
+  @@map("contest_ratings")
+}
+
+model ContestRatingChange {
+  id           String   @id @default(cuid())
+  contestId    String
+  userId       String
+  rank         Int
+  participants Int
+  oldRating    Int
+  newRating    Int
+  delta        Int
+  createdAt    DateTime @default(now())
+
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([contestId, userId])
+  @@index([userId, createdAt])
+  @@map("contest_rating_changes")
 }
 
 enum UserRole {
@@ -371,10 +544,49 @@ enum Priority {
   HIGH
 }
 
-enum ContestStatus {
-  UPCOMING
-  ONGOING
-  FINISHED
+enum ContestKind {
+  QUIZ
+  CHALLENGE
+  MOCK_EXAM
+  OLYMPIAD
+  APTITUDE
+}
+
+enum ContestTiming {
+  FIXED
+  FLEXIBLE
+}
+
+enum ContestVisibility {
+  PUBLIC
+  INSTITUTION
+  PRIVATE
+}
+
+enum ContestResultsMode {
+  AUTO
+  MANUAL
+}
+
+enum ContestQuestionType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  NUMERIC
+  SHORT_TEXT
+}
+
+enum ContestParticipantStatus {
+  REGISTERED
+  IN_PROGRESS
+  SUBMITTED
+}
+
+enum AnswerVerdict {
+  CORRECT
+  PARTIAL
+  WRONG
+  UNANSWERED
 }
 
 enum AttemptStatus {
@@ -397,6 +609,9 @@ enum NotificationType {
   CONTEST_STARTED
   CONTEST_ENDED
   CONTEST_RANKING
+  CONTEST_ANNOUNCEMENT
+  CONTEST_CLARIFICATION
+  CONTEST_CANCELLED
   QUESTION_UPVOTED
   ANSWER_UPVOTED
   QUESTION_POSTED

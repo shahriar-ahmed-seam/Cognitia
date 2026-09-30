@@ -1,8 +1,7 @@
 import express from "express";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "../lib/database.js";
 
 const router = express.Router();
-const prisma = new PrismaClient();
 
 // ✅ Get notifications for user
 router.get("/", async (req, res) => {

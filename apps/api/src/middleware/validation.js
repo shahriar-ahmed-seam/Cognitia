@@ -83,20 +83,6 @@ export const validateTask = [
   body("estimatedTime").optional().isInt({ min: 1 }).withMessage("Estimated time must be a positive integer"),
 ]
 
-// Contest validation
-export const validateContest = [
-  body("title").trim().isLength({ min: 5, max: 200 }).withMessage("Title must be between 5 and 200 characters"),
-  body("description")
-    .trim()
-    .isLength({ min: 10, max: 1000 })
-    .withMessage("Description must be between 10 and 1000 characters"),
-  body("startTime").isISO8601().withMessage("Start time must be a valid date"),
-  body("endTime").isISO8601().withMessage("End time must be a valid date"),
-  body("difficulty")
-    .isIn(["EASY", "MEDIUM", "HARD", "EXPERT"])
-    .withMessage("Difficulty must be EASY, MEDIUM, HARD, or EXPERT"),
-  body("topics").isArray({ min: 1 }).withMessage("Must provide at least one topic"),
-]
 
 // Model test validation
 export const validateModelTest = [

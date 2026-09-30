@@ -26,8 +26,9 @@ import dashboardRoutes from "./routes/dashboard.js";
 import tasksRoutes from "./routes/tasks.js";
 import modelTestRoutes from "./routes/modelTest.js";
 import notesRoutes from "./routes/notes.js";
-import contestRoutes from "./routes/contest.js";
-import contestAdminRoutes from "./routes/admin/contestAdmin.js";
+import contestRoutes from "./modules/contests/participant.routes.js";
+import contestOrganizerRoutes from "./modules/contests/organizer.routes.js";
+import { runContestLifecycle } from "./modules/contests/service.js";
 import qnaRoutes from "./routes/qa.js";
 import profileRoutes from "./routes/profile.js";
 import { connectDatabase } from "./lib/database.js";
@@ -192,8 +193,9 @@ app.use("/api/qa", authenticateToken, qnaRoutes);
 app.use("/api/profile", authenticateToken, profileRoutes);
 
 // Admin routes
-app.use("/api/admin/contests", authenticateToken, contestAdminRoutes);
+app.use("/api/admin/contests", authenticateToken, contestOrganizerRoutes);
 
+app.use("/api", (req, res) => res.status(404).json({ error: "Not found" }));
 app.use(errorHandler);
 
 cron.schedule("* * * * *", async () => {
@@ -201,6 +203,12 @@ cron.schedule("* * * * *", async () => {
     await autoSubmitExpiredTests();
   } catch (err) {
     console.error("Error auto-submitting test attempts:", err);
+  }
+  try {
+    // Contest reminders, start notices, expired attempts and finalization
+    await runContestLifecycle();
+  } catch (err) {
+    console.error("Contest lifecycle job failed:", err);
   }
 });
 
