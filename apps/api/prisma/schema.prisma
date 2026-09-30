@@ -36,6 +36,9 @@ model User {
   clarificationsAnswered ContestClarification[] @relation("ClarificationResponder")
   contestRating          ContestRating?
   contestRatingChanges   ContestRatingChange[]
+  contestOrganizerships  ContestOrganizer[]
+  gradedContestAnswers   ContestAnswer[]        @relation("ContestAnswerGrader")
+  aiCredentials          AiCredential[]
   modelTests             ModelTest[]
   notes                  Note[]
   notesGroups            NotesGroup[]
@@ -324,6 +327,15 @@ model Contest {
   resultsMode      ContestResultsMode @default(AUTO)
   isRated          Boolean            @default(false)
 
+  // How WRITTEN answers are graded
+  writtenGrading WrittenGradingMode @default(MANUAL)
+  aiSource       AiSource           @default(PLATFORM)
+  aiCredentialId String?
+  // Extra guidance for the AI grader, e.g. "accept either unit"
+  aiInstructions String             @default("")
+  // Hide participant names from graders
+  blindGrading   Boolean            @default(true)
+
   publishedAt        DateTime?
   cancelledAt        DateTime?
   cancelReason       String?
@@ -338,11 +350,14 @@ model Contest {
   updatedAt   DateTime @updatedAt
 
   createdBy      User?                  @relation("ContestCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  aiCredential   AiCredential?          @relation(fields: [aiCredentialId], references: [id], onDelete: SetNull)
   questions      ContestQuestion[]
   participants   ContestParticipant[]
   announcements  ContestAnnouncement[]
   clarifications ContestClarification[]
   ratingChanges  ContestRatingChange[]
+  organizers     ContestOrganizer[]
+  assets         ContestAsset[]
 
   @@index([startsAt])
   @@index([endsAt])
@@ -367,6 +382,8 @@ model ContestQuestion {
   subject          String?
   topics           String[]            @default([])
   difficulty       Difficulty          @default(MEDIUM)
+  // Optional part heading, e.g. "Part A: MCQ". Shuffling stays within a section.
+  section          String?
   sourceQuestionId String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
@@ -398,6 +415,8 @@ model ContestParticipant {
   partialCount  Int       @default(0)
   wrongCount    Int       @default(0)
   answeredCount Int       @default(0)
+  // Written answers that still need a grade
+  pendingCount  Int       @default(0)
   lastAnswerAt  DateTime?
   // Tie-breaker: seconds from start to the last saved answer
   timeTakenSec  Int?
@@ -413,6 +432,7 @@ model ContestParticipant {
   contest Contest         @relation(fields: [contestId], references: [id], onDelete: Cascade)
   user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   answers ContestAnswer[]
+  files   ContestAsset[]
 
   @@unique([contestId, userId])
   @@index([contestId, status])
@@ -431,12 +451,115 @@ model ContestAnswer {
   score         Float         @default(0)
   answeredAt    DateTime      @default(now())
 
+  // Written answers only
+  gradingStatus GradingStatus @default(NONE)
+  // Final feedback shown to the student
+  feedback      String?
+  gradeSource   GradeSource?
+  gradedById    String?
+  gradedAt      DateTime?
+  aiScore       Float?
+  aiFeedback    String?
+  aiConfidence  Float?
+  // [{ criterion, awarded, max, comment }]
+  aiBreakdown   Json?
+  aiFlags       String[]      @default([])
+  aiModel       String?
+  aiGradedAt    DateTime?
+  aiError       String?
+  aiAttempts    Int           @default(0)
+  aiClaimedAt   DateTime?
+
   participant ContestParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
   question    ContestQuestion    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  gradedBy    User?              @relation("ContestAnswerGrader", fields: [gradedById], references: [id], onDelete: SetNull)
 
   @@unique([participantId, questionId])
   @@index([questionId])
+  @@index([gradingStatus])
   @@map("contest_answers")
+}
+
+// Organizing team for a contest. The creator is the OWNER.
+model ContestOrganizer {
+  contestId String
+  userId    String
+  role      ContestOrganizerRole @default(EDITOR)
+  addedById String?
+  createdAt DateTime             @default(now())
+
+  contest Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([contestId, userId])
+  @@index([userId])
+  @@map("contest_organizers")
+}
+
+// Uploaded images. QUESTION assets are served by id without auth (ids are unguessable);
+// ANSWER assets (handwritten work) are only served to their author and the organizers.
+model ContestAsset {
+  id            String           @id @default(cuid())
+  contestId     String
+  kind          ContestAssetKind
+  uploaderId    String?
+  participantId String?
+  questionId    String?
+  mimeType      String
+  size          Int
+  data          Bytes
+  createdAt     DateTime         @default(now())
+
+  contest     Contest             @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  participant ContestParticipant? @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([contestId])
+  @@index([participantId, questionId])
+  @@map("contest_assets")
+}
+
+// An organizer's own AI provider key, encrypted at rest (AES-256-GCM)
+model AiCredential {
+  id            String     @id @default(cuid())
+  ownerId       String
+  label         String
+  provider      AiProvider
+  baseUrl       String
+  model         String
+  keyCiphertext String
+  keyLast4      String
+  lastUsedAt    DateTime?
+  lastTestedAt  DateTime?
+  lastTestOk    Boolean?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  owner    User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  contests Contest[]
+
+  @@index([ownerId])
+  @@map("ai_credentials")
+}
+
+// One row per AI request, for quotas and cost tracking
+model AiUsage {
+  id               String   @id @default(cuid())
+  // Who the request counts against (the contest owner for platform AI)
+  userId           String?
+  contestId        String?
+  // null = Cognitia platform AI
+  credentialId     String?
+  purpose          String
+  model            String
+  promptTokens     Int      @default(0)
+  completionTokens Int      @default(0)
+  success          Boolean
+  error            String?
+  createdAt        DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([contestId])
+  @@map("ai_usage")
 }
 
 model ContestAnnouncement {
@@ -511,6 +634,8 @@ model ContestRatingChange {
 
 enum UserRole {
   STUDENT
+  // Teachers, CRs and club leads who can host contests
+  ORGANIZER
   ADMIN
 }
 
@@ -574,6 +699,53 @@ enum ContestQuestionType {
   TRUE_FALSE
   NUMERIC
   SHORT_TEXT
+  // Typed and/or handwritten (photo) answer, graded by organizers or AI
+  WRITTEN
+}
+
+enum ContestOrganizerRole {
+  OWNER
+  EDITOR
+  GRADER
+}
+
+enum ContestAssetKind {
+  QUESTION
+  ANSWER
+}
+
+enum WrittenGradingMode {
+  // Organizers grade every written answer
+  MANUAL
+  // AI suggests a grade; an organizer approves each one
+  AI_ASSISTED
+  // AI grades; low-confidence or flagged answers go to organizers
+  AI_AUTO
+}
+
+enum AiSource {
+  PLATFORM
+  OWN_KEY
+}
+
+enum AiProvider {
+  DEEPSEEK
+  OPENAI
+  OPENAI_COMPATIBLE
+}
+
+enum GradingStatus {
+  // Objective question, or written answer not submitted yet
+  NONE
+  QUEUED
+  RUNNING
+  NEEDS_REVIEW
+  GRADED
+}
+
+enum GradeSource {
+  AI
+  ORGANIZER
 }
 
 enum ContestParticipantStatus {
@@ -587,6 +759,8 @@ enum AnswerVerdict {
   PARTIAL
   WRONG
   UNANSWERED
+  // Written answer waiting for a grade
+  PENDING
 }
 
 enum AttemptStatus {
@@ -612,6 +786,7 @@ enum NotificationType {
   CONTEST_ANNOUNCEMENT
   CONTEST_CLARIFICATION
   CONTEST_CANCELLED
+  CONTEST_TEAM
   QUESTION_UPVOTED
   ANSWER_UPVOTED
   QUESTION_POSTED
