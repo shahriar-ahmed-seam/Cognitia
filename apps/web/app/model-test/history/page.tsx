@@ -1,634 +1,224 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { Navbar } from "@/components/navbar"
+import Link from "next/link"
+import type React from "react"
+import { Suspense, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight, ClipboardList, FolderOpen, History, Link2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Calendar, Clock, FileText, Search, Trophy, History, ArrowLeft, Loader2 } from "lucide-react"
-import { toast } from "sonner"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from "@/components/ui/dialog"
+import { useApi } from "@/hooks/use-api"
+import { useNow } from "@/hooks/use-server-clock"
+import { cn } from "@/lib/utils"
+import { formatDateTime } from "@/lib/contests/format"
+import { FORMAT_META, formatPercent, formatSpent, percentTone, practicePaths } from "@/lib/practice/format"
+import type { AttemptHistory, PaperList } from "@/lib/practice/types"
+import { ContestShell, EmptyState, ErrorState, Eyebrow, LoadingState, Panel, StageHero, primaryButton } from "@/components/contests/primitives"
+import { GradeBadge, PaperTile } from "@/components/practice/ui"
 
-interface TestAttempt {
-  id: string
-  testId: string
-  testTitle: string
-  testDescription: string
-  startTime: string
-  endTime?: string
-  timeSpent?: number
-  score?: number
-  totalQuestions: number
-  correctAnswers?: number
-  status: "COMPLETED" | "IN_PROGRESS" | "SUBMITTED"
-  subjects: string[]
-  difficulty: string
-  passingScore: number
-  autoSubmitted: boolean
+type Tab = "attempts" | "papers" | "shared"
+const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
+  { key: "attempts", label: "Results", icon: ClipboardList },
+  { key: "papers", label: "My papers", icon: FolderOpen },
+  { key: "shared", label: "Shared with me", icon: Link2 },
+]
+
+function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (p: number) => void }) {
+  if (pages <= 1) return null
+  return (
+    <nav className="mt-6 flex items-center justify-center gap-2" aria-label="Pages">
+      <Button variant="outline" size="sm" className="bg-white" onClick={() => onPage(page - 1)} disabled={page <= 1}>
+        <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Newer
+      </Button>
+      <span className="text-sm tabular-nums text-slate-600">
+        Page {page} of {pages}
+      </span>
+      <Button variant="outline" size="sm" className="bg-white" onClick={() => onPage(page + 1)} disabled={page >= pages}>
+        Older <ChevronRight className="h-4 w-4" aria-hidden="true" />
+      </Button>
+    </nav>
+  )
 }
 
-export default function TestHistoryPage() {
-  const router = useRouter()
-  const [testHistory, setTestHistory] = useState<TestAttempt[]>([])
-  const [filteredHistory, setFilteredHistory] = useState<TestAttempt[]>([])
-  const [searchQuery, setSearchQuery] = useState("")
-  const [filterStatus, setFilterStatus] = useState("all")
-  const [sortBy, setSortBy] = useState("date-desc")
-  const [loading, setLoading] = useState(true)
-  const [selectedAttempt, setSelectedAttempt] = useState<TestAttempt | null>(null)
-  const [detailedResults, setDetailedResults] = useState<any>(null)
-  const [resultsLoading, setResultsLoading] = useState(false)
-
-  useEffect(() => {
-    fetchTestHistory()
-  }, [])
-
-  useEffect(() => {
-    filterAndSortHistory()
-  }, [testHistory, searchQuery, filterStatus, sortBy])
-
-  const fetchTestHistory = async () => {
-    try {
-      setLoading(true)
-      const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch test history")
-      }
-
-      const data = await response.json()
-      const allAttempts: TestAttempt[] = []
-
-      // Limit the number of attempts processed to avoid memory issues
-      data.modelTests.forEach((test: any) => {
-        if (test.attempts?.length) {
-          test.attempts
-            .sort((a: any, b: any) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime())
-            .slice(0, 5) // Limit to the latest 5 attempts per test
-            .forEach((attempt: any) => {
-              allAttempts.push({
-                id: attempt.id,
-                testId: test.id,
-                testTitle: test.title,
-                testDescription: test.description,
-                startTime: attempt.startTime,
-                endTime: attempt.endTime,
-                timeSpent: attempt.timeSpent,
-                score: attempt.score,
-                totalQuestions: attempt.totalQuestions,
-                correctAnswers: attempt.correctAnswers,
-                status: attempt.status,
-                subjects: test.subjects,
-                difficulty: test.difficulty,
-                passingScore: test.passingScore,
-                autoSubmitted: attempt.autoSubmitted,
-              })
-            })
-        }
-      })
-
-      setTestHistory(allAttempts)
-    } catch (error) {
-      console.error("Error fetching test history:", error)
-      toast.error("Failed to load test history")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const filterAndSortHistory = () => {
-    const filtered = testHistory.filter((attempt) => {
-      if (searchQuery && !attempt.testTitle.toLowerCase().includes(searchQuery.toLowerCase())) {
-        return false
-      }
-
-      const status = attempt.status?.toUpperCase()
-      if (filterStatus === "passed" && (!attempt.score || attempt.score < attempt.passingScore)) {
-        return false
-      }
-      if (filterStatus === "failed" && attempt.score && attempt.score >= attempt.passingScore) {
-        return false
-      }
-      if (filterStatus === "completed" && status !== "COMPLETED") {
-        return false
-      }
-      if (filterStatus === "in-progress" && status !== "IN_PROGRESS" && !attempt.endTime) {
-        return false
-      }
-
-      return true
-    })
-
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case "date-asc":
-          return new Date(a.startTime).getTime() - new Date(b.startTime).getTime()
-        case "date-desc":
-          return new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
-        case "score-asc":
-          return (a.score || 0) - (b.score || 0)
-        case "score-desc":
-          return (b.score || 0) - (a.score || 0)
-        case "title-asc":
-          return a.testTitle.localeCompare(b.testTitle)
-        case "title-desc":
-          return b.testTitle.localeCompare(a.testTitle)
-        default:
-          return 0
-      }
-    })
-
-    setFilteredHistory(filtered)
-  }
-
-  const fetchDetailedResults = async (attemptId: string) => {
-    try {
-      setResultsLoading(true)
-      const token = localStorage.getItem("token")
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/model-test/attempt/${attemptId}/results`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch detailed results")
-      }
-
-      const data = await response.json()
-
-      // Only store necessary parts of the detailed results to reduce memory usage
-      setDetailedResults({
-        test: data.test,
-        attempt: data.attempt,
-        questions: data.questions, // Limit to the first 10 questions
-      })
-    } catch (error) {
-      console.error("Error fetching detailed results:", error)
-      toast.error("Failed to load detailed results")
-    } finally {
-      setResultsLoading(false)
-    }
-  }
-
-  const handleViewResults = (attemptId: string) => {
-    setSelectedAttempt(testHistory.find((attempt) => attempt.id === attemptId) || null)
-    fetchDetailedResults(attemptId)
-  }
-
-  const handleContinueTest = (testId: string) => {
-    router.push(`/model-test/${testId}`)
-  }
-
-  const closeModal = () => {
-    setSelectedAttempt(null)
-    setDetailedResults(null)
-  }
-
-  const formatTime = (dateString: string) => new Date(dateString).toLocaleString()
-
-  const formatDuration = (timeSpent?: number) => {
-    if (!timeSpent) return "N/A"
-    const hours = Math.floor(timeSpent / 3600)
-    const minutes = Math.floor((timeSpent % 3600) / 60)
-    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
-  }
-
-  const getDifficultyColor = (difficulty: string) => {
-    switch (difficulty?.toUpperCase()) {
-      case "EASY":
-        return "bg-green-100 text-green-800 hover:bg-green-200"
-      case "MEDIUM":
-        return "bg-yellow-100 text-yellow-800 hover:bg-yellow-200"
-      case "HARD":
-        return "bg-red-100 text-red-800 hover:bg-red-200"
-      default:
-        return "bg-gray-100 text-gray-800 hover:bg-gray-200"
-    }
-  }
-
-  if (loading) {
+function Attempts() {
+  const [page, setPage] = useState(1)
+  const { data, error, loading, refresh } = useApi<AttemptHistory>("/practice/attempts", { query: { page, limit: 20 } })
+  if (loading) return <LoadingState />
+  if (error || !data) return <ErrorState message={error?.message ?? "Couldn't load your results"} onRetry={refresh} />
+  if (!data.attempts.length) {
     return (
-      <>
-        <Navbar />
-        <div className="container mx-auto py-8 flex items-center justify-center min-h-[60vh]">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p>Loading test history...</p>
-          </div>
-        </div>
-      </>
+      <EmptyState
+        icon={History}
+        title="No results yet"
+        description="Papers you take show up here with their grades."
+        action={
+          <Button asChild className={primaryButton}>
+            <Link href={practicePaths.build}>Build a paper</Link>
+          </Button>
+        }
+      />
     )
   }
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-cyan-50 relative overflow-hidden">
-      <Navbar />
-      <div className="container mx-auto py-8 relative z-10">
-        <div className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="outline"
-              onClick={() => router.push("/model-test")}
-              className="bg-white/70 backdrop-blur-sm border-emerald-200 hover:bg-emerald-50"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Tests
-            </Button>
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent flex items-center gap-3">
-              <History className="h-8 w-8 text-emerald-600" />
-              Test History
-            </h1>
-          </div>
-          <Button
-            onClick={() => router.push("/model-test")}
-            className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-          >
-            <FileText className="h-4 w-4 mr-2" />
-            Browse Tests
-          </Button>
+    <>
+      <Panel className="overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <caption className="sr-only">Your practice results</caption>
+            <thead className="bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <tr>
+                <th scope="col" className="px-5 py-3 font-semibold">
+                  Paper
+                </th>
+                <th scope="col" className="hidden px-3 py-3 font-semibold md:table-cell">
+                  Date
+                </th>
+                <th scope="col" className="hidden px-3 py-3 font-semibold sm:table-cell">
+                  Time
+                </th>
+                <th scope="col" className="px-3 py-3 text-right font-semibold">
+                  Marks
+                </th>
+                <th scope="col" className="px-5 py-3 text-right font-semibold">
+                  Grade
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.attempts.map((a) => (
+                <tr key={a.id} className="group border-t border-slate-100 hover:bg-violet-50/30">
+                  <td className="px-5 py-3">
+                    <Link href={practicePaths.attempt(a.id)} className="rounded font-medium text-slate-900 hover:text-violet-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500">
+                      {a.paper.title}
+                    </Link>
+                    <p className="text-xs text-slate-500">
+                      {FORMAT_META[a.paper.format].label}
+                      {a.paper.subjects.length > 0 && ` · ${a.paper.subjects.slice(0, 2).join(", ")}`}
+                      {a.status === "IN_PROGRESS" && <span className="font-medium text-amber-700"> · in progress</span>}
+                      {a.pendingCount > 0 && <span className="text-violet-700"> · {a.pendingCount} written pending</span>}
+                    </p>
+                  </td>
+                  <td className="hidden whitespace-nowrap px-3 py-3 text-slate-600 md:table-cell">{formatDateTime(a.submittedAt ?? a.startedAt)}</td>
+                  <td className="hidden whitespace-nowrap px-3 py-3 text-slate-600 sm:table-cell">{a.status === "COMPLETED" ? formatSpent(a.timeSpent) : "–"}</td>
+                  <td className="whitespace-nowrap px-3 py-3 text-right tabular-nums">
+                    {a.status === "COMPLETED" ? (
+                      <>
+                        <span className="font-semibold text-slate-900">{a.score ?? 0}</span>
+                        <span className="text-slate-500"> / {a.maxScore}</span>
+                      </>
+                    ) : (
+                      <span className="text-slate-500">
+                        {a.answeredCount}/{a.totalQuestions}
+                      </span>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-5 py-3 text-right">
+                    {a.status === "COMPLETED" ? (
+                      <span className="inline-flex items-center gap-2">
+                        <span className={cn("text-xs font-medium tabular-nums", percentTone(a.percent).text)}>{formatPercent(a.percent)}</span>
+                        <GradeBadge grade={a.grade} className="w-11 justify-center" />
+                      </span>
+                    ) : (
+                      <Link href={practicePaths.attempt(a.id)} className="inline-flex items-center gap-1 text-sm font-medium text-amber-700 hover:underline">
+                        Continue <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
+      </Panel>
+      <Pager page={data.pagination.page} pages={data.pagination.pages} onPage={setPage} />
+    </>
+  )
+}
 
-        <Card className="mb-8 bg-white/70 backdrop-blur-sm border border-white/20 shadow-lg">
-          <CardContent className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <label htmlFor="search" className="text-sm font-medium">
-                  Search
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
-                  <Input
-                    id="search"
-                    placeholder="Search by test title..."
-                    className="pl-8"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-              </div>
+function Papers({ scope }: { scope: "mine" | "shared" }) {
+  const [page, setPage] = useState(1)
+  const { data, error, loading, refresh } = useApi<PaperList>("/practice/papers", { query: { scope, page, limit: 24 } })
+  const now = useNow(60_000)
+  if (loading) return <LoadingState />
+  if (error || !data) return <ErrorState message={error?.message ?? "Couldn't load the papers"} onRetry={refresh} />
+  if (!data.papers.length) {
+    return scope === "shared" ? (
+      <EmptyState icon={Link2} title="Nothing shared with you yet" description="When a classmate sends you a paper link and you take it, it shows up here." />
+    ) : (
+      <EmptyState
+        icon={FolderOpen}
+        title="No papers yet"
+        action={
+          <Button asChild className={primaryButton}>
+            <Link href={practicePaths.build}>Build a paper</Link>
+          </Button>
+        }
+      />
+    )
+  }
+  return (
+    <>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {data.papers.map((paper, i) => (
+          <PaperTile key={paper.id} paper={paper} index={i} now={now} />
+        ))}
+      </div>
+      <Pager page={data.pagination.page} pages={data.pagination.pages} onPage={setPage} />
+    </>
+  )
+}
 
-              <div className="space-y-2">
-                <label htmlFor="status" className="text-sm font-medium">
-                  Status
-                </label>
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger id="status">
-                    <SelectValue placeholder="Filter by status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Tests</SelectItem>
-                    <SelectItem value="passed">Passed</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="in-progress">In Progress</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="sort" className="text-sm font-medium">
-                  Sort By
-                </label>
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger id="sort">
-                    <SelectValue placeholder="Sort by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="date-desc">Date (Newest First)</SelectItem>
-                    <SelectItem value="date-asc">Date (Oldest First)</SelectItem>
-                    <SelectItem value="score-desc">Score (Highest First)</SelectItem>
-                    <SelectItem value="score-asc">Score (Lowest First)</SelectItem>
-                    <SelectItem value="title-asc">Title (A-Z)</SelectItem>
-                    <SelectItem value="title-desc">Title (Z-A)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {filteredHistory.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-lg">
-              <History className="h-16 w-16 text-slate-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-slate-700 mb-2">No test history found</h3>
-              <p className="text-slate-500 mb-4">
-                {searchQuery || filterStatus !== "all"
-                  ? "Try adjusting your filters or search query."
-                  : "You haven't taken any tests yet."}
-              </p>
-              {!searchQuery && filterStatus === "all" && (
-                <Button
-                  onClick={() => router.push("/model-test")}
-                  className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-                >
-                  Browse Available Tests
-                </Button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {filteredHistory.map((attempt) => {
-              const isPassed = attempt.score && attempt.score >= attempt.passingScore
-              const isCompleted = attempt.status === "COMPLETED"
-
-              return (
-                <Card
-                  key={attempt.id}
-                  className="overflow-hidden bg-white/70 backdrop-blur-sm border border-white/20 shadow-lg hover:shadow-xl transition-all duration-300"
-                >
-                  <CardContent className="p-6">
-                    <div className="flex flex-col md:flex-row justify-between gap-6">
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between">
-                          <h3 className="text-xl font-bold text-slate-900">{attempt.testTitle}</h3>
-                          <Badge className={getDifficultyColor(attempt.difficulty)}>
-                            {attempt.difficulty}
-                          </Badge>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline" className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatTime(attempt.startTime)}
-                          </Badge>
-
-                          {isCompleted && attempt.timeSpent && (
-                            <Badge variant="outline" className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {formatDuration(attempt.timeSpent)}
-                            </Badge>
-                          )}
-
-                          {isCompleted ? (
-                            <Badge
-                              className={
-                                isPassed
-                                  ? "bg-green-100 text-green-800 hover:bg-green-200"
-                                  : "bg-red-100 text-red-800 hover:bg-red-200"
-                              }
-                            >
-                              {isPassed ? "Passed" : "Failed"} ({attempt.passingScore}% required)
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-yellow-100 text-orange-800">In Progress</Badge>
-                          )}
-
-                          {attempt.autoSubmitted && (
-                            <Badge variant="outline" className="bg-orange-50 text-orange-700">
-                              Auto-submitted
-                            </Badge>
-                          )}
-
-                          {attempt.subjects.slice(0, 2).map((subject) => (
-                            <Badge key={subject} variant="outline">
-                              {subject}
-                            </Badge>
-                          ))}
-                        </div>
-
-                        <p className="text-sm text-slate-600 line-clamp-2">{attempt.testDescription}</p>
-                      </div>
-
-                      <div className="flex flex-col items-end justify-between min-w-[200px]">
-                        {isCompleted ? (
-                          <>
-                            <div className="text-center bg-gradient-to-br from-emerald-50 to-teal-50 p-4 rounded-xl border border-emerald-200">
-                              <div className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 bg-clip-text text-transparent">
-                                {attempt.score}
-                              </div>
-                              <div className="text-sm text-slate-600 mt-1">
-                                {attempt.correctAnswers} of {attempt.totalQuestions} correct
-                              </div>
-                              <div className="text-xs text-slate-500 mt-1">
-                                Passing: {attempt.passingScore}
-                              </div>
-                            </div>
-
-                            <Button
-                              onClick={() => handleViewResults(attempt.id)}
-                              className="mt-4 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-                            >
-                              <Trophy className="h-4 w-4 mr-2" />
-                              View Results
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <div className="text-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-200">
-                              <div className="text-sm font-medium text-blue-800">
-                                In Progress
-                              </div>
-                              <div className="text-xs text-blue-600 mt-1">
-                                Started: {formatTime(attempt.startTime)}
-                              </div>
-                            </div>
-                            <Button
-                              onClick={() => handleContinueTest(attempt.testId)}
-                              className="mt-4 bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600"
-                            >
-                              Continue Test
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
-        )}
-
-        <Dialog open={!!selectedAttempt} onOpenChange={closeModal}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">
-                {selectedAttempt?.testTitle} - Test Results
-              </DialogTitle>
-              <DialogDescription className="text-sm text-slate-600">
-                Detailed breakdown of your test performance
-              </DialogDescription>
-            </DialogHeader>
-            
-            {resultsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin text-emerald-500" />
-                <span className="ml-3 text-lg">Loading detailed results...</span>
-              </div>
-            ) : detailedResults ? (
-              <div className="space-y-6">
-                {/* Summary Section */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg border border-emerald-200">
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-emerald-800">Performance Summary</h3>
-                    <div className="space-y-1">
-                      <p className="text-sm">
-                        <span className="font-medium">Final Score:</span>{" "}
-                        <span className="text-lg font-bold text-emerald-600">
-                          {detailedResults.attempt.score}%
-                        </span>
-                      </p>
-                      <p className="text-sm">
-                        <span className="font-medium">Status:</span>{" "}
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          detailedResults.attempt.passed
-                            ? "bg-green-100 text-green-800"
-                            : "bg-red-100 text-red-800"
-                        }`}>
-                          {detailedResults.attempt.passed ? "Passed" : "Failed"}
-                        </span>
-                      </p>
-                      <p className="text-sm">
-                        <span className="font-medium">Correct Answers:</span>{" "}
-                        {detailedResults.attempt.correctAnswers} of {detailedResults.attempt.totalQuestions}
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <h3 className="text-lg font-semibold text-teal-800">Test Details</h3>
-                    <div className="space-y-1">
-                      <p className="text-sm">
-                        <span className="font-medium">Time Spent:</span>{" "}
-                        {formatDuration(detailedResults.attempt.timeSpent)}
-                      </p>
-                      <p className="text-sm">
-                        <span className="font-medium">Passing Score:</span>{" "}
-                        {detailedResults.test.passingScore}%
-                      </p>
-                      <p className="text-sm">
-                        <span className="font-medium">Total Points:</span>{" "}
-                        {detailedResults.test.totalPoints}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Questions Section */}
-                <div>
-                  <div className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <FileText className="h-5 w-5 text-emerald-600" />
-                    <span>Question Breakdown</span>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800 ml-2">
-                      Showing {detailedResults.length} questions
-                    </span>
-                  </div>
-                  
-                  <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                    {detailedResults.questions.map((q: any, index: number) => (
-                      <Card key={q.id} className="border border-slate-200">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between mb-3">
-                            <h4 className="font-medium text-slate-900">
-                              Question {q.number || index + 1}
-                            </h4>
-                            <div className="flex items-center gap-2">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                q.isCorrect
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}>
-                                {q.isCorrect ? "Correct" : "Incorrect"}
-                              </span>
-                              <span className="text-sm text-slate-600">
-                                {q.points || 1} point{(q.points || 1) !== 1 ? 's' : ''}
-                              </span>
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-3">
-                            <div>
-                              <p className="text-sm font-medium text-slate-700 mb-1">Question:</p>
-                              <p className="text-sm text-slate-600 bg-slate-50 p-2 rounded">
-                                {q.question}
-                              </p>
-                            </div>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div>
-                                <p className="text-sm font-medium text-slate-700 mb-1">Your Answer:</p>
-                                <p className={`text-sm p-2 rounded ${
-                                  q.isCorrect 
-                                    ? "bg-green-50 text-green-700 border border-green-200" 
-                                    : "bg-red-50 text-red-700 border border-red-200"
-                                }`}>
-                                  {q.userAnswer || "No answer provided"}
-                                </p>
-                              </div>
-                              
-                              <div>
-                                <p className="text-sm font-medium text-slate-700 mb-1">Correct Answer:</p>
-                                <p className="text-sm bg-green-50 text-green-700 p-2 rounded border border-green-200">
-                                  {q.correctAnswer}
-                                </p>
-                              </div>
-                            </div>
-                            
-                            {q.explanation && (
-                              <div>
-                                <p className="text-sm font-medium text-slate-700 mb-1">Explanation:</p>
-                                <p className="text-sm text-slate-600 bg-blue-50 p-2 rounded border border-blue-200">
-                                  {q.explanation}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <FileText className="h-12 w-12 text-slate-300 mx-auto mb-4" />
-                <p className="text-slate-600">No detailed results available for this test.</p>
-                <p className="text-sm text-slate-500 mt-2">
-                  This might be due to the test being in progress or data not being saved properly.
-                </p>
-              </div>
+function HistoryTabs() {
+  const params = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const tab = (TABS.some((t) => t.key === params.get("tab")) ? params.get("tab") : "attempts") as Tab
+  const select = (next: Tab) => router.replace(next === "attempts" ? pathname : `${pathname}?tab=${next}`, { scroll: false })
+  return (
+    <div className="space-y-6">
+      <div role="tablist" aria-label="History" className="relative z-10 inline-flex flex-wrap gap-1 rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-slate-900/[0.07]">
+        {TABS.map(({ key, label, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => select(key)}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",
+              tab === key ? "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md shadow-violet-600/25" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
             )}
-            
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-              <Button variant="outline" onClick={closeModal}>
-                Close
-              </Button>
-              {selectedAttempt && !selectedAttempt.score && (
-                <Button 
-                  onClick={() => {
-                    closeModal()
-                    handleContinueTest(selectedAttempt.testId)
-                  }}
-                  className="bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600"
-                >
-                  Continue Test
-                </Button>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+          >
+            <Icon className="h-4 w-4" aria-hidden="true" /> {label}
+          </button>
+        ))}
+      </div>
+      <div role="tabpanel" aria-label={TABS.find((t) => t.key === tab)?.label}>
+        {tab === "attempts" ? <Attempts /> : <Papers key={tab} scope={tab === "shared" ? "shared" : "mine"} />}
       </div>
     </div>
   )
 }
 
-export const app = () => {
+export default function HistoryPage() {
   return (
-    <div>
-      <h1>My App</h1>
-    </div>
+    <ContestShell
+      width="wide"
+      hero={
+        <StageHero width="wide">
+          <Link href={practicePaths.home} className="inline-flex items-center gap-1.5 rounded text-sm text-slate-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Exam practice
+          </Link>
+          <div className="rise mt-4" style={{ "--i": 0 } as React.CSSProperties}>
+            <Eyebrow>History</Eyebrow>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Your results and papers</h1>
+            <p className="mt-2 max-w-2xl text-slate-300">Every paper you've taken, with marks, grades and the full review.</p>
+          </div>
+        </StageHero>
+      }
+    >
+      <Suspense fallback={<LoadingState />}>
+        <HistoryTabs />
+      </Suspense>
+    </ContestShell>
   )
 }

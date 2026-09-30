@@ -35,6 +35,3 @@ export function isOverWordLimit(question: Pick<ArenaQuestion, "type" | "written"
   const max = question.type === "WRITTEN" ? question.written?.maxWords : null
   return Boolean(max) && wordCount(writtenText(response)) > (max as number)
 }
-
-/** API path of an answer photo; load it with useAuthImage. */
-export const answerFileUrl = (id: string) => `/api/contests/answer-files/${id}`

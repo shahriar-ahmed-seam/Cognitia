@@ -10,7 +10,8 @@ import { IMAGE_ACCEPT } from "@/lib/contests/image"
 import { cn } from "@/lib/utils"
 import type { ArenaQuestion, ContestResponse } from "@/lib/contests/types"
 import type { PhotoUpload } from "./use-photo-uploads"
-import { WRITTEN_MAX_CHARS, answerFileUrl, wordCount, writtenFiles, writtenResponse, writtenText } from "./written-response"
+import { WRITTEN_MAX_CHARS, wordCount, writtenFiles, writtenResponse, writtenText } from "./written-response"
+import { useAnswerFileUrl } from "./answer-files"
 
 /** A new response, or a function of the latest one (so a typed change and a photo change can't overwrite each other). */
 export type ResponseUpdate = ContestResponse | null | ((previous: ContestResponse | null) => ContestResponse | null)
@@ -400,7 +401,8 @@ function PhotoThumb({
   onOpen: (url: string) => void
   onRemove: () => void
 }) {
-  const { url, error } = useAuthImage(answerFileUrl(fileId))
+  const fileUrl = useAnswerFileUrl()
+  const { url, error } = useAuthImage(fileUrl(fileId))
   const alt = `Photo ${index + 1} of your answer to question ${questionNumber}`
   return (
     <div className="relative aspect-[3/4] overflow-hidden rounded-xl bg-slate-100 ring-1 ring-slate-200">

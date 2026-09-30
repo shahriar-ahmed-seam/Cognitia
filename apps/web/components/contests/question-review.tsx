@@ -1,11 +1,13 @@
 "use client"
 
+import type React from "react"
 import { useCallback, useEffect, useState } from "react"
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Hourglass, ImageOff, Lightbulb, Loader2, Maximize2, MessageSquareQuote, UserCheck, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
 import { useAuthImage } from "@/hooks/use-auth-image"
+import { useAnswerFileUrl } from "@/components/contests/arena/answer-files"
 import { cn } from "@/lib/utils"
 import { QUESTION_TYPE_META, VERDICT_META, formatDateTime, formatScore } from "@/lib/contests/format"
 import type { AiBreakdownRow, AnswerKey, ContestResponse, QuestionStats, ReviewedQuestion, SolvedQuestion, Verdict, WrittenGrade, WrittenResponse } from "@/lib/contests/types"
@@ -88,10 +90,9 @@ export function StatsBar({ stats, points, written = false }: { stats: QuestionSt
 
 // ---------- answer photos ----------
 
-const photoPath = (id: string) => `/api/contests/answer-files/${id}`
-
 function PhotoThumb({ id, index, total, onOpen, onUrl }: { id: string; index: number; total: number; onOpen: () => void; onUrl: (id: string, url: string | null) => void }) {
-  const { url, error } = useAuthImage(photoPath(id))
+  const fileUrl = useAnswerFileUrl()
+  const { url, error } = useAuthImage(fileUrl(id))
   useEffect(() => onUrl(id, url), [id, url, onUrl])
   return (
     <button
@@ -200,7 +201,8 @@ export function WrittenAnswerKey({ answerKey }: { answerKey: AnswerKey }) {
   )
 }
 
-function Breakdown({ rows }: { rows: AiBreakdownRow[] }) {
+/** Marks per rubric criterion. */
+export function Breakdown({ rows }: { rows: AiBreakdownRow[] }) {
   return (
     <div className="overflow-x-auto rounded-xl ring-1 ring-inset ring-slate-200">
       <table className="w-full text-sm">
@@ -345,6 +347,9 @@ export function QuestionReview({
   grading,
   answerLabel = "Your answer",
   defaultOpen = false,
+  writtenBody,
+  badges,
+  footer,
 }: {
   question: SolvedQuestion
   response?: ContestResponse | null
@@ -355,6 +360,12 @@ export function QuestionReview({
   /** "Your answer" for the participant; organizers can pass e.g. "Their answer" */
   answerLabel?: string
   defaultOpen?: boolean
+  /** Replaces the contest's written answer panel (exam practice shows AI checking and self-marking) */
+  writtenBody?: React.ReactNode
+  /** Extra chips in the header, e.g. "Not counted" */
+  badges?: React.ReactNode
+  /** Shown at the end of the open question, e.g. a report link */
+  footer?: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const isWritten = question.type === "WRITTEN"
@@ -399,13 +410,14 @@ export function QuestionReview({
             <span>
               {question.points} mark{question.points === 1 ? "" : "s"}
             </span>
-            {question.topics[0] && <span>{question.topics[0]}</span>}
+            {(question.topics[1] ?? question.topics[0]) && <span>{question.topics[1] ?? question.topics[0]}</span>}
             {verdictMeta && (
               <span className={cn("rounded-full px-2 py-0.5 font-medium ring-1 ring-inset", verdictMeta.className, verdictMeta.ring)}>
                 {verdictMeta.label}
                 {scoreLabel && <span className="tabular-nums"> · {scoreLabel}</span>}
               </span>
             )}
+            {badges}
           </div>
           <div className={cn("mt-1.5 text-sm text-slate-800", !open && "line-clamp-2")}>
             <MarkdownRenderer content={question.prompt} className="[&_p]:my-1" />
@@ -416,7 +428,9 @@ export function QuestionReview({
 
       {open && (
         <div id={bodyId} className="rise space-y-4 border-t border-slate-100 px-5 py-4">
-          {isWritten ? (
+          {isWritten && writtenBody !== undefined ? (
+            writtenBody
+          ) : isWritten ? (
             <WrittenReview question={question} response={response} verdict={verdict} score={score} grading={writtenGrade} answerLabel={answerLabel} />
           ) : question.options ? (
             <ul className="space-y-2">
@@ -485,6 +499,7 @@ export function QuestionReview({
             </div>
           )}
           {question.stats && <StatsBar stats={question.stats} points={question.points} written={isWritten} />}
+          {footer}
         </div>
       )}
     </article>

@@ -100,7 +100,7 @@ function Arena({ initial, contestId }: { initial: ArenaState; contestId: string 
   )
   const onClosed = useCallback((error: ApiError) => leave(CLOSED_MESSAGES[error.code ?? ""] ?? error.message), [leave])
 
-  const sync = useAnswerSync(contestId, initial.answers, onClosed, questions)
+  const sync = useAnswerSync(`/contests/${contestId}`, initial.answers, onClosed, questions)
   const { answers, update, flush, close } = sync
 
   // A finished photo upload is appended to the latest version of its answer
@@ -125,7 +125,7 @@ function Arena({ initial, contestId }: { initial: ArenaState; contestId: string 
     },
     [questionsById, update]
   )
-  const uploads = usePhotoUploads({ contestId, onUploaded, onClosed })
+  const uploads = usePhotoUploads({ basePath: `/contests/${contestId}`, onUploaded, onClosed })
   closeUploads.current = uploads.close
 
   const question = questions[index]

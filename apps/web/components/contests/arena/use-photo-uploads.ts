@@ -66,11 +66,12 @@ let counter = 0
  * its answer.
  */
 export function usePhotoUploads({
-  contestId,
+  basePath,
   onUploaded,
   onClosed,
 }: {
-  contestId: string
+  /** Photos are uploaded to POST `${basePath}/answers/:questionId/files` */
+  basePath: string
   onUploaded: (questionId: string, file: UploadedFile) => void
   onClosed: (error: ApiError) => void
 }) {
@@ -116,7 +117,7 @@ export function usePhotoUploads({
           timedOut = true
           controller.abort()
         }, UPLOAD_TIMEOUT)
-        const uploaded = await uploadFile<UploadedFile>(`/contests/${contestId}/answers/${job.questionId}/files`, prepared.blob, prepared.name, controller.signal)
+        const uploaded = await uploadFile<UploadedFile>(`${basePath}/answers/${job.questionId}/files`, prepared.blob, prepared.name, controller.signal)
         if (closed.current || !find(key)) return
         drop(key)
         callbacks.current.onUploaded(job.questionId, uploaded)
@@ -135,7 +136,7 @@ export function usePhotoUploads({
         if (current.current?.key === key) current.current = null
       }
     },
-    [contestId] // eslint-disable-line react-hooks/exhaustive-deps
+    [basePath] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const pump = useCallback(async () => {
