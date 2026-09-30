@@ -15,7 +15,6 @@ import authRoutes from "./routes/auth.js";
 import analyticsRoutes from "./routes/analytics.js";
 import dashboardRoutes from "./routes/dashboard.js";
 import tasksRoutes from "./routes/tasks.js";
-import modelTestRoutes from "./routes/modelTest.js";
 import notesRoutes from "./routes/notes.js";
 import qnaRoutes from "./routes/qa.js";
 import profileRoutes from "./routes/profile.js";
@@ -24,6 +23,7 @@ import contestRoutes from "./modules/contests/participant.routes.js";
 import contestOrganizerRoutes from "./modules/contests/organizer.routes.js";
 import contestAdminRoutes from "./modules/contests/admin.routes.js";
 import aiRoutes from "./modules/ai/routes.js";
+import practiceRoutes from "./modules/practice/routes.js";
 import { getPublicAsset } from "./modules/contests/service.js";
 
 const app = express();
@@ -153,7 +153,8 @@ app.use("/api/notifications", authenticateToken, notificationsRouter);
 app.use("/api/dashboard", authenticateToken, dashboardRoutes);
 app.use("/api/analytics", authenticateToken, analyticsRoutes);
 app.use("/api/tasks", authenticateToken, tasksRoutes);
-app.use("/api/model-test", authenticateToken, modelTestRoutes);
+// Exam practice (model tests)
+app.use("/api/practice", authenticateToken, practiceRoutes);
 app.use("/api/notes", authenticateToken, notesRoutes);
 app.use("/api/contests", authenticateToken, contestRoutes);
 app.use("/api/qa", authenticateToken, qnaRoutes);

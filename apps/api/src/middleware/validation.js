@@ -82,19 +82,3 @@ export const validateTask = [
   body("tags").optional().isArray().withMessage("Tags must be an array"),
   body("estimatedTime").optional().isInt({ min: 1 }).withMessage("Estimated time must be a positive integer"),
 ]
-
-
-// Model test validation
-export const validateModelTest = [
-  body("title").trim().isLength({ min: 5, max: 200 }).withMessage("Title must be between 5 and 200 characters"),
-  body("description")
-    .trim()
-    .isLength({ min: 10, max: 1000 })
-    .withMessage("Description must be between 10 and 1000 characters"),
-  body("timeLimit").isInt({ min: 5, max: 300 }).withMessage("Time limit must be between 5 and 300 minutes"),
-  body("subjects").isArray({ min: 1 }).withMessage("Must provide at least one subject"),
-  body("topics").isArray({ min: 1 }).withMessage("Must provide at least one topic"),
-  body("difficulty")
-    .isIn(["EASY", "MEDIUM", "HARD", "EXPERT"])
-    .withMessage("Difficulty must be EASY, MEDIUM, HARD, or EXPERT"),
-]

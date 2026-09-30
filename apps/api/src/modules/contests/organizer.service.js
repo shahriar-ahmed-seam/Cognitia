@@ -517,7 +517,8 @@ export async function importQuestions(id, { questionBankIds, points }) {
   const contest = await loadContest(id);
   await assertStructureEditable(contest);
   const [bank, existing, last] = await Promise.all([
-    prisma.questionBank.findMany({ where: { id: { in: questionBankIds } } }),
+    // The contest importer copies single-choice questions; AI-written and personal ones stay private
+    prisma.questionBank.findMany({ where: { id: { in: questionBankIds }, type: "SINGLE_CHOICE", isPublic: true } }),
     prisma.contestQuestion.findMany({ where: { contestId: id, sourceQuestionId: { in: questionBankIds } }, select: { sourceQuestionId: true } }),
     prisma.contestQuestion.findFirst({ where: { contestId: id }, orderBy: { order: "desc" } }),
   ]);
@@ -549,6 +550,8 @@ export async function searchQuestionBank({ subject, topic, difficulty, search, e
     ? (await prisma.contestQuestion.findMany({ where: { contestId: excludeContestId, sourceQuestionId: { not: null } }, select: { sourceQuestionId: true } })).map((q) => q.sourceQuestionId)
     : [];
   const where = {
+    type: "SINGLE_CHOICE",
+    isPublic: true,
     ...(subject && { subject }),
     ...(topic && { topics: { has: topic } }),
     ...(difficulty && { difficulty }),
@@ -558,7 +561,7 @@ export async function searchQuestionBank({ subject, topic, difficulty, search, e
   const [questions, total, facets] = await Promise.all([
     prisma.questionBank.findMany({ where, orderBy: [{ subject: "asc" }, { createdAt: "desc" }], skip: (page - 1) * limit, take: limit }),
     prisma.questionBank.count({ where }),
-    prisma.questionBank.findMany({ select: { subject: true, topics: true } }),
+    prisma.questionBank.findMany({ where: { type: "SINGLE_CHOICE", isPublic: true }, select: { subject: true, topics: true } }),
   ]);
   const subjects = [...new Set(facets.map((f) => f.subject))].sort();
   const topics = [...new Set(facets.filter((f) => !subject || f.subject === subject).flatMap((f) => f.topics))].sort();

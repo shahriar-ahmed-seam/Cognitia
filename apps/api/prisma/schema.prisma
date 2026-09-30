@@ -40,6 +40,8 @@ model User {
   gradedContestAnswers   ContestAnswer[]        @relation("ContestAnswerGrader")
   aiCredentials          AiCredential[]
   modelTests             ModelTest[]
+  bankQuestions          QuestionBank[]         @relation("BankQuestionAuthor")
+  questionReports        QuestionReport[]
   notes                  Note[]
   notesGroups            NotesGroup[]
   notifications          Notification[]
@@ -200,17 +202,39 @@ model SessionFeedback {
   @@map("session_feedback")
 }
 
+// A practice paper (class test, term final mock, drill...). Owned by one student; can be
+// shared by link so classmates take it privately.
 model ModelTest {
   id           String               @id @default(cuid())
   title        String
   description  String
+  // Minutes; 0 = untimed
   timeLimit    Int
   subjects     String[]             @default([])
   topics       String[]             @default([])
   difficulty   Difficulty           @default(MEDIUM)
+  // Legacy, unused since v2
   isCustom     Boolean              @default(false)
   passingScore Int
+  // Highest possible score (sections with "answer any N" count their best N)
   totalPoints  Int
+
+  format           PracticeFormat  @default(CUSTOM)
+  mode             PracticeMode    @default(EXAM)
+  source           PaperSource     @default(BANK)
+  status           PaperStatus     @default(READY)
+  // Why generation failed, or a note such as "Made 13 of 15 questions"
+  statusNote       String?
+  visibility       PaperVisibility @default(PRIVATE)
+  negativeMarking  Float           @default(0)
+  shuffleQuestions Boolean         @default(true)
+  shuffleOptions   Boolean         @default(true)
+  // [{ name, answerAny? }] in paper order; questions refer to them by name
+  sections         Json?
+  instructions     String          @default("")
+  // What the paper was built from (topics, mix, notes excerpt), for "make another like this"
+  spec             Json?
+
   createdAt    DateTime             @default(now())
   updatedAt    DateTime             @updatedAt
   userId       String
@@ -218,6 +242,7 @@ model ModelTest {
   assignments  QuestionAssignment[]
   attempts     TestAttempt[]
 
+  @@index([userId, createdAt])
   @@map("model_tests")
 }
 
@@ -226,10 +251,12 @@ model TestAttempt {
   status         AttemptStatus @default(IN_PROGRESS)
   startTime      DateTime      @default(now())
   endTime        DateTime?
+  // Seconds from start to submission, measured by the server
   timeSpent      Int?
-  score          Int?
+  score          Float?
   correctAnswers Int?
   totalQuestions Int
+  // Legacy answer map (v1); v2 answers live in test_answers
   answers        Json          @default("{}")
   userId         String
   testId         String
@@ -237,10 +264,96 @@ model TestAttempt {
   updatedAt      DateTime      @default(now())
   autoSubmitted  Boolean       @default(false)
   lastActivity   DateTime?
-  test           ModelTest     @relation(fields: [testId], references: [id], onDelete: Cascade)
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Null when untimed
+  deadlineAt    DateTime?
+  // Per-attempt seed for question and option order
+  seed          Int       @default(0)
+  maxScore      Float     @default(0)
+  partialCount  Int       @default(0)
+  wrongCount    Int       @default(0)
+  answeredCount Int       @default(0)
+  // Written answers still waiting for a grade
+  pendingCount  Int       @default(0)
+
+  test        ModelTest       @relation(fields: [testId], references: [id], onDelete: Cascade)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  testAnswers TestAnswer[]
+  files       PracticeAsset[]
+
+  @@index([userId, status])
+  @@index([testId])
   @@map("test_attempts")
+}
+
+// One answer in a practice attempt. Mirrors contest answers, including AI grading.
+model TestAnswer {
+  id         String        @id @default(cuid())
+  attemptId  String
+  questionId String
+  response   Json?
+  flagged    Boolean       @default(false)
+  verdict    AnswerVerdict @default(UNANSWERED)
+  score      Float         @default(0)
+  answeredAt DateTime      @default(now())
+  // Practice mode: when the student checked this answer (it's locked afterwards)
+  checkedAt  DateTime?
+
+  gradingStatus GradingStatus @default(NONE)
+  feedback      String?
+  gradeSource   GradeSource?
+  gradedAt      DateTime?
+  aiScore       Float?
+  aiFeedback    String?
+  aiConfidence  Float?
+  aiBreakdown   Json?
+  aiFlags       String[]      @default([])
+  aiModel       String?
+  aiGradedAt    DateTime?
+  aiError       String?
+  aiAttempts    Int           @default(0)
+  aiClaimedAt   DateTime?
+  // Student-requested AI re-checks
+  recheckCount  Int           @default(0)
+
+  attempt  TestAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question QuestionBank @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@unique([attemptId, questionId])
+  @@index([gradingStatus])
+  @@index([questionId])
+  @@map("test_answers")
+}
+
+// Photos of handwritten work in a practice attempt; private to the student
+model PracticeAsset {
+  id         String   @id @default(cuid())
+  attemptId  String
+  questionId String
+  mimeType   String
+  size       Int
+  data       Bytes
+  createdAt  DateTime @default(now())
+
+  attempt TestAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  @@index([attemptId, questionId])
+  @@map("practice_assets")
+}
+
+// "This question is wrong" reports from students
+model QuestionReport {
+  id         String   @id @default(cuid())
+  questionId String
+  userId     String
+  reason     String
+  createdAt  DateTime @default(now())
+
+  question QuestionBank @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user     User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([questionId, userId])
+  @@map("question_reports")
 }
 
 model Notification {
@@ -259,19 +372,36 @@ model Notification {
   @@map("notifications")
 }
 
+// Shared question bank: curated questions, plus AI-written and personal ones (private to their author)
 model QuestionBank {
   id            String               @id @default(cuid())
+  type          ContestQuestionType  @default(SINGLE_CHOICE)
   question      String
   explanation   String?
-  options       Json
-  correctAnswer Int
+  // Choice types: string[] of option texts
+  options       Json?
+  // SINGLE_CHOICE only (legacy); `answer` holds the key for every type
+  correctAnswer Int?
+  // Answer key in the contest engine's shape (see modules/contests/engine.js)
+  answer        Json?
+  // Marks; null = by difficulty
+  points        Int?
   subject       String
   topics        String[]             @default([])
   difficulty    Difficulty           @default(MEDIUM)
+  source        QuestionSource       @default(CURATED)
+  createdById   String?
+  isPublic      Boolean              @default(true)
+  reportCount   Int                  @default(0)
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @default(now())
+  createdBy     User?                @relation("BankQuestionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   assignments   QuestionAssignment[]
+  testAnswers   TestAnswer[]
+  reports       QuestionReport[]
 
+  @@index([subject])
+  @@index([createdById])
   @@map("question_banks")
 }
 
@@ -281,6 +411,9 @@ model QuestionAssignment {
   questionId  String
   modelTestId String?
   points      Int          @default(5)
+  // Position in the paper, and the section it belongs to
+  order       Int          @default(0)
+  section     String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   modelTest   ModelTest?   @relation(fields: [modelTestId], references: [id], onDelete: Cascade)
@@ -746,6 +879,47 @@ enum GradingStatus {
 enum GradeSource {
   AI
   ORGANIZER
+  // Practice: the student marked it against the rubric
+  SELF
+}
+
+enum PracticeFormat {
+  CLASS_TEST
+  TERM_FINAL
+  TOPIC_DRILL
+  MISTAKES
+  CUSTOM
+}
+
+enum PracticeMode {
+  // Answers and marks after submitting
+  EXAM
+  // Check each answer as you go
+  PRACTICE
+}
+
+enum PaperSource {
+  BANK
+  AI
+  MISTAKES
+}
+
+enum PaperStatus {
+  GENERATING
+  READY
+  FAILED
+}
+
+enum PaperVisibility {
+  PRIVATE
+  // Anyone with the link can take it
+  LINK
+}
+
+enum QuestionSource {
+  CURATED
+  AI
+  USER
 }
 
 enum ContestParticipantStatus {

@@ -4,19 +4,21 @@ import http from "http";
 import cron from "node-cron";
 import { parse } from "url";
 import app from "./app.js";
-import { autoSubmitExpiredTests } from "./jobs/autoSubmit.js";
 import { connectDatabase } from "./lib/database.js";
 import { processGradingQueue } from "./modules/ai/queue.js";
 import { runContestLifecycle } from "./modules/contests/service.js";
+import { processPracticeQueue } from "./modules/practice/checker.js";
+import { runPracticeLifecycle } from "./modules/practice/service.js";
 import wss from "./notificationSocket.js";
 
 const PORT = process.env.PORT;
 
 cron.schedule("* * * * *", async () => {
   try {
-    await autoSubmitExpiredTests();
+    // Practice papers: submit attempts whose time ran out, fail stuck AI papers
+    await runPracticeLifecycle();
   } catch (err) {
-    console.error("Error auto-submitting test attempts:", err);
+    console.error("Practice lifecycle job failed:", err);
   }
   try {
     // Contest reminders, start notices, expired attempts, finalization and auto-publishing
@@ -26,6 +28,7 @@ cron.schedule("* * * * *", async () => {
   }
   // AI grading can take most of a minute, so it runs on its own without blocking the next tick
   processGradingQueue().catch((err) => console.error("AI grading queue failed:", err));
+  processPracticeQueue().catch((err) => console.error("Practice AI queue failed:", err));
 });
 
 // Create HTTP server (for Express + WebSocket)
