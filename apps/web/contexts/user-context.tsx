@@ -1,13 +1,17 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useCallback, useContext, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 
 export interface User {
   id?: string
   name: string
   email: string
+  /** API path such as "/api/public/avatars/:id?v=..." (pass it through assetUrl), or undefined */
   avatar?: string
+  username?: string | null
+  headline?: string | null
+  reputation?: number
   bio?: string
   institution?: string
   graduationYear?: number
@@ -16,20 +20,6 @@ export interface User {
   location?: string
   website?: string
   role?: string
-}
-
-export const DEFAULT_MOCK_USER: User = {
-  id: "user-1",
-  name: "Shahriar",
-  email: "shahriar@example.com",
-  role: "STUDENT",
-  bio: "Software Engineering Undergrad & AI Enthusiast",
-  institution: "Department of Computer Science & Engineering",
-  graduationYear: 2026,
-  major: "Software Engineering",
-  grade: "Senior",
-  location: "Dhaka, Bangladesh",
-  website: "https://github.com/shahriar",
 }
 
 interface UserContextType {
@@ -51,16 +41,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const router = useRouter()
 
-  const arrayBufferToBase64 = (buffer: number[]) => {
-    try {
-      const binary = Buffer.from(buffer).toString('base64')
-      return binary
-    } catch {
-      return ""
-    }
-  }
-
-  const fetchUser = async () => {
+  const fetchUser = useCallback(async () => {
     try {
       if (typeof window === "undefined") return
 
@@ -69,25 +50,18 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem("token")
         localStorage.removeItem("user")
         setUser(null)
-        setLoading(false)
         return
       }
 
       const apiUrl = process.env.NEXT_PUBLIC_API_URL || ""
       const response = await fetch(`${apiUrl}/api/dashboard/me`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       })
 
       if (response.ok) {
         const data = await response.json()
-        setUser({
-          ...data,
-          avatar: data.avatar
-            ? (typeof data.avatar === "string" ? data.avatar : `data:image/jpeg;base64,${arrayBufferToBase64(data.avatar)}`)
-            : undefined,
-        })
+        // The API sends the avatar as a URL (or null); older builds sent raw bytes, which we drop
+        setUser({ ...data, avatar: typeof data.avatar === "string" ? data.avatar : undefined })
       } else {
         // Token expired or invalid
         localStorage.removeItem("token")
@@ -100,11 +74,11 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
     fetchUser()
-  }, [])
+  }, [fetchUser])
 
   const logout = () => {
     if (typeof window !== "undefined") {
@@ -115,11 +89,7 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
     router.push("/login")
   }
 
-  return (
-    <UserContext.Provider value={{ user, loading, logout, refreshUser: fetchUser }}>
-      {children}
-    </UserContext.Provider>
-  )
+  return <UserContext.Provider value={{ user, loading, logout, refreshUser: fetchUser }}>{children}</UserContext.Provider>
 }
 
 export const useUser = () => useContext(UserContext)
