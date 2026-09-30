@@ -16,6 +16,12 @@ export default function errorHandler(err, req, res, next) {
     return res.status(400).json({ error: "Request body isn't valid JSON" })
   }
 
+  // Upload problems (multer): too large, too many files, unexpected field
+  if (err.name === "MulterError") {
+    const message = err.code === "LIMIT_FILE_SIZE" ? "Images can be at most 6 MB" : "That upload wasn't accepted. Send one image as \"file\".";
+    return res.status(400).json({ error: message, code: err.code })
+  }
+
   console.error("Error:", err)
 
   // Prisma errors

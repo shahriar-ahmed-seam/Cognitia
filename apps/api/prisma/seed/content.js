@@ -27,7 +27,8 @@ export const users = {
     major: CSE,
   },
   classmates: [
-    { key: "tasnim", email: "tasnim@cognitia.test", name: "Tasnim Akter", bio: "Class representative, Section A. Posts every CT date first.", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
+    // Organizer role: the CR hosts section practice contests
+    { key: "tasnim", email: "tasnim@cognitia.test", name: "Tasnim Akter", role: "ORGANIZER", bio: "Class representative, Section A. Posts every CT date first.", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
     { key: "arif", email: "arif@cognitia.test", name: "Arif Hossain", bio: "Competitive programmer. Ask me about DP.", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
     { key: "mehjabin", email: "mehjabin@cognitia.test", name: "Mehjabin Chowdhury", bio: "Databases and data engineering. Neat notes, always PDF.", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
     { key: "rakib", email: "rakib@cognitia.test", name: "Rakib Hasan", bio: "Networking lab TA helper. Wireshark enthusiast.", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },

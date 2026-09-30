@@ -1,10 +1,11 @@
 "use client"
 
 import Link from "next/link"
-import { Suspense, useEffect, useMemo, useState } from "react"
+import type React from "react"
+import { Suspense, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { ArrowRight, BarChart3, CalendarClock, Crown, LayoutDashboard, Medal, Search, Sparkles, TrendingUp, Trophy } from "lucide-react"
+import { ArrowRight, BarChart3, CalendarClock, ChevronLeft, ChevronRight, Clock3, Crown, LayoutDashboard, Medal, Search, Sparkles, TrendingUp, Trophy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -12,11 +13,30 @@ import { useUser } from "@/contexts/user-context"
 import { useApi } from "@/hooks/use-api"
 import { useNow } from "@/hooks/use-server-clock"
 import { cn } from "@/lib/utils"
-import { DIFFICULTY_META, KIND_META, formatDateTime, formatDuration, formatRelative, ordinal, ratingClass } from "@/lib/contests/format"
+import { DIFFICULTY_META, KIND_META, formatDateTime, formatDuration, formatRelative, ordinal } from "@/lib/contests/format"
 import type { ContestCard as ContestCardData, ContestKind, ContestList, ContestOverview, Difficulty } from "@/lib/contests/types"
 import { ContestCard } from "@/components/contests/contest-card"
 import { Countdown } from "@/components/contests/countdown"
-import { ContestShell, EmptyState, ErrorState, KindBadge, LoadingState, Panel, PhaseBadge, RatedBadge, primaryButton } from "@/components/contests/primitives"
+import {
+  AccessBadge,
+  ContestShell,
+  CountUp,
+  EmptyState,
+  ErrorState,
+  Eyebrow,
+  KindBadge,
+  LoadingState,
+  Panel,
+  ParticipantsLabel,
+  PhaseBadge,
+  RatedBadge,
+  SpotlightCard,
+  StageHero,
+  StageStat,
+  flameButton,
+  primaryButton,
+  stageButton,
+} from "@/components/contests/primitives"
 
 type Tab = "live" | "upcoming" | "past" | "mine"
 const TABS: { key: Tab; label: string }[] = [
@@ -26,119 +46,167 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "mine", label: "My contests" },
 ]
 
+// ---------- hero ----------
+
 function FeaturedContest({ contest, now }: { contest: ContestCardData; now: number }) {
   const live = contest.phase === "LIVE"
   const target = live ? contest.endsAt : contest.startsAt
-  const Icon = KIND_META[contest.kind].icon
+  const remaining = new Date(target).getTime() - now
+  const kind = KIND_META[contest.kind]
+  const Icon = kind.icon
+  const inProgress = contest.me?.status === "IN_PROGRESS"
+  const cta = inProgress ? "Resume contest" : live && contest.me ? "Enter the arena" : contest.me ? "View details" : live ? "View and join" : "View and register"
+
   return (
-    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: "easeOut" }}>
-      <Panel className="relative overflow-hidden">
-        <div className={cn("pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gradient-to-br opacity-20 blur-3xl", KIND_META[contest.kind].tint)} />
-        <div className="relative grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
-          <div>
+    <div className={cn("rise h-full", live && "live-ring rounded-2xl")} style={{ "--i": 1 } as React.CSSProperties}>
+      <SpotlightCard dark className={cn("relative h-full overflow-hidden p-6 md:p-7", live && "bg-[#15102f] hover:bg-[#1a1438]")}>
+        <div className={cn("pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gradient-to-br opacity-25 blur-3xl", kind.tint)} aria-hidden="true" />
+        <div className="relative flex h-full flex-col justify-center gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-orange-700">
-                <Sparkles className="h-3.5 w-3.5" /> {live ? "Happening now" : "Next up"}
+              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-[0.16em] text-amber-300">
+                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" /> {live ? "Happening now" : "Next up"}
               </span>
-              <PhaseBadge phase={contest.phase} />
-              <KindBadge kind={contest.kind} />
-              {contest.isRated && <RatedBadge />}
+              <PhaseBadge phase={contest.phase} onDark />
+              <KindBadge kind={contest.kind} onDark />
+              {contest.isRated && <RatedBadge onDark />}
+              <AccessBadge visibility={contest.visibility} institution={contest.institution} onDark />
             </div>
-            <h2 className="mt-3 flex items-start gap-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
-              <Icon className="mt-1 hidden h-7 w-7 shrink-0 text-orange-600 sm:block" />
-              {contest.title}
+            <h2 className="mt-4 flex items-start gap-3 text-2xl font-semibold tracking-tight text-white md:text-3xl">
+              <span className={cn("mt-0.5 hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white shadow-lg sm:flex", kind.tint)} aria-hidden="true">
+                <Icon className="h-5 w-5" />
+              </span>
+              <span>{contest.title}</span>
             </h2>
-            <p className="mt-2 max-w-2xl text-slate-600">{contest.summary}</p>
-            <p className="mt-3 text-sm text-slate-500">
-              {formatDateTime(contest.startsAt)} · {contest.timing === "FLEXIBLE" ? `${formatDuration(contest.durationMinutes)} timer, start any time before it closes` : formatDuration(contest.durationMinutes)}
-              {contest.hostName && ` · ${contest.hostName}`}
+            <p className="mt-2 line-clamp-3 max-w-2xl text-slate-300">{contest.summary}</p>
+            <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-400">
+              <span className="inline-flex items-center gap-1.5">
+                <CalendarClock className="h-4 w-4" aria-hidden="true" /> {formatDateTime(contest.startsAt)}
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <Clock3 className="h-4 w-4" aria-hidden="true" />
+                {contest.timing === "FLEXIBLE" ? `${formatDuration(contest.durationMinutes)} timer, start any time before it closes` : formatDuration(contest.durationMinutes)}
+              </span>
+              {contest.hostName && <span>{contest.hostName}</span>}
             </p>
-            <div className="mt-5 flex flex-wrap items-center gap-3">
-              <Button asChild className={primaryButton}>
+            <div className="mt-6 flex flex-wrap items-center gap-4">
+              <Button asChild size="lg" className={live ? flameButton : primaryButton}>
                 <Link href={`/contests/${contest.id}`}>
-                  {contest.me?.status === "IN_PROGRESS" ? "Resume contest" : live && contest.me ? "Go to contest" : contest.me ? "View details" : "View and register"}
-                  <ArrowRight className="h-4 w-4" />
+                  {cta}
+                  <ArrowRight className="h-4 w-4" aria-hidden="true" />
                 </Link>
               </Button>
-              <span className="text-sm text-slate-500">{contest.registeredCount} registered</span>
+              <ParticipantsLabel count={contest.registeredCount} capacity={contest.capacity} onDark />
             </div>
           </div>
-          <div className="md:text-right">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">{live ? "Ends in" : "Starts in"}</p>
-            <Countdown remainingMs={new Date(target).getTime() - now} size="lg" />
+          <div className="w-full max-w-sm shrink-0 xl:w-[320px]">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">{live ? "Ends in" : "Starts in"}</p>
+            <Countdown
+              remainingMs={remaining}
+              size="lg"
+              tone="dark"
+              fill
+              urgent={remaining > 0 && remaining < 600_000}
+              announce={live ? "The featured contest ends" : "The featured contest starts"}
+            />
           </div>
         </div>
-      </Panel>
-    </motion.div>
+      </SpotlightCard>
+    </div>
   )
 }
 
-function MyStats({ overview, userId }: { overview: ContestOverview; userId?: string }) {
-  const { stats } = overview
+function NoFeatured() {
   return (
-    <Panel className="p-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">Your contest record</h2>
+    <div className="rise flex h-full items-center gap-4 rounded-2xl bg-white/[0.05] p-8 ring-1 ring-inset ring-white/10" style={{ "--i": 1 } as React.CSSProperties}>
+      <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-amber-300 ring-1 ring-inset ring-white/15">
+        <Crown className="h-6 w-6" aria-hidden="true" />
+      </span>
+      <div>
+        <p className="font-medium text-white">No contests scheduled right now</p>
+        <p className="mt-0.5 text-sm text-slate-300">Past contests and their solutions are still open for practice.</p>
+      </div>
+    </div>
+  )
+}
+
+function RecordPanel({ overview, userId, now }: { overview: ContestOverview; userId?: string; now: number }) {
+  const { stats, myUpcoming } = overview
+  return (
+    <div className="rise flex h-full flex-col rounded-2xl bg-white/[0.04] p-4 ring-1 ring-inset ring-white/10" style={{ "--i": 2 } as React.CSSProperties}>
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-sm font-semibold text-white">Your contest record</h2>
         {userId && (
-          <Link href={`/contests/profile/${userId}`} className="text-xs font-medium text-orange-700 hover:underline">
+          <Link href={`/contests/profile/${userId}`} className="rounded text-xs font-medium text-violet-300 hover:text-violet-200 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">
             Full history
           </Link>
         )}
       </div>
-      <div className="mt-4 flex items-end gap-3">
-        <div>
-          <p className="text-xs text-slate-500">Rating</p>
-          <p className={cn("text-3xl font-semibold tabular-nums", ratingClass(stats.rating))}>{stats.rating ?? "Unrated"}</p>
-        </div>
-        {stats.globalRank && <p className="pb-1 text-sm text-slate-500">#{stats.globalRank} overall</p>}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <StageStat
+          label="Rating"
+          value={stats.rating ? <CountUp value={stats.rating} /> : "Unrated"}
+          hint={stats.peakRating && stats.peakRating !== stats.rating ? `Peak ${stats.peakRating}` : stats.rating ? `${stats.contestsRated} rated` : "Take a rated contest"}
+        />
+        <StageStat label="Global rank" value={stats.globalRank ? <>#<CountUp value={stats.globalRank} /></> : "—"} hint={stats.globalRank ? "overall" : undefined} />
+        <StageStat label="Contests taken" value={<CountUp value={stats.contestsTaken} />} hint={stats.bestRank ? `Best ${ordinal(stats.bestRank)}` : undefined} />
+        <StageStat label="Podiums" value={<CountUp value={stats.podiums} />} hint="top 3 finishes" />
       </div>
-      <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-100 pt-4 text-center">
-        <div>
-          <dt className="text-[11px] uppercase tracking-wide text-slate-500">Taken</dt>
-          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{stats.contestsTaken}</dd>
-        </div>
-        <div>
-          <dt className="text-[11px] uppercase tracking-wide text-slate-500">Best</dt>
-          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{stats.bestRank ? ordinal(stats.bestRank) : "—"}</dd>
-        </div>
-        <div>
-          <dt className="text-[11px] uppercase tracking-wide text-slate-500">Top 3</dt>
-          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{stats.podiums}</dd>
-        </div>
-      </dl>
-      {stats.peakRating && stats.peakRating !== stats.rating && (
-        <p className="mt-3 text-xs text-slate-500">Peak rating {stats.peakRating}</p>
-      )}
-    </Panel>
+
+      <div className="mt-4 border-t border-white/10 pt-3">
+        <h3 className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+          <CalendarClock className="h-3.5 w-3.5" aria-hidden="true" /> Coming up for you
+        </h3>
+        {myUpcoming.length === 0 ? (
+          <p className="mt-2 px-1 text-sm text-slate-400">You're not registered for anything upcoming.</p>
+        ) : (
+          <ul className="mt-1.5 space-y-0.5">
+            {myUpcoming.slice(0, 3).map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/contests/${c.id}`}
+                  className="group flex items-center justify-between gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-100 group-hover:text-white">{c.title}</p>
+                    <p className="text-xs text-slate-400">
+                      {c.phase === "LIVE" ? (c.me?.status === "IN_PROGRESS" ? "In progress" : `Live · ends ${formatRelative(c.endsAt, now)}`) : `Starts ${formatRelative(c.startsAt, now)}`}
+                    </p>
+                  </div>
+                  <PhaseBadge phase={c.phase} onDark />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   )
 }
 
-function ComingUp({ contests, now }: { contests: ContestCardData[]; now: number }) {
+// ---------- browse ----------
+
+function SkeletonGrid() {
   return (
-    <Panel className="p-5">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-        <CalendarClock className="h-4 w-4 text-orange-600" /> Coming up for you
-      </h2>
-      {contests.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">You're not registered for anything upcoming.</p>
-      ) : (
-        <ul className="mt-3 space-y-2">
-          {contests.map((c) => (
-            <li key={c.id}>
-              <Link href={`/contests/${c.id}`} className="group flex items-start justify-between gap-3 rounded-xl px-2 py-2 -mx-2 hover:bg-slate-50">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-slate-800 group-hover:text-orange-700">{c.title}</p>
-                  <p className="text-xs text-slate-500">
-                    {c.phase === "LIVE" ? (c.me?.status === "IN_PROGRESS" ? "In progress" : `Live · ends ${formatRelative(c.endsAt, now)}`) : `Starts ${formatRelative(c.startsAt, now)}`}
-                  </p>
-                </div>
-                <PhaseBadge phase={c.phase} />
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-    </Panel>
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" role="status" aria-label="Loading contests">
+      {Array.from({ length: 6 }, (_, i) => (
+        <Panel key={i} className="rise overflow-hidden p-5" style={{ "--i": i } as React.CSSProperties}>
+          <div className="animate-soft-pulse space-y-3">
+            <div className="flex items-start justify-between">
+              <div className="h-10 w-10 rounded-xl bg-slate-200/80" />
+              <div className="h-5 w-24 rounded-full bg-slate-100" />
+            </div>
+            <div className="h-3 w-24 rounded bg-slate-100" />
+            <div className="h-4 w-3/4 rounded bg-slate-200/80" />
+            <div className="h-3 w-full rounded bg-slate-100" />
+            <div className="h-3 w-2/3 rounded bg-slate-100" />
+            <div className="border-t border-slate-100 pt-3">
+              <div className="h-3 w-28 rounded bg-slate-100" />
+            </div>
+          </div>
+        </Panel>
+      ))}
+    </div>
   )
 }
 
@@ -147,7 +215,7 @@ function ContestsHub() {
   const pathname = usePathname()
   const params = useSearchParams()
   const { user } = useUser()
-  const isOrganizer = user?.role === "ADMIN"
+  const canHost = user?.role === "ORGANIZER" || user?.role === "ADMIN"
 
   const [tab, setTab] = useState<Tab | null>((params.get("tab") as Tab) ?? null)
   const [kind, setKind] = useState<ContestKind | "ALL">("ALL")
@@ -155,6 +223,7 @@ function ContestsHub() {
   const [search, setSearch] = useState("")
   const [term, setTerm] = useState("")
   const [page, setPage] = useState(1)
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   useEffect(() => {
     const timer = window.setTimeout(() => setTerm(search.trim()), 300)
@@ -181,6 +250,17 @@ function ContestsHub() {
     router.replace(`${pathname}?${query.toString()}`, { scroll: false })
   }
 
+  // Arrow keys move between tabs (WAI-ARIA tabs pattern)
+  const onTabKey = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0
+    if (!delta && event.key !== "Home" && event.key !== "End") return
+    event.preventDefault()
+    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? TABS.length - 1 : (index + delta + TABS.length) % TABS.length
+    const next = TABS[nextIndex].key
+    selectTab(next)
+    tabRefs.current[next]?.focus()
+  }
+
   const emptyCopy = useMemo(
     () =>
       ({
@@ -191,88 +271,104 @@ function ContestsHub() {
       })[tab ?? "upcoming"],
     [tab]
   )
+  const filtered = kind !== "ALL" || difficulty !== "ALL" || Boolean(term)
+  const activeLabel = TABS.find((t) => t.key === tab)?.label ?? "Contests"
 
-  return (
-    <ContestShell>
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-slate-900">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-sm">
-              <Trophy className="h-5 w-5" />
-            </span>
-            Contests
+  const hero = (
+    <StageHero>
+      <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+        <div className="rise max-w-3xl">
+          <Eyebrow className="flex items-center gap-2">
+            <Trophy className="h-3.5 w-3.5" aria-hidden="true" /> Cognitia contests
+          </Eyebrow>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl lg:text-5xl lg:leading-[1.1]">
+            Test what you know, <span className="text-shimmer">climb the rankings</span>
           </h1>
-          <p className="mt-2 text-slate-600">Quizzes, mock exams, weekly challenges and olympiad rounds for engineering students.</p>
+          <p className="mt-3 max-w-2xl text-slate-300">Quizzes, mock exams, weekly challenges and olympiad rounds for engineering students. Timed, fair and ranked.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button asChild variant="outline" className="bg-white/80">
+        <div className="rise flex flex-wrap gap-2" style={{ "--i": 1 } as React.CSSProperties}>
+          <Button asChild variant="ghost" className={stageButton}>
             <Link href="/contests/rankings">
-              <BarChart3 className="h-4 w-4" /> Rankings
+              <BarChart3 className="h-4 w-4" aria-hidden="true" /> Rankings
             </Link>
           </Button>
-          {isOrganizer && (
+          {canHost && (
             <Button asChild className={primaryButton}>
               <Link href="/contests/manage">
-                <LayoutDashboard className="h-4 w-4" /> Organizer console
+                <LayoutDashboard className="h-4 w-4" aria-hidden="true" /> Organizer console
               </Link>
             </Button>
           )}
         </div>
-      </header>
+      </div>
 
-      <section className="mt-6 grid gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="mt-8 grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
         {overview.loading ? (
-          <Panel className="lg:col-span-2">
-            <LoadingState />
-          </Panel>
+          <div className="rounded-2xl bg-white/[0.04] ring-1 ring-inset ring-white/10 lg:col-span-2">
+            <LoadingState onDark label="Loading your contests…" />
+          </div>
         ) : overview.error ? (
           <div className="lg:col-span-2">
             <ErrorState message={overview.error.message} onRetry={overview.refresh} />
           </div>
         ) : overview.data ? (
           <>
-            {overview.data.featured ? (
-              <FeaturedContest contest={overview.data.featured} now={now} />
-            ) : (
-              <Panel className="flex items-center gap-4 p-8">
-                <Crown className="h-8 w-8 text-slate-300" />
-                <div>
-                  <p className="font-medium text-slate-900">No contests scheduled right now</p>
-                  <p className="text-sm text-slate-500">Past contests and their solutions are still open for practice.</p>
-                </div>
-              </Panel>
-            )}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-              <MyStats overview={overview.data} userId={user?.id} />
-              <ComingUp contests={overview.data.myUpcoming} now={now} />
-            </div>
+            {overview.data.featured ? <FeaturedContest contest={overview.data.featured} now={now} /> : <NoFeatured />}
+            <RecordPanel overview={overview.data} userId={user?.id} now={now} />
           </>
         ) : null}
-      </section>
+      </div>
+    </StageHero>
+  )
 
-      <section className="mt-10" aria-labelledby="browse-heading">
-        <h2 id="browse-heading" className="sr-only">Browse contests</h2>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div role="tablist" aria-label="Contest lists" className="inline-flex w-fit rounded-xl bg-white/80 p-1 shadow-sm ring-1 ring-slate-200">
-            {TABS.map((t) => {
+  return (
+    <ContestShell hero={hero}>
+      <section aria-labelledby="browse-heading">
+        <h2 id="browse-heading" className="sr-only">
+          Browse contests
+        </h2>
+        <Panel className="flex flex-col gap-3 p-2.5 lg:flex-row lg:items-center lg:justify-between">
+          <div role="tablist" aria-label="Contest lists" className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100/80 p-1">
+            {TABS.map((t, index) => {
               const active = tab === t.key
               const count = list.data?.counts[t.key]
               return (
                 <button
                   key={t.key}
+                  ref={(node) => {
+                    tabRefs.current[t.key] = node
+                  }}
+                  id={`contest-tab-${t.key}`}
                   role="tab"
+                  type="button"
                   aria-selected={active}
+                  aria-controls="contest-list"
+                  tabIndex={active || (!tab && index === 0) ? 0 : -1}
                   onClick={() => selectTab(t.key)}
+                  onKeyDown={(event) => onTabKey(event, index)}
                   className={cn(
-                    "relative rounded-lg px-3.5 py-1.5 text-sm font-medium transition",
+                    "relative whitespace-nowrap rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",
                     active ? "text-white" : "text-slate-600 hover:text-slate-900"
                   )}
                 >
-                  {active && <motion.span layoutId="contest-tab" className="absolute inset-0 rounded-lg bg-slate-900" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
+                  {active && (
+                    <motion.span
+                      layoutId="contest-tab"
+                      className="absolute inset-0 rounded-lg bg-gradient-to-r from-violet-600 to-fuchsia-600 shadow-md shadow-violet-600/25"
+                      transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                    />
+                  )}
                   <span className="relative flex items-center gap-1.5">
-                    {t.key === "live" && (list.data?.counts.live ?? 0) > 0 && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />}
+                    {t.key === "live" && (list.data?.counts.live ?? 0) > 0 && (
+                      <span className="relative flex h-1.5 w-1.5" aria-hidden="true">
+                        <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 motion-safe:animate-ping" />
+                        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      </span>
+                    )}
                     {t.label}
-                    {count !== undefined && <span className={cn("tabular-nums text-xs", active ? "text-white/70" : "text-slate-400")}>{count}</span>}
+                    {count !== undefined && (
+                      <span className={cn("rounded-full px-1.5 text-xs tabular-nums", active ? "bg-white/20 text-white" : "bg-white text-slate-500 ring-1 ring-inset ring-slate-200")}>{count}</span>
+                    )}
                   </span>
                 </button>
               )
@@ -280,11 +376,11 @@ function ContestsHub() {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <div className="relative sm:w-64">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search contests or hosts" className="bg-white/90 pl-9" aria-label="Search contests" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search contests or hosts" className="bg-white pl-9 focus-visible:ring-violet-500" aria-label="Search contests" />
             </div>
             <Select value={kind} onValueChange={(v) => setKind(v as ContestKind | "ALL")}>
-              <SelectTrigger className="bg-white/90 sm:w-40" aria-label="Contest type">
+              <SelectTrigger className="bg-white sm:w-40" aria-label="Contest type">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -297,7 +393,7 @@ function ContestsHub() {
               </SelectContent>
             </Select>
             <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty | "ALL")}>
-              <SelectTrigger className="bg-white/90 sm:w-36" aria-label="Difficulty">
+              <SelectTrigger className="bg-white sm:w-36" aria-label="Difficulty">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -310,15 +406,46 @@ function ContestsHub() {
               </SelectContent>
             </Select>
           </div>
-        </div>
+        </Panel>
 
-        <div className="mt-5">
+        <div id="contest-list" role="tabpanel" aria-labelledby={tab ? `contest-tab-${tab}` : undefined} className="mt-6">
+          <div className="mb-4 flex items-baseline justify-between gap-3">
+            <h3 className="text-lg font-semibold text-slate-900">{activeLabel}</h3>
+            {list.data && list.data.pagination.total > 0 && (
+              <p className="text-sm text-slate-500" aria-live="polite">
+                {list.data.pagination.total} contest{list.data.pagination.total === 1 ? "" : "s"}
+                {filtered && " match"}
+              </p>
+            )}
+          </div>
           {!tab || list.loading ? (
-            <LoadingState label="Loading contests…" />
+            <SkeletonGrid />
           ) : list.error ? (
             <ErrorState message={list.error.message} onRetry={list.refresh} />
           ) : list.data && list.data.contests.length === 0 ? (
-            <EmptyState icon={tab === "mine" ? Medal : TrendingUp} title={emptyCopy.title} description={emptyCopy.description} />
+            <EmptyState
+              icon={tab === "mine" ? Medal : TrendingUp}
+              title={emptyCopy.title}
+              description={emptyCopy.description}
+              action={
+                filtered ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setKind("ALL")
+                      setDifficulty("ALL")
+                      setSearch("")
+                    }}
+                  >
+                    Clear filters
+                  </Button>
+                ) : tab !== "upcoming" ? (
+                  <Button variant="outline" onClick={() => selectTab("upcoming")}>
+                    See upcoming contests
+                  </Button>
+                ) : undefined
+              }
+            />
           ) : list.data ? (
             <>
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -327,17 +454,17 @@ function ContestsHub() {
                 ))}
               </div>
               {list.data.pagination.pages > 1 && (
-                <div className="mt-6 flex items-center justify-center gap-2 text-sm text-slate-600">
-                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-                    Previous
+                <nav aria-label="Pages" className="mt-8 flex items-center justify-center gap-3 text-sm text-slate-600">
+                  <Button variant="outline" size="sm" className="bg-white" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+                    <ChevronLeft className="h-4 w-4" aria-hidden="true" /> Previous
                   </Button>
-                  <span className="tabular-nums">
+                  <span className="rounded-full bg-white px-3 py-1 tabular-nums ring-1 ring-inset ring-slate-200">
                     {page} / {list.data.pagination.pages}
                   </span>
-                  <Button variant="outline" size="sm" disabled={page >= list.data.pagination.pages} onClick={() => setPage((p) => p + 1)}>
-                    Next
+                  <Button variant="outline" size="sm" className="bg-white" disabled={page >= list.data.pagination.pages} onClick={() => setPage((p) => p + 1)}>
+                    Next <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </Button>
-                </div>
+                </nav>
               )}
             </>
           ) : null}

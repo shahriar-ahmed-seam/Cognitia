@@ -89,6 +89,7 @@ async function clearDatabase() {
   await prisma.note.deleteMany();
   await prisma.notesGroup.deleteMany();
   await prisma.contest.deleteMany();
+  await prisma.aiUsage.deleteMany();
   await prisma.modelTest.deleteMany();
   await prisma.questionBank.deleteMany();
   await prisma.notification.deleteMany();
@@ -288,9 +289,69 @@ function simulateResponse(question, correct) {
       const decoys = question.decoys?.length ? question.decoys : ["not sure"];
       return { text: decoys[randomInt(0, decoys.length - 1)] };
     }
+    case "WRITTEN": {
+      // samples[0] is a strong answer, [1] partial, [2] weak
+      const samples = question.samples ?? [];
+      if (!samples.length) return null;
+      const pick = correct ? (random() < 0.6 ? 0 : 1) : random() < 0.5 ? 1 : 2;
+      return { text: samples[Math.min(pick, samples.length - 1)].text };
+    }
     default:
       return null;
   }
+}
+
+const sampleScore = (sample) => sample.breakdown.reduce((sum, [, awarded]) => sum + awarded, 0);
+
+/**
+ * Grade state for a submitted attempt's written answers, as the grading desk would have left it.
+ * graded: everything graded (AI suggestions approved or overridden). mixed: some graded, most
+ * waiting for approval, a few where the AI failed. review: all waiting for approval.
+ */
+function gradeWrittenRows(rows, questions, extrasByPrompt, { mode, graderIds, submittedAt }) {
+  const byId = new Map(questions.map((question) => [question.id, question]));
+  return rows.map((row) => {
+    if (row.verdict !== "PENDING") return row;
+    const question = byId.get(row.questionId);
+    const samples = extrasByPrompt.get(question.prompt)?.samples ?? [];
+    const sample = samples.find((s) => s.text === row.response?.text) ?? samples[samples.length - 1];
+    const score = sampleScore(sample);
+    const aiAt = later(submittedAt, randomInt(2, 9) * MINUTE);
+    const confidence = Math.round((0.72 + random() * 0.24) * 100) / 100;
+    const ai = {
+      aiScore: score,
+      aiFeedback: sample.feedback,
+      aiConfidence: confidence,
+      aiBreakdown: sample.breakdown.map(([criterion, awarded, max]) => ({ criterion, awarded, max, comment: "" })),
+      aiFlags: [],
+      aiModel: "deepseek-flash",
+      aiGradedAt: aiAt,
+      aiAttempts: 1,
+    };
+    const roll = random();
+    if (mode === "graded" || (mode === "mixed" && roll < 0.35)) {
+      const byOrganizer = random() < 0.35;
+      // An organizer who overrides usually moves the AI's suggestion by half a mark
+      const aiScore = byOrganizer ? engine.clampWrittenScore(score + (random() < 0.5 ? -0.5 : 0.5), question.points) : score;
+      return {
+        ...row,
+        ...ai,
+        aiScore,
+        gradingStatus: "GRADED",
+        score,
+        verdict: engine.writtenVerdict(score, question.points),
+        feedback: sample.feedback,
+        gradeSource: byOrganizer ? "ORGANIZER" : "AI",
+        gradedById: graderIds[randomInt(0, graderIds.length - 1)],
+        gradedAt: later(aiAt, randomInt(10, 90) * MINUTE),
+      };
+    }
+    if (mode === "mixed" && roll > 0.85) {
+      return { ...row, gradingStatus: "NEEDS_REVIEW", aiError: "The AI took too long to respond", aiAttempts: 3 };
+    }
+    const unsure = random() < 0.2;
+    return { ...row, ...ai, aiConfidence: unsure ? 0.55 : confidence, aiFlags: unsure ? ["UNSURE"] : [], gradingStatus: "NEEDS_REVIEW" };
+  });
 }
 
 /** Answer rows for one attempt: `questions` in the order the participant saw them. */
@@ -306,7 +367,7 @@ function simulateAnswers({ questions, skill, negativeMarking, startedAt, finishe
       return;
     }
     const p = Math.min(0.97, Math.max(0.08, skill + (DIFFICULTY_SHIFT[question.difficulty] ?? 0) + (random() - 0.5) * 0.2));
-    const withDecoys = { ...question, decoys: decoysByPrompt.get(question.prompt) };
+    const withDecoys = { ...question, ...decoysByPrompt.get(question.prompt) };
     const response = engine.normalizeResponse(question, simulateResponse(withDecoys, random() < p));
     const grade = engine.gradeResponse(question, response, { negativeMarking });
     rows.push({ questionId: question.id, response, flagged, ...grade, answeredAt });
@@ -316,7 +377,12 @@ function simulateAnswers({ questions, skill, negativeMarking, startedAt, finishe
 
 async function seedContests(bank, people) {
   const definitions = contestDefinitions({ atDay, later, now, MINUTE, DAY });
-  const decoysByPrompt = new Map(Object.values(contestQuestions).filter((q) => q.decoys).map((q) => [q.prompt, q.decoys]));
+  // Simulation-only extras per custom question: wrong short answers and written sample answers
+  const extrasByPrompt = new Map(
+    Object.values(contestQuestions)
+      .filter((q) => q.decoys || q.samples)
+      .map((q) => [q.prompt, { decoys: q.decoys, samples: q.samples }])
+  );
   const contests = {};
   const counts = { contests: 0, questions: 0, participants: 0, answers: 0, announcements: 0, clarifications: 0 };
   const toFinalize = [];
@@ -329,6 +395,9 @@ async function seedContests(bank, people) {
     const createdAt = later(start, -randomInt(6, 10) * DAY);
     const published = def.state !== "draft";
     const begun = start <= now;
+    const owner = people[def.owner ?? "admin"];
+    const team = (def.team ?? []).map(([key, role]) => ({ person: people[key], role }));
+    const graderIds = [owner.id, ...team.filter((m) => m.role === "GRADER").map((m) => m.person.id)];
 
     const contest = await prisma.contest.create({
       data: {
@@ -359,9 +428,16 @@ async function seedContests(bank, people) {
         cancelReason: def.cancelReason ?? null,
         reminderSentAt: begun && published ? later(start, -30 * MINUTE) : null,
         startNoticeSentAt: begun && published ? start : null,
-        createdById: people.admin.id,
+        writtenGrading: def.writtenGrading ?? "MANUAL",
+        createdById: owner.id,
         createdAt,
       },
+    });
+    await prisma.contestOrganizer.createMany({
+      data: [
+        { contestId: contest.id, userId: owner.id, role: "OWNER", addedById: owner.id, createdAt },
+        ...team.map((m) => ({ contestId: contest.id, userId: m.person.id, role: m.role, addedById: owner.id, createdAt: later(createdAt, HOUR) })),
+      ],
     });
     contests[def.key] = contest;
     counts.contests++;
@@ -369,7 +445,7 @@ async function seedContests(bank, people) {
     // Questions: bank picks first, then custom ones
     const questionData = [
       ...(def.bank ?? []).flatMap((spec) => pickFromBank(bank, spec).map(fromBank)),
-      ...(def.custom ?? []).map(({ decoys, ...question }) => ({ partialCredit: false, explanation: null, options: null, ...question })),
+      ...(def.custom ?? []).map(({ decoys, samples, ...question }) => ({ partialCredit: false, explanation: null, options: null, ...question })),
     ];
     await prisma.contestQuestion.createMany({
       data: questionData.map((question, index) => ({ ...question, contestId: contest.id, order: index + 1 })),
@@ -400,13 +476,14 @@ async function seedContests(bank, people) {
         const submittedAt = autoSubmitted ? deadlineAt : later(startedAt, used);
         answers = simulateAnswers({
           questions: ordered, skill: SKILL[key] ?? 0.6, negativeMarking: contest.negativeMarking,
-          startedAt, finishedAt: submittedAt, answeredCount: ordered.length, decoysByPrompt,
+          startedAt, finishedAt: submittedAt, answeredCount: ordered.length, decoysByPrompt: extrasByPrompt,
         });
+        answers = gradeWrittenRows(answers, questions, extrasByPrompt, { mode: def.writtenState ?? "review", graderIds, submittedAt });
         data = { status: "SUBMITTED", startedAt, deadlineAt, submittedAt, autoSubmitted, ...engine.summarizeAnswers(answers, startedAt) };
       } else {
         answers = simulateAnswers({
           questions: ordered, skill: SKILL[key] ?? 0.6, negativeMarking: contest.negativeMarking,
-          startedAt, finishedAt: later(now, -MINUTE), answeredCount: Math.min(extra.answered ?? 3, ordered.length), decoysByPrompt,
+          startedAt, finishedAt: later(now, -MINUTE), answeredCount: Math.min(extra.answered ?? 3, ordered.length), decoysByPrompt: extrasByPrompt,
         });
         data = { status: "IN_PROGRESS", startedAt, deadlineAt, ...engine.summarizeAnswers(answers, startedAt) };
       }
@@ -425,7 +502,7 @@ async function seedContests(bank, people) {
       let createdAtNote = later(start, note.at);
       if (createdAtNote > now) createdAtNote = ago(randomInt(30, 300) * MINUTE);
       await prisma.contestAnnouncement.create({
-        data: { contestId: contest.id, authorId: people.admin.id, title: note.title, body: note.body, createdAt: createdAtNote },
+        data: { contestId: contest.id, authorId: owner.id, title: note.title, body: note.body, createdAt: createdAtNote },
       });
       counts.announcements++;
     }
@@ -441,7 +518,7 @@ async function seedContests(bank, people) {
           question: item.question,
           answer: item.answer ?? null,
           isPublic: item.isPublic ?? false,
-          answeredById: item.answer ? people.admin.id : null,
+          answeredById: item.answer ? owner.id : null,
           answeredAt: item.answer ? later(askedAt, 3 * MINUTE) : null,
           createdAt: askedAt,
         },
@@ -449,7 +526,7 @@ async function seedContests(bank, people) {
       counts.clarifications++;
     }
 
-    if (def.state === "results" || def.state === "review") toFinalize.push({ contest, def, end });
+    if (["results", "review", "grading"].includes(def.state)) toFinalize.push({ contest, def, end });
   }
 
   // One integrity case: disqualified in the OS and Networks Sprint (excluded from ranks and ratings)
@@ -711,12 +788,18 @@ async function seedNotifications(people, contests) {
     { type: "CONTEST_ENDED", title: "Results waiting for review", message: "Software Engineering Case Quiz has ended. Review the results and publish them when ready.", at: 2 * HOUR, read: false, link: `/contests/manage/${contests.seQuiz.id}?tab=results` },
     { type: "CONTEST_REGISTERED", title: "New registrations", message: "5 students registered for Database Systems Speed Round.", at: 5 * HOUR, read: false, link: `/contests/manage/${contests.dbSpeed.id}?tab=participants` },
     { type: "QUESTION_POSTED", title: "New question", message: "Anika Sultana asked \"How does Linux clone() decide between a thread and a process?\"", at: 6 * HOUR, read: false },
+    { type: "CONTEST_ENDED", title: "Grading needed", message: "CSE 313 Written Quiz: Deadlocks has ended. The AI suggested grades for most written answers; approve or adjust them on the grading desk.", at: 85 * MINUTE, read: false, link: `/contests/manage/${contests.deadlockCt.id}?tab=grading` },
     { type: "PASSWORD_CHANGED", title: "Password changed", message: "Your password was changed. If this wasn't you, contact support.", at: 30 * DAY, read: true },
+  ];
+  const forGrader = [
+    { type: "CONTEST_TEAM", title: "You joined an organizing team", message: "Dr. Farhana Haque added you to CSE 313 Written Quiz: Deadlocks as a grader.", at: 2 * DAY, read: true, link: `/contests/manage/${contests.deadlockCt.id}` },
+    { type: "CONTEST_ENDED", title: "Grading needed", message: "CSE 313 Written Quiz: Deadlocks has ended. Written answers are waiting on the grading desk.", at: 85 * MINUTE, read: false, link: `/contests/manage/${contests.deadlockCt.id}?tab=grading` },
   ];
 
   const rows = [
     ...forStudent.map((n) => ({ ...n, userId: people.student.id })),
     ...forAdmin.map((n) => ({ ...n, userId: people.admin.id })),
+    ...forGrader.map((n) => ({ ...n, userId: people.rakib.id })),
     ...users.classmates.map((c) => ({ type: "LOGIN", title: "New sign-in", message: "Your account was signed in from a new device.", at: randomInt(1, 9) * DAY, read: random() < 0.5, userId: people[c.key].id })),
   ];
   await prisma.notification.createMany({

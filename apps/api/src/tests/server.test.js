@@ -32,7 +32,7 @@ jest.unstable_mockModule("../lib/database.js", () => ({
   connectDatabase: jest.fn().mockResolvedValue(true),
 }));
 
-const { default: app } = await import("../server.js");
+const { default: app } = await import("../app.js");
 
 describe("Server Health Checks", () => {
   beforeEach(() => {

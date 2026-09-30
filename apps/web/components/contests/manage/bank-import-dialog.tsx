@@ -39,7 +39,7 @@ export function BankImportDialog({ open, onOpenChange, contestId, onImported }: 
     if (!open) setSelected(new Map())
   }, [open])
 
-  const { data, loading, refresh } = useApi<BankPage>(open ? "/admin/contests/question-bank" : null, {
+  const { data, loading, refresh } = useApi<BankPage>(open ? "/organizer/contests/question-bank" : null, {
     query: { subject: subject === "ALL" ? undefined : subject, topic: topic === "ALL" ? undefined : topic, difficulty: difficulty === "ALL" ? undefined : difficulty, search: term, page, limit: 20, excludeContestId: contestId },
     revalidateOnFocus: false,
   })
@@ -55,7 +55,7 @@ export function BankImportDialog({ open, onOpenChange, contestId, onImported }: 
   const importSelected = async () => {
     setImporting(true)
     try {
-      const result = await api<{ imported: number; skipped: number }>(`/admin/contests/${contestId}/questions/import`, { method: "POST", body: { questionBankIds: [...selected.keys()] } })
+      const result = await api<{ imported: number; skipped: number }>(`/organizer/contests/${contestId}/questions/import`, { method: "POST", body: { questionBankIds: [...selected.keys()] } })
       toast.success(`Imported ${result.imported} question${result.imported === 1 ? "" : "s"}${result.skipped ? ` (${result.skipped} already in the contest)` : ""}`)
       onImported()
       onOpenChange(false)
@@ -72,7 +72,9 @@ export function BankImportDialog({ open, onOpenChange, contestId, onImported }: 
       <DialogContent className="flex max-h-[92vh] flex-col sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Import from the question bank</DialogTitle>
-          <DialogDescription>Imported questions are copied into this contest, so editing the bank later won't change it. Marks default to 1, 2 or 3 by difficulty.</DialogDescription>
+          <DialogDescription>
+            Imported questions are copied into this contest as single choice questions, so editing the bank later won't change them. Marks default to 1, 2 or 3 by difficulty.
+          </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-2 sm:grid-cols-[1fr_repeat(3,minmax(0,160px))]">
@@ -103,7 +105,7 @@ export function BankImportDialog({ open, onOpenChange, contestId, onImported }: 
           </Select>
         </div>
 
-        <div className="min-h-[300px] flex-1 overflow-y-auto rounded-xl border border-slate-200">
+        <div className="min-h-[300px] flex-1 overflow-y-auto rounded-xl border border-slate-200" aria-busy={loading}>
           {loading ? (
             <LoadingState />
           ) : data?.questions.length ? (
@@ -112,8 +114,16 @@ export function BankImportDialog({ open, onOpenChange, contestId, onImported }: 
                 const on = selected.has(q.id)
                 return (
                   <li key={q.id}>
-                    <button type="button" onClick={() => toggle(q)} aria-pressed={on} className={cn("flex w-full items-start gap-3 px-4 py-3 text-left transition", on ? "bg-orange-50/70" : "hover:bg-slate-50")}>
-                      <span className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border", on ? "border-orange-600 bg-orange-600 text-white" : "border-slate-300")}>
+                    <button
+                      type="button"
+                      onClick={() => toggle(q)}
+                      aria-pressed={on}
+                      className={cn(
+                        "flex w-full items-start gap-3 px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-500",
+                        on ? "bg-violet-50/70" : "hover:bg-slate-50"
+                      )}
+                    >
+                      <span className={cn("mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors", on ? "border-violet-600 bg-violet-600 text-white" : "border-slate-300 bg-white")} aria-hidden="true">
                         {on && <Check className="h-3.5 w-3.5" />}
                       </span>
                       <span className="min-w-0 flex-1">
@@ -134,6 +144,11 @@ export function BankImportDialog({ open, onOpenChange, contestId, onImported }: 
 
         <DialogFooter className="items-center gap-2 sm:justify-between">
           <div className="flex items-center gap-2 text-sm text-slate-500">
+            {selected.size > 0 && (
+              <span className="rounded-full bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-inset ring-violet-200" aria-live="polite">
+                {selected.size} selected
+              </span>
+            )}
             {data && data.pagination.pages > 1 && (
               <>
                 <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>

@@ -30,37 +30,45 @@ export default function CertificatePage() {
   }
 
   const award = AWARD_META[cert.award]
+  const top = cert.award === "TOP_3"
   return (
-    <div className="min-h-screen bg-slate-100 px-4 py-8 print:bg-white print:p-0">
+    <div className="min-h-screen bg-gradient-to-b from-slate-100 to-violet-50/60 px-4 py-8 print:bg-white print:bg-none print:p-0">
       <style>{`@media print { @page { size: A4 landscape; margin: 0; } }`}</style>
       <div className="mx-auto mb-6 flex max-w-5xl items-center justify-between print:hidden">
         <Button asChild variant="ghost">
           <Link href={`/contests/${id}?tab=results`}>
-            <ArrowLeft className="h-4 w-4" /> Back to results
+            <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back to results
           </Link>
         </Button>
         <Button className={primaryButton} onClick={() => window.print()}>
-          <Printer className="h-4 w-4" /> Print or save as PDF
+          <Printer className="h-4 w-4" aria-hidden="true" /> Print or save as PDF
         </Button>
       </div>
 
-      <article className="relative mx-auto aspect-[1.414/1] max-w-5xl overflow-hidden bg-white shadow-xl print:max-w-none print:shadow-none">
-        <div className="absolute inset-4 border-2 border-orange-900/80" aria-hidden="true" />
-        <div className="absolute inset-6 border border-orange-900/30" aria-hidden="true" />
-        <div className="pointer-events-none absolute -left-32 -top-32 h-80 w-80 rounded-full bg-gradient-to-br from-orange-200/60 to-rose-200/40 blur-2xl" aria-hidden="true" />
-        <div className="pointer-events-none absolute -bottom-40 -right-24 h-96 w-96 rounded-full bg-gradient-to-br from-amber-200/60 to-orange-100/40 blur-2xl" aria-hidden="true" />
+      <article className="relative mx-auto aspect-[1.414/1] max-w-5xl overflow-hidden bg-white shadow-[0_30px_70px_-30px_rgba(46,16,101,0.45)] ring-1 ring-slate-900/5 print:max-w-none print:shadow-none print:ring-0">
+        <div className="absolute inset-4 border-2 border-violet-950/75" aria-hidden="true" />
+        <div className="absolute inset-6 border border-amber-600/40" aria-hidden="true" />
+        {/* Soft corner washes: plain radial gradients, no blur filters */}
+        <div className="pointer-events-none absolute -left-40 -top-40 h-96 w-96 rounded-full bg-[radial-gradient(circle,rgba(167,139,250,0.30),transparent_65%)]" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-48 -right-32 h-[28rem] w-[28rem] rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.28),transparent_65%)]" aria-hidden="true" />
+        <div className="pointer-events-none absolute -bottom-40 -left-24 h-80 w-80 rounded-full bg-[radial-gradient(circle,rgba(232,121,249,0.16),transparent_65%)]" aria-hidden="true" />
 
         <div className="relative flex h-full flex-col items-center justify-between px-[8%] py-[6%] text-center">
           <div className="flex items-center gap-2 text-slate-700">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 text-white">
-              <BookOpen className="h-5 w-5" />
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-violet-600 to-fuchsia-600 text-white">
+              <BookOpen className="h-5 w-5" aria-hidden="true" />
             </span>
             <span className="text-lg font-semibold tracking-tight">Cognitia</span>
           </div>
 
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-orange-800">{award.label}</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.35em] text-amber-800">{award.label}</p>
             <h1 className="mt-3 font-serif text-4xl text-slate-900 sm:text-5xl">{award.title}</h1>
+            <div className="mx-auto mt-4 flex w-40 items-center gap-2" aria-hidden="true">
+              <span className="h-px flex-1 bg-gradient-to-r from-transparent to-violet-300" />
+              <span className="h-1.5 w-1.5 rotate-45 bg-amber-500" />
+              <span className="h-px flex-1 bg-gradient-to-l from-transparent to-violet-300" />
+            </div>
             <p className="mt-6 text-sm text-slate-500">This certifies that</p>
             <p className="mt-2 font-serif text-3xl italic text-slate-900 sm:text-4xl">{cert.recipient.name}</p>
             {cert.recipient.institution && <p className="mt-1 text-sm text-slate-600">{cert.recipient.institution}</p>}
@@ -78,7 +86,13 @@ export default function CertificatePage() {
               <p className="mt-0.5 font-mono">ID {cert.certificateId}</p>
             </div>
             <div className="flex justify-center">
-              <span className="flex h-24 w-24 flex-col items-center justify-center rounded-full border-4 border-double border-orange-800/70 text-center font-semibold uppercase text-orange-900">
+              <span
+                className={
+                  top
+                    ? "flex h-24 w-24 flex-col items-center justify-center rounded-full border-4 border-double border-amber-700/80 text-center font-semibold uppercase text-amber-900"
+                    : "flex h-24 w-24 flex-col items-center justify-center rounded-full border-4 border-double border-violet-900/70 text-center font-semibold uppercase text-violet-950"
+                }
+              >
                 {cert.award === "PARTICIPATION" ? (
                   <span className="text-[10px] leading-tight tracking-wider">Verified<br />participant</span>
                 ) : (

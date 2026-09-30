@@ -1,13 +1,15 @@
 // Contest engine: pure functions with no I/O.
 // Phases, grading, ranking, ratings, shuffling and question statistics all live here
-// so they can be verified in isolation and reused by the API, jobs and seed.
+// so they can be unit-tested in isolation and reused by the API, jobs and seed.
 
 export const ANSWER_GRACE_MS = 15_000; // accept saves this long after a deadline (network latency)
 export const DEFAULT_RATING = 1500;
 
-export const QUESTION_TYPES = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "NUMERIC", "SHORT_TEXT"];
+export const QUESTION_TYPES = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "NUMERIC", "SHORT_TEXT", "WRITTEN"];
 export const CHOICE_TYPES = new Set(["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE"]);
 export const TRUE_FALSE_OPTIONS = ["True", "False"];
+
+export const WRITTEN_LIMITS = { maxText: 20_000, maxImagesCap: 6, defaultImages: 4, minWords: 10, maxWords: 5000 };
 
 const round2 = (value) => Math.round(value * 100) / 100;
 
@@ -17,7 +19,7 @@ const round2 = (value) => Math.round(value * 100) / 100;
 
 /**
  * DRAFT → UPCOMING → LIVE → ENDED → RESULTS, or CANCELLED at any point after publishing.
- * ENDED means the window closed but results aren't public yet (finalizing or manual review).
+ * ENDED means the window closed but results aren't public yet (finalizing, grading or manual review).
  */
 export function contestPhase(contest, now = new Date()) {
   if (!contest.publishedAt) return "DRAFT";
@@ -71,11 +73,22 @@ export function newSeed() {
   return Math.floor(Math.random() * 2 ** 31);
 }
 
-/** Questions in the order this participant sees them. */
+/**
+ * Questions in the order this participant sees them. Sections keep their order
+ * (by the first question in each); shuffling only happens inside a section.
+ */
 export function orderQuestions(questions, { seed, shuffle }) {
   const sorted = [...questions].sort((a, b) => a.order - b.order);
   if (!shuffle) return sorted;
-  return seededPermutation(sorted.length, seed).map((i) => sorted[i]);
+  const groups = new Map();
+  for (const question of sorted) {
+    const key = question.section?.trim() || "";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(question);
+  }
+  return [...groups.entries()].flatMap(([section, group]) =>
+    seededPermutation(group.length, (seed ^ hashString(section)) >>> 0).map((i) => group[i])
+  );
 }
 
 /**
@@ -116,6 +129,23 @@ export function parseNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export function wordCount(text) {
+  const trimmed = String(text ?? "").trim();
+  return trimmed ? trimmed.split(/\s+/).length : 0;
+}
+
+/** Settings for a written question, with defaults filled in. */
+export function writtenConfig(question) {
+  const key = question.answer ?? {};
+  const allowImages = key.allowImages !== false;
+  return {
+    allowText: key.allowText !== false,
+    allowImages,
+    maxWords: key.maxWords ?? null,
+    maxImages: allowImages ? Math.min(WRITTEN_LIMITS.maxImagesCap, key.maxImages ?? WRITTEN_LIMITS.defaultImages) : 0,
+  };
+}
+
 /** Returns an error message if the answer key doesn't fit the question, otherwise null. */
 export function validateAnswerKey({ type, options, answer }) {
   const count = type === "TRUE_FALSE" ? 2 : Array.isArray(options) ? options.length : 0;
@@ -150,6 +180,21 @@ export function validateAnswerKey({ type, options, answer }) {
       }
       return null;
     }
+    case "WRITTEN": {
+      if (typeof answer?.rubric !== "string" || answer.rubric.trim().length < 3) {
+        return "Add a marking rubric so graders (and the AI) know how to award marks";
+      }
+      if (answer.allowText === false && answer.allowImages === false) return "Allow typed answers, photos, or both";
+      if (answer.maxWords !== null && answer.maxWords !== undefined) {
+        if (!Number.isInteger(answer.maxWords) || answer.maxWords < WRITTEN_LIMITS.minWords || answer.maxWords > WRITTEN_LIMITS.maxWords) {
+          return `Word limit must be between ${WRITTEN_LIMITS.minWords} and ${WRITTEN_LIMITS.maxWords}`;
+        }
+      }
+      if (answer.maxImages !== undefined && (!Number.isInteger(answer.maxImages) || answer.maxImages < 1 || answer.maxImages > WRITTEN_LIMITS.maxImagesCap)) {
+        return `Photo limit must be between 1 and ${WRITTEN_LIMITS.maxImagesCap}`;
+      }
+      return null;
+    }
     default:
       return "Unknown question type";
   }
@@ -157,7 +202,7 @@ export function validateAnswerKey({ type, options, answer }) {
 
 /** Coerce a client response into the canonical shape, or null if it's empty/invalid. */
 export function normalizeResponse(question, response) {
-  if (response === null || response === undefined) return null;
+  if (response === null || response === undefined || typeof response !== "object") return null;
   const count = optionTexts(question).length;
   switch (question.type) {
     case "SINGLE_CHOICE":
@@ -178,6 +223,15 @@ export function normalizeResponse(question, response) {
       const text = String(response.text ?? "").slice(0, 200).trim();
       return text ? { text } : null;
     }
+    case "WRITTEN": {
+      const config = writtenConfig(question);
+      const text = config.allowText ? String(response.text ?? "").slice(0, WRITTEN_LIMITS.maxText).trim() : "";
+      const files = config.allowImages && Array.isArray(response.files)
+        ? [...new Set(response.files.filter((f) => typeof f === "string" && f.length <= 40))].slice(0, config.maxImages)
+        : [];
+      if (!text && !files.length) return null;
+      return { ...(text && { text }), ...(files.length && { files }) };
+    }
     default:
       return null;
   }
@@ -190,7 +244,8 @@ export function normalizeResponse(question, response) {
 /**
  * Grade one response.
  * Wrong answers lose `negativeMarking × points`. Partial answers are never penalized.
- * @returns {{ verdict: "CORRECT"|"PARTIAL"|"WRONG"|"UNANSWERED", score: number }}
+ * Written answers are PENDING until an organizer or the AI grades them.
+ * @returns {{ verdict: "CORRECT"|"PARTIAL"|"WRONG"|"UNANSWERED"|"PENDING", score: number }}
  */
 export function gradeResponse(question, response, { negativeMarking = 0 } = {}) {
   const normalized = normalizeResponse(question, response);
@@ -233,14 +288,40 @@ export function gradeResponse(question, response, { negativeMarking = 0 } = {}) 
       return accepted.includes(given) ? correct : wrong;
     }
 
+    case "WRITTEN":
+      return { verdict: "PENDING", score: 0 };
+
     default:
       return { verdict: "UNANSWERED", score: 0 };
   }
 }
 
+/** Snap a manual or AI score for a written answer to quarter marks within [0, points]. */
+export function clampWrittenScore(score, points) {
+  const value = Number(score);
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(points, Math.max(0, Math.round(value * 4) / 4));
+}
+
+/** Verdict for a graded written answer. */
+export function writtenVerdict(score, points) {
+  if (score >= points) return "CORRECT";
+  if (score > 0) return "PARTIAL";
+  return "WRONG";
+}
+
 /** Totals for a participant from their graded answers. */
 export function summarizeAnswers(answers, startedAt) {
-  const totals = { score: 0, correctCount: 0, partialCount: 0, wrongCount: 0, answeredCount: 0, lastAnswerAt: null, timeTakenSec: null };
+  const totals = {
+    score: 0,
+    correctCount: 0,
+    partialCount: 0,
+    wrongCount: 0,
+    answeredCount: 0,
+    pendingCount: 0,
+    lastAnswerAt: null,
+    timeTakenSec: null,
+  };
   for (const answer of answers) {
     if (answer.verdict === "UNANSWERED") continue;
     totals.answeredCount++;
@@ -248,6 +329,7 @@ export function summarizeAnswers(answers, startedAt) {
     if (answer.verdict === "CORRECT") totals.correctCount++;
     else if (answer.verdict === "PARTIAL") totals.partialCount++;
     else if (answer.verdict === "WRONG") totals.wrongCount++;
+    else if (answer.verdict === "PENDING") totals.pendingCount++;
     const at = new Date(answer.answeredAt);
     if (!totals.lastAnswerAt || at > totals.lastAnswerAt) totals.lastAnswerAt = at;
   }
@@ -326,13 +408,16 @@ export function computeRatingChanges(entries) {
 export function questionStats(question, answers, participantCount) {
   const answered = answers.filter((a) => a.verdict !== "UNANSWERED");
   const count = (verdict) => answered.filter((a) => a.verdict === verdict).length;
+  const graded = answered.filter((a) => a.verdict !== "PENDING");
   const stats = {
     participants: participantCount,
     answered: answered.length,
     correct: count("CORRECT"),
     partial: count("PARTIAL"),
     wrong: count("WRONG"),
+    pending: count("PENDING"),
     correctRate: participantCount ? Math.round((count("CORRECT") / participantCount) * 1000) / 10 : 0,
+    averageScore: graded.length ? round2(graded.reduce((sum, a) => sum + a.score, 0) / graded.length) : null,
     distribution: null,
   };
   if (CHOICE_TYPES.has(question.type)) {

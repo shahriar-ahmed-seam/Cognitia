@@ -1,41 +1,44 @@
 "use client"
 
 import Link from "next/link"
+import dynamic from "next/dynamic"
 import type React from "react"
-import { Suspense, useEffect } from "react"
+import { Suspense, useEffect, useRef } from "react"
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { CalendarDays, ChevronRight, Clock3, ListOrdered, Scale, Settings2, Users } from "lucide-react"
+import { BookOpenText, CalendarDays, ChevronRight, Settings2, Tag } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MarkdownRenderer } from "@/components/markdown-renderer"
-import { useUser } from "@/contexts/user-context"
 import { useApi } from "@/hooks/use-api"
 import { useNow } from "@/hooks/use-server-clock"
 import { cn } from "@/lib/utils"
-import { TIMING_META, formatDuration, formatWindow, negativeMarkingLabel } from "@/lib/contests/format"
+import { TEAM_ROLE_META, TIMING_META, formatDuration, formatWindow, negativeMarkingLabel } from "@/lib/contests/format"
 import type { Announcement, ContestDetail, MyResult, ProblemSet } from "@/lib/contests/types"
-import { AccessBadge, ContestShell, DifficultyLabel, ErrorState, KindBadge, LoadingState, Panel, PhaseBadge, RatedBadge } from "@/components/contests/primitives"
+import {
+  AccessBadge,
+  ContestShell,
+  CountUp,
+  DifficultyLabel,
+  ErrorState,
+  KindBadge,
+  LoadingState,
+  Panel,
+  PanelHeader,
+  PhaseBadge,
+  RatedBadge,
+  StageHero,
+  StageStat,
+  stageButton,
+} from "@/components/contests/primitives"
 import { ActionPanel } from "@/components/contests/detail/action-panel"
 import { AnnouncementList, RulesCard } from "@/components/contests/detail/sections"
 import { StandingsTable } from "@/components/contests/standings-table"
-import { ResultView } from "@/components/contests/result-view"
-import { ProblemsView } from "@/components/contests/problems-view"
+
+// Results and practice load only when their tab opens
+const ResultView = dynamic(() => import("@/components/contests/result-view").then((m) => m.ResultView), { loading: () => <LoadingState label="Loading your result…" /> })
+const ProblemsView = dynamic(() => import("@/components/contests/problems-view").then((m) => m.ProblemsView), { loading: () => <LoadingState label="Loading problems…" /> })
 
 type Tab = "overview" | "standings" | "announcements" | "results" | "problems"
-
-function Fact({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
-  return (
-    <div className="flex gap-3">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
-        <Icon className="h-4 w-4" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xs text-slate-500">{label}</p>
-        <p className="text-sm font-medium text-slate-900">{value}</p>
-      </div>
-    </div>
-  )
-}
 
 function ResultsTab({ id }: { id: string }) {
   const { data, error, loading, refresh } = useApi<MyResult>(`/contests/${id}/results`, { revalidateOnFocus: false })
@@ -58,14 +61,18 @@ function AnnouncementsTab({ id }: { id: string }) {
   return data ? <AnnouncementList announcements={data.announcements} /> : null
 }
 
+function negativeShort(fraction: number) {
+  return fraction ? negativeMarkingLabel(fraction).replace(" per wrong answer", "") : "None"
+}
+
 function ContestPage() {
   const { id } = useParams<{ id: string }>()
   const params = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const { user } = useUser()
   const { data: contest, error, loading, refresh, mutate } = useApi<ContestDetail>(`/contests/${id}`, { refreshInterval: 30_000 })
   const now = useNow(1000, contest?.serverNow)
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
 
   // Refresh right when the contest starts or ends so the page switches state on time
   useEffect(() => {
@@ -77,15 +84,21 @@ function ContestPage() {
 
   if (loading) {
     return (
-      <ContestShell>
-        <LoadingState label="Loading contest…" />
+      <ContestShell
+        hero={
+          <StageHero>
+            <LoadingState onDark label="Loading contest…" />
+          </StageHero>
+        }
+      >
+        <div />
       </ContestShell>
     )
   }
   if (error || !contest) {
     return (
       <ContestShell>
-        <ErrorState message={error?.status === 404 ? "This contest doesn't exist or isn't published yet." : error?.message ?? "Couldn't load the contest"} onRetry={refresh} backHref="/contests" />
+        <ErrorState message={error?.status === 404 ? "This contest doesn't exist or isn't published yet." : (error?.message ?? "Couldn't load the contest")} onRetry={refresh} backHref="/contests" />
       </ContestShell>
     )
   }
@@ -95,120 +108,170 @@ function ContestPage() {
     { key: "overview", label: "Overview", show: true },
     { key: "results", label: "My result", show: contest.phase === "RESULTS" && participated },
     { key: "standings", label: "Standings", show: contest.phase !== "DRAFT" && contest.phase !== "CANCELLED" },
-    { key: "problems", label: "Problems & solutions", show: contest.phase === "RESULTS" },
+    { key: "problems", label: "Problems and solutions", show: contest.phase === "RESULTS" },
     { key: "announcements", label: "Announcements", show: contest.phase !== "DRAFT", badge: contest.announcementCount },
   ]
   const visible = tabs.filter((t) => t.show)
   const requested = params.get("tab") as Tab | null
   const tab: Tab = visible.some((t) => t.key === requested) ? (requested as Tab) : contest.phase === "RESULTS" && participated ? "results" : "overview"
   const setTab = (next: Tab) => router.replace(`${pathname}?tab=${next}`, { scroll: false })
+  const onTabKey = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : 0
+    if (!delta && event.key !== "Home" && event.key !== "End") return
+    event.preventDefault()
+    const nextIndex = event.key === "Home" ? 0 : event.key === "End" ? visible.length - 1 : (index + delta + visible.length) % visible.length
+    const next = visible[nextIndex].key
+    setTab(next)
+    tabRefs.current[next]?.focus()
+  }
   const timing = TIMING_META[contest.timing]
+  const live = contest.phase === "LIVE"
+  const tags = [...contest.subjects, ...contest.topics.filter((t) => !contest.subjects.includes(t))]
 
-  return (
-    <ContestShell>
-      <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-slate-500">
-        <Link href="/contests" className="hover:text-slate-900">Contests</Link>
-        <ChevronRight className="h-3.5 w-3.5" />
-        <span className="truncate text-slate-700">{contest.title}</span>
-      </nav>
-
-      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="mt-4 grid gap-4 lg:grid-cols-[1fr_340px]">
-        <Panel className="p-6">
-          <div className="flex flex-wrap items-center gap-2">
-            <PhaseBadge phase={contest.phase} />
-            <KindBadge kind={contest.kind} />
-            {contest.isRated && <RatedBadge />}
-            <AccessBadge visibility={contest.visibility} institution={contest.institution} />
-          </div>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">{contest.title}</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {contest.hostName ?? "Cognitia"}
-            {contest.createdBy && ` · organized by ${contest.createdBy.name}`}
-          </p>
-          <p className="mt-3 text-slate-700">{contest.summary}</p>
-
-          <div className="mt-6 grid gap-4 sm:grid-cols-2">
-            <Fact icon={CalendarDays} label={timing.label} value={formatWindow(contest.startsAt, contest.endsAt)} />
-            <Fact
-              icon={Clock3}
-              label={contest.timing === "FLEXIBLE" ? "Your time limit" : "Duration"}
-              value={
-                <>
-                  {formatDuration(contest.durationMinutes)} · <DifficultyLabel difficulty={contest.difficulty} />
-                </>
-              }
-            />
-            <Fact icon={ListOrdered} label="Questions" value={`${contest.questionCount} questions · ${contest.totalPoints} marks`} />
-            <Fact icon={Scale} label="Marking" value={negativeMarkingLabel(contest.negativeMarking)} />
-            <Fact
-              icon={Users}
-              label="Participants"
-              value={
-                contest.phase === "LIVE"
-                  ? `${contest.activity.registered} registered · ${contest.activity.inProgress} answering now`
-                  : `${contest.activity.registered} registered${contest.capacity ? ` of ${contest.capacity}` : ""}`
-              }
-            />
-          </div>
-          {user?.role === "ADMIN" && (
-            <div className="mt-6 border-t border-slate-100 pt-4">
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/contests/manage/${contest.id}`}>
-                  <Settings2 className="h-4 w-4" /> Manage in organizer console
-                </Link>
-              </Button>
-            </div>
-          )}
-        </Panel>
-        <div className="lg:sticky lg:top-20 lg:self-start">
-          <ActionPanel contest={contest} now={now} onUpdate={mutate} />
-        </div>
-      </motion.section>
-
-      <div role="tablist" aria-label="Contest sections" className="mt-8 flex gap-1 overflow-x-auto border-b border-slate-200">
-        {visible.map((t) => (
-          <button
-            key={t.key}
-            role="tab"
-            aria-selected={tab === t.key}
-            onClick={() => setTab(t.key)}
-            className={cn(
-              "relative whitespace-nowrap px-3 pb-3 pt-1 text-sm font-medium transition",
-              tab === t.key ? "text-slate-900" : "text-slate-500 hover:text-slate-800"
-            )}
-          >
-            {t.label}
-            {t.badge ? <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs tabular-nums text-slate-600">{t.badge}</span> : null}
-            {tab === t.key && <motion.span layoutId="contest-detail-tab" className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-orange-600" />}
-          </button>
-        ))}
+  const hero = (
+    <StageHero>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1 text-sm text-slate-400">
+          <Link href="/contests" className="rounded hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300">
+            Contests
+          </Link>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          <span className="truncate text-slate-300" aria-current="page">
+            {contest.title}
+          </span>
+        </nav>
+        {contest.teamRole && (
+          <Button asChild size="sm" variant="ghost" className={stageButton}>
+            <Link href={`/contests/manage/${contest.id}`}>
+              <Settings2 className="h-4 w-4" aria-hidden="true" /> Manage
+              <span className="rounded-full bg-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-100">{TEAM_ROLE_META[contest.teamRole].label}</span>
+            </Link>
+          </Button>
+        )}
       </div>
 
-      <div className="mt-6" role="tabpanel">
+      <div className="mt-6 grid gap-8 lg:grid-cols-[1fr_380px] lg:items-start">
+        <div className="rise min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <PhaseBadge phase={contest.phase} onDark />
+            <KindBadge kind={contest.kind} onDark />
+            {contest.isRated && <RatedBadge onDark />}
+            <AccessBadge visibility={contest.visibility} institution={contest.institution} onDark />
+          </div>
+          <h1 className="mt-4 text-3xl font-semibold tracking-tight text-white md:text-4xl lg:leading-tight">{contest.title}</h1>
+          <p className="mt-2 text-sm text-slate-300">
+            {contest.hostName ?? "Cognitia"}
+            {contest.createdBy && <span className="text-slate-400"> · organized by {contest.createdBy.name}</span>}
+          </p>
+          {contest.summary && <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-slate-200">{contest.summary}</p>}
+          <p className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-300">
+            <CalendarDays className="h-4 w-4 text-violet-300" aria-hidden="true" />
+            <span className="font-medium text-white">{timing.label}</span>
+            <span className="text-slate-500" aria-hidden="true">
+              ·
+            </span>
+            <span>{formatWindow(contest.startsAt, contest.endsAt)}</span>
+          </p>
+
+          <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <StageStat
+              label={contest.timing === "FLEXIBLE" ? "Your time limit" : "Duration"}
+              value={formatDuration(contest.durationMinutes)}
+              hint={<DifficultyLabel difficulty={contest.difficulty} onDark />}
+            />
+            <StageStat label="Questions" value={<CountUp value={contest.questionCount} />} hint={`${contest.totalPoints} marks${contest.writtenCount ? ` · ${contest.writtenCount} written` : ""}`} />
+            <StageStat
+              label="Registered"
+              value={<CountUp value={contest.activity.registered} />}
+              hint={live ? `${contest.activity.inProgress} answering now` : contest.capacity ? `of ${contest.capacity} places` : undefined}
+            />
+            <StageStat label="Negative marking" value={negativeShort(contest.negativeMarking)} hint={contest.negativeMarking ? "per wrong answer" : "Guessing is free"} />
+          </div>
+        </div>
+
+        <div className="rise" style={{ "--i": 2 } as React.CSSProperties}>
+          <ActionPanel contest={contest} now={now} onUpdate={mutate} />
+        </div>
+      </div>
+    </StageHero>
+  )
+
+  return (
+    <ContestShell hero={hero}>
+      <Panel className="p-1.5">
+        <div role="tablist" aria-label="Contest sections" className="flex gap-1 overflow-x-auto">
+          {visible.map((t, index) => {
+            const active = tab === t.key
+            return (
+              <button
+                key={t.key}
+                ref={(node) => {
+                  tabRefs.current[t.key] = node
+                }}
+                id={`contest-section-${t.key}`}
+                role="tab"
+                type="button"
+                aria-selected={active}
+                aria-controls="contest-section-panel"
+                tabIndex={active ? 0 : -1}
+                onClick={() => setTab(t.key)}
+                onKeyDown={(event) => onTabKey(event, index)}
+                className={cn(
+                  "relative whitespace-nowrap rounded-xl px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500",
+                  active ? "text-white" : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="contest-detail-tab"
+                    className="absolute inset-0 rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 shadow-md shadow-violet-600/25"
+                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  />
+                )}
+                <span className="relative flex items-center gap-1.5">
+                  {t.label}
+                  {t.badge ? (
+                    <span className={cn("rounded-full px-1.5 py-0.5 text-xs tabular-nums", active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600")}>{t.badge}</span>
+                  ) : null}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </Panel>
+
+      <div className="mt-6" role="tabpanel" id="contest-section-panel" aria-labelledby={`contest-section-${tab}`}>
         {tab === "overview" && (
           <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-            <Panel className="p-6">
-              {contest.description ? (
-                <div className="text-[15px] text-slate-700">
-                  <MarkdownRenderer content={contest.description} />
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500">The organizer hasn't added a description.</p>
-              )}
-              {(contest.subjects.length > 0 || contest.topics.length > 0) && (
-                <div className="mt-6 flex flex-wrap gap-1.5 border-t border-slate-100 pt-4">
-                  {[...contest.subjects, ...contest.topics.filter((t) => !contest.subjects.includes(t))].map((tag) => (
-                    <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600">
+            <Panel className="rise">
+              <PanelHeader title="About this contest" icon={BookOpenText} />
+              <div className="px-5 py-4 sm:px-6">
+                {contest.description ? (
+                  <div className="text-[15px] text-slate-700">
+                    <MarkdownRenderer content={contest.description} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-slate-500">The organizer hasn't added a description.</p>
+                )}
+              </div>
+              {tags.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-slate-100 px-5 py-4 sm:px-6">
+                  <Tag className="mr-1 h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                  <span className="sr-only">Topics:</span>
+                  {tags.map((tag) => (
+                    <span key={tag} className="rounded-full bg-violet-50 px-2.5 py-0.5 text-xs font-medium text-violet-700 ring-1 ring-inset ring-violet-100">
                       {tag}
                     </span>
                   ))}
                 </div>
               )}
             </Panel>
-            <RulesCard contest={contest} />
+            <div className="rise" style={{ "--i": 1 } as React.CSSProperties}>
+              <RulesCard contest={contest} />
+            </div>
           </div>
         )}
-        {tab === "standings" && <StandingsTable contestId={contest.id} live={contest.phase === "LIVE"} />}
+        {tab === "standings" && <StandingsTable contestId={contest.id} live={live} />}
         {tab === "announcements" && <AnnouncementsTab id={contest.id} />}
         {tab === "results" && <ResultsTab id={contest.id} />}
         {tab === "problems" && <ProblemsTab id={contest.id} />}

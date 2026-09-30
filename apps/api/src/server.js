@@ -1,202 +1,16 @@
 // Load .env before any other module reads process.env at import time
 import "dotenv/config";
-import express from "express";
-import helmet from "helmet";
-import morgan from "morgan";
-import compression from "compression";
 import http from "http";
-import { swaggerSpec, swaggerUi } from "./utils/swagger.js";
-import jwt from "jsonwebtoken";
 import cron from "node-cron";
-import { createServer } from "http";
-import { WebSocketServer } from "ws";
-import { autoSubmitExpiredTests } from "./jobs/autoSubmit.js";
-import corsMiddleware from "./middleware/cors.js";
-import errorHandler from "./middleware/errorHandler.js";
-import { authenticateToken } from "./middleware/auth.js";
-import {
-  validateCuidOrUUID,
-  handleValidationErrors,
-} from "./middleware/validation.js";
-import { detectMimeType } from "./utils/fileUtils.js";
-// Import your route handlers
-import authRoutes from "./routes/auth.js";
-import analyticsRoutes from "./routes/analytics.js";
-import dashboardRoutes from "./routes/dashboard.js";
-import tasksRoutes from "./routes/tasks.js";
-import modelTestRoutes from "./routes/modelTest.js";
-import notesRoutes from "./routes/notes.js";
-import contestRoutes from "./modules/contests/participant.routes.js";
-import contestOrganizerRoutes from "./modules/contests/organizer.routes.js";
-import { runContestLifecycle } from "./modules/contests/service.js";
-import qnaRoutes from "./routes/qa.js";
-import profileRoutes from "./routes/profile.js";
-import { connectDatabase } from "./lib/database.js";
-import { prisma } from "./lib/database.js";
-
-import { createClient } from "redis";
 import { parse } from "url";
+import app from "./app.js";
+import { autoSubmitExpiredTests } from "./jobs/autoSubmit.js";
+import { connectDatabase } from "./lib/database.js";
+import { processGradingQueue } from "./modules/ai/queue.js";
+import { runContestLifecycle } from "./modules/contests/service.js";
 import wss from "./notificationSocket.js";
-import notificationsRouter from "./routes/notifications.js";
 
-const app = express();
 const PORT = process.env.PORT;
-
-// Log all incoming requests
-app.use((req, res, next) => {
-  console.log("Request received:");
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  // log request body if it's a POST/PUT request
-  if (req.method === "POST" || req.method === "PUT") {
-    console.log("Request body:", req.body);
-  }
-  next();
-});
-
-// Security and optimization middleware
-app.use(helmet());
-app.use(compression());
-app.use(corsMiddleware);
-app.use((req, res, next) => {
-  res.setHeader(
-    "Content-Security-Policy",
-    "frame-ancestors 'self' http://localhost:3000 http://130.33.96.3:3000 http://130.33.96.3 http://cognitiahub.me https://cognitiahub.me http://www.cognitiahub.me https://www.cognitiahub.me"
-  );
-  res.removeHeader("X-Frame-Options");
-  next();
-});
-
-app.use(morgan("combined"));
-
-// Body parsing middleware
-app.use(express.json({ limit: "50mb" }));
-app.use(express.urlencoded({ extended: true, limit: "50mb" }));
-
-// Health check endpoint
-app.get("/health", async (req, res) => {
-  try {
-    // Test database connection
-    await prisma.$queryRaw`SELECT 1`;
-
-    res.status(200).json({
-      status: "healthy",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      database: "connected",
-      version: "1.1.0",
-      environment: process.env.NODE_ENV || "development",
-    });
-  } catch (error) {
-    console.error("Health check failed:", error);
-    res.status(503).json({
-      status: "unhealthy",
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      database: "disconnected",
-      error: error.message,
-      version: "1.1.0",
-      environment: process.env.NODE_ENV || "development",
-    });
-  }
-});
-
-app.get("/api/users/count", async (req, res) => {
-  try {
-    const userCount = await prisma.user.count();
-    res.json({ count: userCount });
-  } catch (error) {
-    console.error("Error fetching user count:", error);
-    res.status(500).json({ error: "Failed to fetch user count" });
-  }
-});
-
-app.get("/api/notes/count", async (req, res) => {
-  try {
-    const notesCount = await prisma.note.count();
-    res.json({ count: notesCount });
-  } catch (error) {
-    console.error("Error fetching notes count:", error);
-    res.status(500).json({ error: "Failed to fetch notes count" });
-  }
-});
-
-// File serving endpoint with better organization
-app.get(
-  "/api/notes/:id/file",
-  [validateCuidOrUUID("id"), handleValidationErrors],
-  async (req, res) => {
-    try {
-      const token = req.query.token;
-      if (!token) {
-        return res.status(401).json({ error: "No token provided" });
-      }
-
-      let user;
-      try {
-        user = jwt.verify(token, process.env.JWT_SECRET);
-      } catch (err) {
-        return res.status(401).json({ error: "Invalid or expired token" });
-      }
-
-      const note = await prisma.note.findUnique({
-        where: { id: req.params.id },
-        select: {
-          file: true,
-          title: true,
-          visibility: true,
-          authorId: true,
-        },
-      });
-
-      if (!note) {
-        return res.status(404).json({ error: "Note not found" });
-      }
-
-      if (note.visibility === "PRIVATE" && note.authorId !== user.id) {
-        return res.status(403).json({ error: "Access denied" });
-      }
-
-      if (!note.file) {
-        return res.status(404).json({ error: "No file attached to this note" });
-      }
-
-      // contentType is pdf
-      const contentType = await detectMimeType(note.file);
-      const sanitizedFilename = note.title.replace(/[^a-zA-Z0-9.-]/g, "_");
-
-      res.setHeader("Content-Type", contentType);
-      res.setHeader(
-        "Content-Disposition",
-        `inline; filename="${sanitizedFilename}"`
-      );
-      res.setHeader("Cache-Control", "private, max-age=3600");
-      res.send(note.file);
-    } catch (error) {
-      console.error("Serve note file error:", error);
-      res.status(500).json({ error: "Failed to serve note file" });
-    }
-  }
-);
-
-// Group routes by functionality
-// Authentication routes
-app.use("/api/auth", authRoutes);
-app.use("/api/notifications", authenticateToken, notificationsRouter);
-// Protected routes
-app.use("/api/dashboard", authenticateToken, dashboardRoutes);
-app.use("/api/analytics", authenticateToken, analyticsRoutes);
-app.use("/api/tasks", authenticateToken, tasksRoutes);
-app.use("/api/model-test", authenticateToken, modelTestRoutes);
-app.use("/api/notes", authenticateToken, notesRoutes);
-app.use("/api/contests", authenticateToken, contestRoutes);
-app.use("/api/qa", authenticateToken, qnaRoutes);
-app.use("/api/profile", authenticateToken, profileRoutes);
-
-// Admin routes
-app.use("/api/admin/contests", authenticateToken, contestOrganizerRoutes);
-
-app.use("/api", (req, res) => res.status(404).json({ error: "Not found" }));
-app.use(errorHandler);
 
 cron.schedule("* * * * *", async () => {
   try {
@@ -205,11 +19,13 @@ cron.schedule("* * * * *", async () => {
     console.error("Error auto-submitting test attempts:", err);
   }
   try {
-    // Contest reminders, start notices, expired attempts and finalization
+    // Contest reminders, start notices, expired attempts, finalization and auto-publishing
     await runContestLifecycle();
   } catch (err) {
     console.error("Contest lifecycle job failed:", err);
   }
+  // AI grading can take most of a minute, so it runs on its own without blocking the next tick
+  processGradingQueue().catch((err) => console.error("AI grading queue failed:", err));
 });
 
 // Create HTTP server (for Express + WebSocket)
@@ -234,7 +50,6 @@ server.on("upgrade", (req, socket, head) => {
 connectDatabase()
   .then(() => {
     console.log("✅ Database connected successfully");
-    // Start server
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`🔗 API base URL: http://localhost:${PORT}/api`);

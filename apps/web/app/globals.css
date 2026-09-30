@@ -585,3 +585,155 @@
 .text-outline-black {
   -webkit-text-stroke: 1px rgb(252, 249, 249);
 }
+
+/* ==========================================================================
+   Contest theme
+   Midnight "stage" heroes with an aurora, violet→fuchsia brand, amber flame accent.
+   Effects animate transform/opacity only (cheap on lab PCs) and stop under reduced motion.
+   ========================================================================== */
+
+.stage {
+  background-color: #0b0a1d;
+  background-image:
+    radial-gradient(60rem 30rem at 8% -12%, rgba(124, 58, 237, 0.42), transparent 62%),
+    radial-gradient(48rem 26rem at 92% -6%, rgba(217, 70, 239, 0.26), transparent 60%),
+    radial-gradient(42rem 22rem at 55% 125%, rgba(245, 158, 11, 0.18), transparent 60%),
+    linear-gradient(180deg, #0b0a1d 0%, #110d2b 100%);
+}
+
+/* Faint blueprint grid that fades out from the top */
+.stage-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 35%, transparent 80%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, #000 35%, transparent 80%);
+}
+
+@keyframes aurora-drift {
+  0% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(6%, 4%, 0) scale(1.08); }
+  100% { transform: translate3d(-4%, 8%, 0) scale(0.96); }
+}
+
+.aurora-blob {
+  position: absolute;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform;
+  animation: aurora-drift 24s ease-in-out infinite alternate;
+}
+.aurora-violet { background: radial-gradient(circle, rgba(139, 92, 246, 0.5), transparent 66%); }
+.aurora-fuchsia { background: radial-gradient(circle, rgba(236, 72, 153, 0.34), transparent 66%); animation-duration: 30s; animation-delay: -8s; }
+.aurora-amber { background: radial-gradient(circle, rgba(251, 191, 36, 0.26), transparent 66%); animation-duration: 34s; animation-delay: -15s; }
+
+/* Gradient hairline border on light cards */
+.gradient-border {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(135deg, rgba(139, 92, 246, 0.55), rgba(236, 72, 153, 0.35) 45%, rgba(245, 158, 11, 0.45)) border-box;
+}
+
+/* Cursor-following glow; --x/--y are set by <SpotlightCard> */
+.spotlight {
+  position: relative;
+  isolation: isolate;
+}
+.spotlight::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(360px circle at var(--x, 50%) var(--y, 0%), rgba(139, 92, 246, 0.11), transparent 45%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+.spotlight:hover::before { opacity: 1; }
+.spotlight-dark::before {
+  background: radial-gradient(360px circle at var(--x, 50%) var(--y, 0%), rgba(196, 181, 253, 0.16), transparent 45%);
+}
+
+/* Spinning conic ring for live things (uses the --rotate property defined above) */
+.live-ring {
+  position: relative;
+  isolation: isolate;
+}
+/* Own keyframes name: Tailwind's animate-spin also defines "spin" (as a transform) and would win */
+@keyframes live-ring-turn {
+  from { --rotate: 0deg; }
+  to { --rotate: 360deg; }
+}
+.live-ring::before {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--rotate), #22c55e, #8b5cf6, #ec4899, #f59e0b, #22c55e);
+  animation: live-ring-turn 5s linear infinite;
+  z-index: -1;
+}
+.live-ring::after {
+  content: "";
+  position: absolute;
+  inset: -1.5px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--rotate), #22c55e, #8b5cf6, #ec4899, #f59e0b, #22c55e);
+  filter: blur(14px);
+  opacity: 0.35;
+  animation: live-ring-turn 5s linear infinite;
+  z-index: -2;
+}
+
+@keyframes shimmer-text {
+  0% { background-position: 200% 50%; }
+  100% { background-position: -200% 50%; }
+}
+.text-shimmer {
+  background-image: linear-gradient(100deg, #c4b5fd 20%, #ffffff 40%, #f0abfc 55%, #fcd34d 70%, #c4b5fd 90%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer-text 8s linear infinite;
+}
+.text-brand {
+  background-image: linear-gradient(90deg, #7c3aed, #c026d3 55%, #ea580c);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translate3d(0, 10px, 0); }
+  to { opacity: 1; transform: none; }
+}
+/* Staggered entrance: style={{ "--i": index }} */
+.rise {
+  animation: rise-in 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 45ms);
+}
+
+@keyframes soft-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+.animate-soft-pulse { animation: soft-pulse 2.4s ease-in-out infinite; }
+
+.medal-gold { background: linear-gradient(135deg, #fde68a, #f59e0b 55%, #b45309); color: #451a03; }
+.medal-silver { background: linear-gradient(135deg, #f1f5f9, #94a3b8 55%, #475569); color: #0f172a; }
+.medal-bronze { background: linear-gradient(135deg, #fed7aa, #ea580c 55%, #7c2d12); color: #fff7ed; }
+
+@media (prefers-reduced-motion: reduce) {
+  .aurora-blob,
+  .live-ring::before,
+  .live-ring::after,
+  .text-shimmer,
+  .rise,
+  .animate-soft-pulse {
+    animation: none !important;
+  }
+}

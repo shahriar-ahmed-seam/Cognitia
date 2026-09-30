@@ -63,6 +63,11 @@ const contestFields = {
   liveStandings: z.boolean(),
   resultsMode: z.enum(["AUTO", "MANUAL"]),
   isRated: z.boolean(),
+  writtenGrading: z.enum(["MANUAL", "AI_ASSISTED", "AI_AUTO"]),
+  aiSource: z.enum(["PLATFORM", "OWN_KEY"]),
+  aiCredentialId: z.string().trim().max(40).nullable(),
+  aiInstructions: z.string().max(2000),
+  blindGrading: z.boolean(),
 };
 
 export const createContestSchema = z.object({
@@ -84,6 +89,11 @@ export const createContestSchema = z.object({
   liveStandings: contestFields.liveStandings.default(true),
   resultsMode: contestFields.resultsMode.default("AUTO"),
   isRated: contestFields.isRated.default(false),
+  writtenGrading: contestFields.writtenGrading.default("MANUAL"),
+  aiSource: contestFields.aiSource.default("PLATFORM"),
+  aiCredentialId: contestFields.aiCredentialId.optional(),
+  aiInstructions: contestFields.aiInstructions.default(""),
+  blindGrading: contestFields.blindGrading.default(true),
 });
 
 export const updateContestSchema = z.object(contestFields).partial();
@@ -101,6 +111,7 @@ const questionFields = {
   subject: optionalText(60),
   topics: tagList(10),
   difficulty: z.enum(DIFFICULTIES),
+  section: optionalText(80),
 };
 
 export const createQuestionSchema = z.object({
@@ -147,6 +158,20 @@ export function normalizeAnswerKey(type, options, answer) {
         }
       }
       key = { accepted: accepted.slice(0, 20), caseSensitive: Boolean(answer?.caseSensitive) };
+      break;
+    }
+    case "WRITTEN": {
+      const allowImages = answer?.allowImages !== false;
+      const maxWords = answer?.maxWords === null || answer?.maxWords === undefined || answer?.maxWords === "" ? null : Number(answer.maxWords);
+      key = {
+        rubric: String(answer?.rubric ?? "").trim().slice(0, 5000),
+        modelAnswer: answer?.modelAnswer ? String(answer.modelAnswer).trim().slice(0, 10000) : null,
+        allowText: answer?.allowText !== false,
+        allowImages,
+        maxWords,
+        maxImages: allowImages ? Number(answer?.maxImages ?? 4) : 0,
+      };
+      if (!allowImages) delete key.maxImages;
       break;
     }
     default:
@@ -208,6 +233,35 @@ export const importSchema = z.object({
   questionBankIds: z.array(z.string()).min(1).max(100),
   points: z.number().int().min(1).max(100).optional(),
 });
+// ---------- team and grading ----------
+
+export const addTeamMemberSchema = z.object({
+  email: z.string().trim().toLowerCase().email("Enter a valid email"),
+  role: z.enum(["EDITOR", "GRADER"]).default("EDITOR"),
+});
+export const updateTeamMemberSchema = z.object({ role: z.enum(["EDITOR", "GRADER"]) });
+
+export const gradingQuerySchema = z.object({
+  status: z.enum(["NEEDS_REVIEW", "QUEUED", "GRADED", "ALL"]).default("NEEDS_REVIEW"),
+  questionId: z.string().trim().max(40).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+});
+export const gradeSchema = z.object({
+  score: z.number().min(0).max(100),
+  feedback: z.string().trim().max(3000).optional().transform((v) => v || null),
+});
+export const acceptAiSchema = z.object({
+  minConfidence: z.number().min(0).max(1).default(0.8),
+  questionId: z.string().trim().max(40).optional(),
+});
+export const requeueSchema = z.object({
+  questionId: z.string().trim().max(40).optional(),
+  answerIds: z.array(z.string().max(40)).max(500).optional(),
+  // Also re-run answers that were already graded by the AI (never overwrites organizer grades)
+  includeAiGraded: z.boolean().default(false),
+});
+
 export const bankQuerySchema = z.object({
   subject: z.string().trim().max(60).optional(),
   topic: z.string().trim().max(60).optional(),

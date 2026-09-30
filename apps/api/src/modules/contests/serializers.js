@@ -1,6 +1,6 @@
 // Response shapes. Answer keys only ever leave the server through `publicAnswerKey`,
 // which callers use once results are public (or for organizers).
-import { contestPhase, orderOptions, orderQuestions, optionTexts, CHOICE_TYPES, percentile } from "./engine.js";
+import { contestPhase, orderOptions, orderQuestions, optionTexts, writtenConfig, CHOICE_TYPES, percentile } from "./engine.js";
 
 const iso = (date) => (date ? new Date(date).toISOString() : null);
 
@@ -29,6 +29,8 @@ export function participantSummary(contest, participant, phase) {
     disqualified: Boolean(participant.disqualifiedAt),
     disqualifyReason: participant.disqualifyReason ?? null,
     score: showScore ? participant.score : null,
+    // Written answers still waiting for a grade (not part of `score` yet)
+    pendingCount: finished ? participant.pendingCount ?? 0 : 0,
     rank: phase === "RESULTS" ? participant.rank : null,
   };
 }
@@ -79,7 +81,26 @@ export function contestDetail(contest, ctx) {
     registration: ctx.registration,
     activity: ctx.activity,
     announcementCount: ctx.announcementCount ?? 0,
+    writtenCount: ctx.writtenCount ?? 0,
+    writtenGrading: ctx.writtenCount ? contest.writtenGrading : null,
+    // Written-answer grading progress, once the contest has ended
+    grading: ctx.grading ?? null,
+    // The viewer's role on the organizing team ("OWNER", "EDITOR", "GRADER", "ADMIN") or null
+    teamRole: ctx.teamRole ?? null,
     serverNow: iso(ctx.at),
+  };
+}
+
+/** Grade details for a written answer, shown to its author once results are public. */
+export function writtenGradeView(answer) {
+  if (!answer || answer.verdict === "UNANSWERED") return null;
+  return {
+    status: answer.gradingStatus,
+    feedback: answer.feedback ?? null,
+    gradeSource: answer.gradeSource ?? null,
+    // The AI's per-criterion marks, only when its grade is the one that counts
+    breakdown: answer.gradeSource === "AI" && Array.isArray(answer.aiBreakdown) ? answer.aiBreakdown : null,
+    gradedAt: iso(answer.gradedAt),
   };
 }
 
@@ -96,6 +117,8 @@ export function publicAnswerKey(question) {
       return { value: key.value, tolerance: key.tolerance ?? 0, toleranceType: key.toleranceType ?? "ABSOLUTE", unit: key.unit ?? null };
     case "SHORT_TEXT":
       return { accepted: key.accepted ?? [], caseSensitive: Boolean(key.caseSensitive) };
+    case "WRITTEN":
+      return { rubric: key.rubric ?? "", modelAnswer: key.modelAnswer ?? null };
     default:
       return null;
   }
@@ -112,7 +135,10 @@ function baseQuestion(question, number) {
     subject: question.subject,
     topics: question.topics,
     difficulty: question.difficulty,
+    section: question.section ?? null,
     unit: question.type === "NUMERIC" ? question.answer?.unit ?? null : null,
+    // Answer limits for written questions (never the rubric)
+    written: question.type === "WRITTEN" ? writtenConfig(question) : null,
   };
 }
 

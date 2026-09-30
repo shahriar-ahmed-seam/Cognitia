@@ -27,7 +27,7 @@ Share notes, ask and answer questions, practice with timed model tests, compete 
 | **Notes** | Upload PDF notes into groups, keep them private or make them public, browse and read classmates' public notes in the app |
 | **Q&A** | Ask course questions, answer, upvote and downvote, filter by subject |
 | **Model tests** | Take timed MCQ tests from a shared question bank, resume unfinished attempts, review answers with explanations, track history |
-| **Contests** | Quizzes, mock CTs, weekly challenges, aptitude and olympiad rounds with five question types, negative marking and partial credit. Fixed or flexible time windows; public, institution-only or invite-only access. Autosaving contest arena, live and final standings, answer review with explanations, practice mode, certificates, and Elo-style contest ratings with university rankings. Admins get an organizer console for authoring, clarifications, announcements, integrity checks, rejudging and CSV export ([design](docs/product/contests.md)) |
+| **Contests** | Quizzes, mock CTs, weekly challenges, aptitude and olympiad rounds with six question types, including written answers (typed or photos of handwritten work), math and images, sections, negative marking and partial credit. Fixed or flexible time windows; public, institution-only or invite-only access. Autosaving contest arena, live and final standings, answer review with feedback, practice mode, certificates, and Elo-style contest ratings with university rankings. Organizers (teachers, CRs, club leads) run contests with a team of editors and graders: authoring, a grading desk with optional AI grading (Cognitia's AI or their own key), clarifications, announcements, integrity checks, rejudging and CSV export ([design](docs/product/contests.md)) |
 | **Study plan** | Track tasks with priorities and due dates, and plan study sessions. AI scheduling is being rebuilt as part of the Study Engine |
 | **Notifications** | Get updates on answers, votes, contests, deadlines and sign-ins |
 | **Profiles** | Manage academic profile details (institution, level and term, major) and avatar |
@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 - **`apps/web`**: Next.js App Router frontend with Tailwind CSS, shadcn/ui (Radix) and Framer Motion.
-- **`apps/api`**: Express REST API, Prisma ORM on PostgreSQL, JWT auth with Google OAuth, email OTP verification, a notification WebSocket endpoint and a per-minute job that auto-submits expired tests and runs the contest lifecycle (reminders, auto-submit, finalizing, ratings). Endpoint references are in [`apps/api/docs/api/`](apps/api/docs/api/).
+- **`apps/api`**: Express REST API, Prisma ORM on PostgreSQL, JWT auth with Google OAuth, email OTP verification, a notification WebSocket endpoint and a per-minute job that auto-submits expired tests and runs the contest lifecycle (reminders, auto-submit, finalizing, ratings) and the AI grading queue for written answers. Endpoint references are in [`apps/api/docs/api/`](apps/api/docs/api/).
 - **`apps/ai`**: Flask service that builds study schedules with DeepSeek. It falls back to a local heuristic when no API key is set.
 
 ## Repository layout
@@ -94,6 +94,10 @@ At minimum, set these three:
 - `JWT_SECRET` in `apps/api/.env` (generate one with `openssl rand -hex 32`)
 - `DEEPSEEK_API_KEY` in `apps/ai/.env`. This one is optional; without it the AI service uses its local heuristic.
 
+For AI grading of written contest answers, also set in `apps/api/.env`:
+- `AI_PLATFORM_API_KEY`: a DeepSeek key for Cognitia's own AI (the other `AI_PLATFORM_*` values have working defaults). Without it, written answers are graded by organizers only, or with organizers' own keys.
+- `AI_KEY_ENCRYPTION_SECRET` (`openssl rand -hex 32`): encrypts organizers' own AI keys. Without it they can't save keys.
+
 When email isn't configured, OTP codes are printed to the API console in development.
 
 ### 3. Create and seed the database
@@ -121,17 +125,21 @@ The seed creates a realistic dataset for a Level 3 CSE section. It includes cour
 
 | Role | Email |
 |---|---|
-| Admin (contest organizer) | `admin@cognitia.test` |
+| Admin (manages every contest) | `admin@cognitia.test` |
 | Student | `student@cognitia.test` |
-| Classmates | `tasnim@`, `arif@`, `mehjabin@`, `rakib@`, `anika@`, `fahim@`, `nusrat@`, `tanvir@`, `sadia@cognitia.test` |
+| Organizer (class representative) | `tasnim@cognitia.test`: owns the Section A contest and edits the compiler quiz draft |
+| Grader (student TA) | `rakib@cognitia.test`: grades the two CSE 313 written contests |
+| Classmates | `arif@`, `mehjabin@` (editor on Section A), `anika@`, `fahim@`, `nusrat@`, `tanvir@`, `sadia@cognitia.test` |
 | Students at other universities | `zarif@` (CUET), `mahir@` (KUET), `farzana@` (DU), `shafin@` (SUST) and 12 more `@cognitia.test` accounts |
 
 These accounts exist only in your local database.
 
 The seed has contests in every state, with times relative to when you seed:
-- two live contests: a fixed 3-hour challenge, and a flexible mock CT with a 30-minute personal timer
+- two live contests: a fixed 3-hour challenge, and a flexible mock CT with a 30-minute personal timer and a written question
 - upcoming contests, including an invite-only one (access code `SECA-2025`) and a BUET-only one
 - a finished contest waiting for the organizer to review and publish results
+- a finished written quiz whose answers are on the grading desk: some graded, most with AI suggestions to approve, a few where the AI failed
+- a written CT with published results, feedback and marks per rubric criterion
 - four rated contests with published results and ratings
 - one cancelled contest and one draft
 
@@ -150,6 +158,13 @@ Run from the repository root:
 | `npm run db:seed` | Wipe and reseed the demo data |
 | `npm run db:reset` | Drop the database, re-apply migrations and reseed |
 | `npm run db:studio` | Open Prisma Studio |
+
+API tests, from `apps/api`:
+
+| Command | Description |
+|---|---|
+| `npm test` | Unit tests (contest engine, AI grading helpers, routes) |
+| `TEST_DATABASE_URL=… npm run test:integration` | Resets and seeds a separate test database (its name must contain "test"), then runs the contest integration tests against it |
 
 ## Roadmap
 
