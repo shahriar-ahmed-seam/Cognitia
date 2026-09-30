@@ -72,7 +72,7 @@ See `.github/workflows/deploy.yml` for CI/CD and deployment automation details.
 
 ## API Reference
 
-See `docs/api/` for detailed API documentation for each module.
+See `docs/api/` for detailed API documentation for each module. The contest system is documented in [`docs/api/contests.md`](docs/api/contests.md). Its code is in `src/modules/contests/`: routes, services, validation, and a pure grading, ranking and rating engine in `engine.js`.
 
 
 ## Live Website

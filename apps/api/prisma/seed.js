@@ -1,10 +1,13 @@
 // Seeds a realistic local dataset covering every model in the schema.
 // Usage: npm run db:seed   (wipes existing data first)
 import "dotenv/config";
-import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import { prisma } from "../src/lib/database.js";
+import * as engine from "../src/modules/contests/engine.js";
+import { applyRatings, computeRanks } from "../src/modules/contests/service.js";
 import { createPdf } from "./seed/pdf.js";
 import { questionBank } from "./seed/questions.js";
+import { contestDefinitions, contestQuestions } from "./seed/contests.js";
 import {
   DEMO_PASSWORD,
   users,
@@ -14,8 +17,6 @@ import {
   classmateTaskTemplates,
   projectBrief,
 } from "./seed/content.js";
-
-const prisma = new PrismaClient();
 
 // ---------- helpers ----------
 
@@ -52,7 +53,6 @@ function atDay(dayOffset, hour, minute = 0) {
   date.setHours(hour, minute, 0, 0);
   return date;
 }
-const pointsFor = (difficulty) => ({ EASY: 5, MEDIUM: 10, HARD: 15 })[difficulty] ?? 10;
 
 // Build an answers map { questionId: optionIndex } with roughly the given accuracy
 function answerSheet(questions, accuracy, answeredCount = questions.length) {
@@ -81,9 +81,9 @@ async function clearDatabase() {
   await prisma.question.deleteMany();
   await prisma.availability.deleteMany();
   await prisma.testAttempt.deleteMany();
-  await prisma.contestAttempt.deleteMany();
   await prisma.questionAssignment.deleteMany();
-  await prisma.contestRegistration.deleteMany();
+  // Contest children cascade from contests; ratings cascade from users
+  await prisma.contestRating.deleteMany();
   await prisma.studySession.deleteMany();
   await prisma.task.deleteMany();
   await prisma.note.deleteMany();
@@ -123,6 +123,9 @@ async function seedUsers(passwordHash) {
   };
   for (const classmate of users.classmates) {
     people[classmate.key] = await create(classmate, { createdAt: ago(randomInt(60, 150) * DAY) });
+  }
+  for (const member of users.community) {
+    people[member.key] = await create(member, { createdAt: ago(randomInt(40, 200) * DAY) });
   }
   const pending = await create(users.pending, {
     verified: false,
@@ -218,124 +221,256 @@ async function seedModelTests(bank, people) {
   return { tests, attempts };
 }
 
-async function seedContests(bank, people) {
-  const definitions = [
-    {
-      title: "OS and Networks Sprint",
-      description: "Ten questions on memory management, scheduling, TCP and subnetting. Fastest correct submissions win ties.",
-      start: atDay(-7, 20), minutes: 60, difficulty: "MEDIUM",
-      topics: ["Operating Systems", "Computer Networks"], pool: byTopic(bank, "Operating Systems", "Computer Networks"), count: 10,
-      eligibility: "Open to all CSE students",
-      registrants: ["student", "tasnim", "arif", "anika", "rakib", "mehjabin", "fahim"],
-      attempts: { student: 0.7, arif: 0.9, anika: 0.8, rakib: 0.6, tasnim: 0.5, mehjabin: 0.75 },
-    },
-    {
-      title: "Digital Logic Quiz Night",
-      description: "Gates, Boolean algebra, flip-flops and pipelining. Good warm-up for the sessional viva.",
-      start: atDay(-14, 21), minutes: 45, difficulty: "EASY",
-      topics: ["Digital Logic", "Computer Architecture"], pool: byTopic(bank, "Digital Logic", "Computer Architecture"), count: 8,
-      eligibility: "Open to all CSE and EEE students",
-      registrants: ["tanvir", "sadia", "anika", "nusrat", "arif"],
-      attempts: { tanvir: 0.85, sadia: 0.7, anika: 0.65, nusrat: 0.55, arif: 0.8 },
-    },
-    {
-      title: "Weekly Algorithms Challenge #12",
-      description: "Graphs, dynamic programming and complexity. Harder than usual this week.",
-      start: later(now, -20 * MINUTE), minutes: 120, difficulty: "HARD",
-      topics: ["Algorithms", "Data Structures"], pool: byTopic(bank, "Algorithms", "Data Structures"), count: 10,
-      eligibility: "Open to all students",
-      registrants: ["student", "arif", "fahim", "anika"],
-      attempts: { fahim: 0.6 },
-      inProgress: { arif: 4 },
-    },
-    {
-      title: "Database Systems Speed Round",
-      description: "Seven quick questions on SQL, normalization and transactions. 45 minutes.",
-      start: atDay(2, 20), minutes: 45, difficulty: "MEDIUM",
-      topics: ["Database Systems"], pool: byTopic(bank, "Database Systems"), count: 7,
-      eligibility: "Open to all CSE students",
-      registrants: ["mehjabin", "nusrat", "tasnim"],
-      attempts: {},
-    },
-    {
-      title: "Engineering Math Marathon",
-      description: "Linear algebra, probability, calculus and numerical methods. 90 minutes, 12 questions.",
-      start: atDay(6, 19), minutes: 90, difficulty: "HARD",
-      topics: ["Mathematics"], pool: bySubject(bank, "Mathematics"), count: 12,
-      eligibility: "Open to all students",
-      registrants: [],
-      attempts: {},
-    },
-  ];
+// Contest skill per person: rough probability of answering a medium question correctly
+const SKILL = {
+  student: 0.8, arif: 0.92, fahim: 0.78, anika: 0.84, rakib: 0.66, tasnim: 0.62, mehjabin: 0.74, nusrat: 0.6,
+  tanvir: 0.8, sadia: 0.68, zarif: 0.86, mahir: 0.76, nabila: 0.58, shafin: 0.7, farzana: 0.64, rafid: 0.72,
+  tahmid: 0.55, samiha: 0.7, adnan: 0.6, lamia: 0.66, mushfiq: 0.52, raisa: 0.74, sabbir: 0.5, proma: 0.62,
+  ishrat: 0.77, tanzim: 0.69,
+};
+const CONTEST_POINTS = { EASY: 1, MEDIUM: 2, HARD: 3, EXPERT: 4 };
+const DIFFICULTY_SHIFT = { EASY: 0.12, MEDIUM: 0, HARD: -0.15, EXPERT: -0.25 };
 
+function fromBank(question) {
+  return {
+    type: "SINGLE_CHOICE",
+    prompt: question.question,
+    options: question.options,
+    answer: { correct: question.correctAnswer },
+    explanation: question.explanation,
+    points: CONTEST_POINTS[question.difficulty] ?? 1,
+    subject: question.subject,
+    topics: question.topics,
+    difficulty: question.difficulty,
+    sourceQuestionId: question.id,
+  };
+}
+
+function pickFromBank(bank, { topics, subject, count, excludeTopics = [] }) {
+  const pool = bank.filter(
+    (q) =>
+      (subject ? q.subject === subject : true) &&
+      (topics ? q.topics.some((t) => topics.includes(t)) : true) &&
+      !q.topics.some((t) => excludeTopics.includes(t))
+  );
+  return shuffle(pool).slice(0, count);
+}
+
+/** A plausible response: correct, partly correct or wrong. */
+function simulateResponse(question, correct) {
+  const key = question.answer;
+  const count = engine.optionTexts(question).length;
+  switch (question.type) {
+    case "SINGLE_CHOICE":
+    case "TRUE_FALSE": {
+      if (correct) return { choice: key.correct };
+      const wrong = [...Array(count).keys()].filter((i) => i !== key.correct);
+      return { choice: wrong[randomInt(0, wrong.length - 1)] };
+    }
+    case "MULTIPLE_CHOICE": {
+      if (correct) return { choices: key.correct };
+      const wrong = [...Array(count).keys()].filter((i) => !key.correct.includes(i));
+      // Half the time: only some of the right options; otherwise one right and one wrong
+      return random() < 0.5 && key.correct.length > 1
+        ? { choices: key.correct.slice(0, key.correct.length - 1) }
+        : { choices: [key.correct[0], wrong[randomInt(0, wrong.length - 1)]] };
+    }
+    case "NUMERIC": {
+      if (correct) return { value: key.value };
+      const direction = random() < 0.5 ? -1 : 1;
+      let value = key.value * (1 + direction * (0.15 + random() * 0.35));
+      value = Number.isInteger(key.value) ? Math.round(value) : Math.round(value * 1000) / 1000;
+      if (Math.abs(value - key.value) <= (key.tolerance ?? 0)) value = key.value + direction * Math.max(1, key.tolerance * 10);
+      return { value };
+    }
+    case "SHORT_TEXT": {
+      if (correct) return { text: key.accepted[0] };
+      const decoys = question.decoys?.length ? question.decoys : ["not sure"];
+      return { text: decoys[randomInt(0, decoys.length - 1)] };
+    }
+    default:
+      return null;
+  }
+}
+
+/** Answer rows for one attempt: `questions` in the order the participant saw them. */
+function simulateAnswers({ questions, skill, negativeMarking, startedAt, finishedAt, answeredCount, decoysByPrompt }) {
+  const skipChance = negativeMarking > 0 ? 0.12 : 0.04;
+  const span = Math.max(60_000, finishedAt - startedAt);
+  const rows = [];
+  questions.slice(0, answeredCount).forEach((question, index) => {
+    const answeredAt = new Date(startedAt.getTime() + ((index + 1) / (answeredCount + 1)) * span + randomInt(0, 50) * 1000);
+    const flagged = random() < 0.08;
+    if (random() < skipChance) {
+      if (flagged) rows.push({ questionId: question.id, response: null, flagged, verdict: "UNANSWERED", score: 0, answeredAt });
+      return;
+    }
+    const p = Math.min(0.97, Math.max(0.08, skill + (DIFFICULTY_SHIFT[question.difficulty] ?? 0) + (random() - 0.5) * 0.2));
+    const withDecoys = { ...question, decoys: decoysByPrompt.get(question.prompt) };
+    const response = engine.normalizeResponse(question, simulateResponse(withDecoys, random() < p));
+    const grade = engine.gradeResponse(question, response, { negativeMarking });
+    rows.push({ questionId: question.id, response, flagged, ...grade, answeredAt });
+  });
+  return rows;
+}
+
+async function seedContests(bank, people) {
+  const definitions = contestDefinitions({ atDay, later, now, MINUTE, DAY });
+  const decoysByPrompt = new Map(Object.values(contestQuestions).filter((q) => q.decoys).map((q) => [q.prompt, q.decoys]));
   const contests = {};
-  let attemptCount = 0;
+  const counts = { contests: 0, questions: 0, participants: 0, answers: 0, announcements: 0, clarifications: 0 };
+  const toFinalize = [];
+
   for (const def of definitions) {
-    const end = later(def.start, def.minutes * MINUTE);
-    const status = end <= now ? "FINISHED" : def.start <= now ? "ONGOING" : "UPCOMING";
-    const questions = shuffle(def.pool)
-      .slice(0, def.count)
-      .map((question) => ({ question, points: pointsFor(question.difficulty) }));
-    const createdAt = later(def.start, -randomInt(5, 10) * DAY);
+    const start = def.start;
+    const end = def.end ?? later(start, def.minutes * MINUTE);
+    const timing = def.timing ?? "FIXED";
+    const durationMinutes = timing === "FLEXIBLE" ? def.durationMinutes : Math.round((end - start) / MINUTE);
+    const createdAt = later(start, -randomInt(6, 10) * DAY);
+    const published = def.state !== "draft";
+    const begun = start <= now;
+
     const contest = await prisma.contest.create({
       data: {
         title: def.title,
+        summary: def.summary,
         description: def.description,
-        startTime: def.start,
-        endTime: end,
-        status,
+        rules: def.rules ?? "",
+        kind: def.kind,
         difficulty: def.difficulty,
-        participants: def.registrants.length,
+        subjects: def.subjects,
         topics: def.topics,
-        eligibility: def.eligibility,
-        createdBy: people.admin.id,
+        hostName: def.hostName,
+        timing,
+        startsAt: start,
+        endsAt: end,
+        durationMinutes,
+        registrationClosesAt: def.registrationClosesAt ?? null,
+        visibility: def.visibility ?? "PUBLIC",
+        institution: def.institution ?? null,
+        accessCode: def.accessCode ?? null,
+        capacity: def.capacity ?? null,
+        negativeMarking: def.negativeMarking ?? 0,
+        liveStandings: def.liveStandings ?? true,
+        resultsMode: def.resultsMode ?? "AUTO",
+        isRated: def.isRated ?? false,
+        publishedAt: published ? later(createdAt, 2 * HOUR) : null,
+        cancelledAt: def.state === "cancelled" ? ago(5 * HOUR) : null,
+        cancelReason: def.cancelReason ?? null,
+        reminderSentAt: begun && published ? later(start, -30 * MINUTE) : null,
+        startNoticeSentAt: begun && published ? start : null,
+        createdById: people.admin.id,
         createdAt,
-        updatedAt: createdAt,
-        assignments: { create: questions.map(({ question, points }) => ({ questionId: question.id, points })) },
       },
     });
-    contests[def.title] = contest;
+    contests[def.key] = contest;
+    counts.contests++;
 
-    for (const key of def.registrants) {
-      await prisma.contestRegistration.create({
-        data: {
-          contestId: contest.id,
-          userId: people[key].id,
-          registrationTime: later(createdAt, randomInt(1, 72) * HOUR),
-        },
-      });
+    // Questions: bank picks first, then custom ones
+    const questionData = [
+      ...(def.bank ?? []).flatMap((spec) => pickFromBank(bank, spec).map(fromBank)),
+      ...(def.custom ?? []).map(({ decoys, ...question }) => ({ partialCredit: false, explanation: null, options: null, ...question })),
+    ];
+    await prisma.contestQuestion.createMany({
+      data: questionData.map((question, index) => ({ ...question, contestId: contest.id, order: index + 1 })),
+    });
+    const questions = await prisma.contestQuestion.findMany({ where: { contestId: contest.id }, orderBy: { order: "asc" } });
+    counts.questions += questions.length;
+
+    for (const [key, status, extra = {}] of def.participants) {
+      const person = people[key];
+      const registeredAt = new Date(Math.min(later(createdAt, randomInt(3, 96) * HOUR).getTime(), start.getTime() - MINUTE, now.getTime() - HOUR));
+      const seed = randomInt(1, 2 ** 30);
+      const base = { contestId: contest.id, userId: person.id, registeredAt, seed };
+      if (status === "registered") {
+        await prisma.contestParticipant.create({ data: base });
+        counts.participants++;
+        continue;
+      }
+
+      const startedAt = extra.startAt ?? later(start, (extra.startAfter ?? randomInt(0, 5)) * MINUTE);
+      const deadlineAt = engine.participantDeadline({ timing, endsAt: end, durationMinutes }, startedAt);
+      const ordered = engine.orderQuestions(questions, { seed, shuffle: true });
+      let answers;
+      let data;
+      if (status === "submitted") {
+        const available = deadlineAt - startedAt;
+        const used = Math.min(available, extra.used ?? Math.round(available * (0.55 + random() * 0.4)));
+        const autoSubmitted = random() < 0.1;
+        const submittedAt = autoSubmitted ? deadlineAt : later(startedAt, used);
+        answers = simulateAnswers({
+          questions: ordered, skill: SKILL[key] ?? 0.6, negativeMarking: contest.negativeMarking,
+          startedAt, finishedAt: submittedAt, answeredCount: ordered.length, decoysByPrompt,
+        });
+        data = { status: "SUBMITTED", startedAt, deadlineAt, submittedAt, autoSubmitted, ...engine.summarizeAnswers(answers, startedAt) };
+      } else {
+        answers = simulateAnswers({
+          questions: ordered, skill: SKILL[key] ?? 0.6, negativeMarking: contest.negativeMarking,
+          startedAt, finishedAt: later(now, -MINUTE), answeredCount: Math.min(extra.answered ?? 3, ordered.length), decoysByPrompt,
+        });
+        data = { status: "IN_PROGRESS", startedAt, deadlineAt, ...engine.summarizeAnswers(answers, startedAt) };
+      }
+      const focusLossCount = random() < 0.25 ? randomInt(1, 3) : 0;
+      const participant = await prisma.contestParticipant.create({ data: { ...base, ...data, focusLossCount } });
+      if (answers.length) {
+        await prisma.contestAnswer.createMany({
+          data: answers.map((a) => ({ ...a, participantId: participant.id, response: a.response ?? undefined })),
+        });
+      }
+      counts.participants++;
+      counts.answers += answers.length;
     }
 
-    const writeAttempt = async (key, accuracy, answeredCount, completed) => {
-      const { answers, correct, score } = answerSheet(questions, accuracy, answeredCount);
-      const startTime = later(def.start, randomInt(0, 5) * MINUTE);
-      const timeSpent = completed
-        ? Math.round(def.minutes * 60 * (0.5 + random() * 0.45))
-        : Math.round((now.getTime() - startTime.getTime()) / 1000);
-      const endTime = completed ? later(startTime, timeSpent * 1000) : null;
-      await prisma.contestAttempt.create({
+    for (const note of def.announcements ?? []) {
+      let createdAtNote = later(start, note.at);
+      if (createdAtNote > now) createdAtNote = ago(randomInt(30, 300) * MINUTE);
+      await prisma.contestAnnouncement.create({
+        data: { contestId: contest.id, authorId: people.admin.id, title: note.title, body: note.body, createdAt: createdAtNote },
+      });
+      counts.announcements++;
+    }
+
+    for (const item of def.clarifications ?? []) {
+      const question = item.customKey ? questions.find((qq) => qq.prompt === contestQuestions[item.customKey].prompt) : null;
+      const askedAt = later(start, item.at);
+      await prisma.contestClarification.create({
         data: {
-          status: completed ? "COMPLETED" : "IN_PROGRESS",
-          startTime,
-          endTime,
-          timeSpent: completed ? timeSpent : null,
-          score: completed ? score : null,
-          correctAnswers: completed ? correct : null,
-          totalQuestions: questions.length,
-          answers,
           contestId: contest.id,
-          userId: people[key].id,
-          lastActivity: endTime ?? later(now, -2 * MINUTE),
-          createdAt: startTime,
-          updatedAt: endTime ?? now,
+          questionId: question?.id ?? null,
+          askedById: people[item.by].id,
+          question: item.question,
+          answer: item.answer ?? null,
+          isPublic: item.isPublic ?? false,
+          answeredById: item.answer ? people.admin.id : null,
+          answeredAt: item.answer ? later(askedAt, 3 * MINUTE) : null,
+          createdAt: askedAt,
         },
       });
-      attemptCount++;
-    };
-    for (const [key, accuracy] of Object.entries(def.attempts)) await writeAttempt(key, accuracy, questions.length, true);
-    for (const [key, answered] of Object.entries(def.inProgress ?? {})) await writeAttempt(key, 0.7, answered, false);
+      counts.clarifications++;
+    }
+
+    if (def.state === "results" || def.state === "review") toFinalize.push({ contest, def, end });
   }
-  return { contests, attempts: attemptCount };
+
+  // One integrity case: disqualified in the OS and Networks Sprint (excluded from ranks and ratings)
+  const sprint = contests.osNet;
+  await prisma.contestParticipant.updateMany({
+    where: { contestId: sprint.id, userId: people.mushfiq.id },
+    data: { focusLossCount: 11, disqualifiedAt: later(sprint.endsAt, 20 * MINUTE), disqualifyReason: "Switched away from the contest 11 times and submitted identical wrong answers to another participant." },
+  });
+
+  // Finalize finished contests in date order so ratings build up chronologically
+  for (const { contest, def, end } of toFinalize.sort((a, b) => a.end - b.end)) {
+    await prisma.contest.update({ where: { id: contest.id }, data: { finalizedAt: end } });
+    await computeRanks(contest.id);
+    if (def.state === "results") {
+      const publishedAt = later(end, 2 * MINUTE);
+      await prisma.contest.update({ where: { id: contest.id }, data: { resultsPublishedAt: publishedAt } });
+      if (contest.isRated) await applyRatings(contest.id, publishedAt);
+    }
+  }
+
+  return { contests, counts };
 }
 
 async function seedNotes(people) {
@@ -447,7 +582,7 @@ async function seedStudyPlan(people) {
   }
 
   // Classmates get a few of the same section deadlines
-  const classmates = Object.keys(people).filter((key) => !["admin", "student"].includes(key));
+  const classmates = users.classmates.map((c) => c.key);
   const classmateTaskIds = [];
   for (const key of classmates) {
     for (const { dueInDays, dueHour, ...template } of shuffle(classmateTaskTemplates).slice(0, randomInt(2, 4))) {
@@ -541,17 +676,20 @@ async function seedStudyPlan(people) {
 }
 
 async function seedNotifications(people, contests) {
-  const sprint = contests["OS and Networks Sprint"];
-  const sprintAttempts = await prisma.contestAttempt.findMany({
-    where: { contestId: sprint.id, status: "COMPLETED" },
-    orderBy: [{ score: "desc" }, { timeSpent: "asc" }],
-  });
-  const rank = sprintAttempts.findIndex((attempt) => attempt.userId === people.student.id) + 1;
+  const sprint = contests.osNet;
+  const [mine, ranked, change] = await Promise.all([
+    prisma.contestParticipant.findUnique({ where: { contestId_userId: { contestId: sprint.id, userId: people.student.id } } }),
+    prisma.contestParticipant.count({ where: { contestId: sprint.id, status: "SUBMITTED", disqualifiedAt: null } }),
+    prisma.contestRatingChange.findUnique({ where: { contestId_userId: { contestId: sprint.id, userId: people.student.id } } }),
+  ]);
+  const ratingText = change ? ` Rating ${change.delta >= 0 ? "+" : ""}${change.delta}.` : "";
+  const link = (key, suffix = "") => `/contests/${contests[key].id}${suffix}`;
 
   const forStudent = [
-    { type: "CONTEST_STARTED", title: "Contest is live", message: "Weekly Algorithms Challenge #12 has started. You have 2 hours.", at: 20 * MINUTE, read: false },
+    { type: "CONTEST_STARTED", title: "Contest is live", message: "Weekly Algorithms Challenge #12 has started. Good luck!", at: 24 * MINUTE, read: false, link: link("algo12") },
     { type: "TASK_DEADLINE_SOON", title: "Due tomorrow", message: "Networks Lab 5 report is due tomorrow at 11:59 PM.", at: 2 * HOUR, read: false },
-    { type: "CONTEST_REMINDER", title: "Upcoming contest", message: "Database Systems Speed Round starts in 2 days. Registration is open.", at: 3 * HOUR, read: false },
+    { type: "CONTEST_ANNOUNCEMENT", title: "CSE 313 Mock CT-3: Calculators are fine", message: "Use a calculator freely. Round numeric answers to whole numbers unless the question says otherwise.", at: 3 * HOUR, read: false, link: link("mockCt", "?tab=announcements") },
+    { type: "CONTEST_CANCELLED", title: "Contest cancelled", message: "Signals and Systems Quiz was cancelled: The organizing teacher is away this week.", at: 5 * HOUR, read: false, link: link("signals") },
     { type: "TASK_OVERDUE", title: "Past due", message: "OS Lab 4: mini shell with pipes was due yesterday at 11:59 PM.", at: 8 * HOUR, read: false },
     { type: "SESSION_ADDED", title: "Today's plan", message: "3 study sessions are planned for today.", at: 10 * HOUR, read: false },
     { type: "QUESTION_REPLIED", title: "New answer", message: "Tasnim Akter answered your question \"Three chapters, two days until the CT. How do you prioritize?\"", at: 20 * HOUR, read: false },
@@ -559,18 +697,19 @@ async function seedNotifications(people, contests) {
     { type: "SESSION_STARTED", title: "Session started", message: "Study session started: Page replacement numericals (FIFO, LRU, OPT).", at: 1 * DAY + 4 * HOUR, read: true },
     { type: "LOGIN", title: "New sign-in", message: "Your account was signed in from Chrome on Linux.", at: 1 * DAY, read: true },
     { type: "QUESTION_UPVOTED", title: "Upvotes on your question", message: "Your question about Belady's anomaly received new upvotes.", at: 2 * DAY, read: true },
-    { type: "CONTEST_REGISTERED", title: "Registered", message: "You registered for Weekly Algorithms Challenge #12.", at: 2 * DAY + 5 * HOUR, read: true },
+    { type: "CONTEST_REGISTERED", title: "You're registered", message: "Weekly Algorithms Challenge #12 starts today at 9 PM.", at: 2 * DAY + 5 * HOUR, read: true, link: link("algo12") },
     { type: "TASK_COMPLETED", title: "Task completed", message: "DBMS Lab 3: triggers and stored procedures is marked complete.", at: 3 * DAY, read: true },
     { type: "NOTE_UPLOADED", title: "New note", message: "Mehjabin Chowdhury uploaded \"SQL Joins Quick Reference\" to Database Systems.", at: 4 * DAY, read: true },
     { type: "TASK_STARTED", title: "Task started", message: "You started OS CT-3: Memory management (Ch 8-9).", at: 4 * DAY + 2 * HOUR, read: true },
     { type: "ANSWER_UPVOTED", title: "Upvotes on your answer", message: "Your answer on \"Which subnet mask do I need for 500 hosts?\" received new upvotes.", at: 5 * DAY, read: true },
     { type: "TASK_ADDED", title: "Task added", message: "DBMS project: booking module API was added to your study plan.", at: 6 * DAY, read: true },
-    { type: "CONTEST_RANKING", title: "Contest results", message: `You placed #${rank} of ${sprintAttempts.length} in OS and Networks Sprint.`, at: 7 * DAY - 2 * HOUR, read: true },
-    { type: "CONTEST_ENDED", title: "Contest ended", message: "OS and Networks Sprint has ended. Rankings are available.", at: 7 * DAY - 3 * HOUR, read: true },
-    { type: "CONTEST_UNREGISTERED", title: "Unregistered", message: "You unregistered from Digital Logic Quiz Night.", at: 15 * DAY, read: true },
+    { type: "CONTEST_RANKING", title: "Results are out", message: `You placed #${mine.rank} of ${ranked} in OS and Networks Sprint.${ratingText}`, at: 7 * DAY - 2 * HOUR, read: true, link: link("osNet", "?tab=results") },
+    { type: "CONTEST_UNREGISTERED", title: "Unregistered", message: "You unregistered from Digital Logic Quiz Night.", at: 15 * DAY, read: true, link: link("dlQuiz") },
   ];
   const forAdmin = [
-    { type: "CONTEST_REGISTERED", title: "New registrations", message: "3 students registered for Database Systems Speed Round.", at: 5 * HOUR, read: false },
+    { type: "CONTEST_CLARIFICATION", title: "Clarification requested", message: "Zarif Rahman asked about Weekly Algorithms Challenge #12.", at: 7 * MINUTE, read: false, link: `/contests/manage/${contests.algo12.id}?tab=communication` },
+    { type: "CONTEST_ENDED", title: "Results waiting for review", message: "Software Engineering Case Quiz has ended. Review the results and publish them when ready.", at: 2 * HOUR, read: false, link: `/contests/manage/${contests.seQuiz.id}?tab=results` },
+    { type: "CONTEST_REGISTERED", title: "New registrations", message: "5 students registered for Database Systems Speed Round.", at: 5 * HOUR, read: false, link: `/contests/manage/${contests.dbSpeed.id}?tab=participants` },
     { type: "QUESTION_POSTED", title: "New question", message: "Anika Sultana asked \"How does Linux clone() decide between a thread and a process?\"", at: 6 * HOUR, read: false },
     { type: "PASSWORD_CHANGED", title: "Password changed", message: "Your password was changed. If this wasn't you, contact support.", at: 30 * DAY, read: true },
   ];
@@ -581,7 +720,7 @@ async function seedNotifications(people, contests) {
     ...users.classmates.map((c) => ({ type: "LOGIN", title: "New sign-in", message: "Your account was signed in from a new device.", at: randomInt(1, 9) * DAY, read: random() < 0.5, userId: people[c.key].id })),
   ];
   await prisma.notification.createMany({
-    data: rows.map(({ type, title, message, at, read, userId }) => ({ type, title, message, isRead: read, userId, createdAt: ago(at) })),
+    data: rows.map(({ type, title, message, at, read, userId, link = null }) => ({ type, title, message, link, isRead: read, userId, createdAt: ago(at) })),
   });
   return rows.length;
 }
@@ -600,7 +739,7 @@ async function main() {
   const { people } = await seedUsers(passwordHash);
   const bank = await seedQuestionBank();
   const modelTests = await seedModelTests(bank, people);
-  const { contests, attempts: contestAttempts } = await seedContests(bank, people);
+  const { contests, counts: contestCounts } = await seedContests(bank, people);
   const notes = await seedNotes(people);
   const qa = await seedQa(people);
   const studyPlan = await seedStudyPlan(people);
@@ -611,8 +750,13 @@ async function main() {
     questionBank: bank.length,
     modelTests: modelTests.tests.length,
     testAttempts: modelTests.attempts,
-    contests: Object.keys(contests).length,
-    contestAttempts,
+    contests: contestCounts.contests,
+    contestQuestions: contestCounts.questions,
+    contestParticipants: contestCounts.participants,
+    contestAnswers: contestCounts.answers,
+    contestAnnouncements: contestCounts.announcements,
+    contestClarifications: contestCounts.clarifications,
+    contestRatings: await prisma.contestRating.count(),
     notesGroups: notes.groups,
     notes: notes.notes,
     questions: qa.questions,
@@ -629,6 +773,8 @@ async function main() {
   console.log(`  Admin:   ${users.admin.email}`);
   console.log(`  Student: ${users.student.email}`);
   console.log(`  Others:  ${users.classmates.map((c) => c.email).join(", ")}`);
+  console.log(`  Other universities: ${users.community.length} accounts (e.g. ${users.community[0].email})`);
+  console.log("  Private contest access code: SECA-2025");
 }
 
 main()
@@ -636,4 +782,8 @@ main()
     console.error("Seeding failed:", error);
     process.exitCode = 1;
   })
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    await prisma.$disconnect();
+    // The notification module opens Redis clients at import time; don't wait on them
+    process.exit(process.exitCode ?? 0);
+  });

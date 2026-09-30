@@ -1,340 +1,226 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
-import { Navbar } from "@/components/navbar"
-import { Badge } from "@/components/ui/badge"
-import { Clock, Trophy, Loader2 } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { formatTime, fetchWithAuth } from "@/lib/utils"
-import { SubmitTestDialog, TimeUpDialog } from "@/components/model-test-dialogs"
-import { TestProgressSidebar } from "@/components/model-test-progress"
-import { QuestionCard } from "@/components/model-test-question-card"
+import Link from "next/link"
+import type React from "react"
+import { Suspense, useEffect } from "react"
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation"
+import { motion } from "framer-motion"
+import { CalendarDays, ChevronRight, Clock3, ListOrdered, Scale, Settings2, Users } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { MarkdownRenderer } from "@/components/markdown-renderer"
+import { useUser } from "@/contexts/user-context"
+import { useApi } from "@/hooks/use-api"
+import { useNow } from "@/hooks/use-server-clock"
+import { cn } from "@/lib/utils"
+import { TIMING_META, formatDuration, formatWindow, negativeMarkingLabel } from "@/lib/contests/format"
+import type { Announcement, ContestDetail, MyResult, ProblemSet } from "@/lib/contests/types"
+import { AccessBadge, ContestShell, DifficultyLabel, ErrorState, KindBadge, LoadingState, Panel, PhaseBadge, RatedBadge } from "@/components/contests/primitives"
+import { ActionPanel } from "@/components/contests/detail/action-panel"
+import { AnnouncementList, RulesCard } from "@/components/contests/detail/sections"
+import { StandingsTable } from "@/components/contests/standings-table"
+import { ResultView } from "@/components/contests/result-view"
+import { ProblemsView } from "@/components/contests/problems-view"
 
-interface Question {
-  id: string
-  question: string
-  options: string[]
-  points: number
-  number: number
-  subject?: string
-  topic?: string
+type Tab = "overview" | "standings" | "announcements" | "results" | "problems"
+
+function Fact({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex gap-3">
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="min-w-0">
+        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-sm font-medium text-slate-900">{value}</p>
+      </div>
+    </div>
+  )
 }
 
-interface ContestAttempt {
-  id: string
-  contestId: string
-  startTime: string
-  endTime?: string
-  timeSpent?: number
-  answers: Record<string, string>
-  status: "in-progress" | "completed"
+function ResultsTab({ id }: { id: string }) {
+  const { data, error, loading, refresh } = useApi<MyResult>(`/contests/${id}/results`, { revalidateOnFocus: false })
+  if (loading) return <LoadingState label="Loading your result…" />
+  if (error) return <ErrorState message={error.message} onRetry={refresh} />
+  return data ? <ResultView result={data} /> : null
 }
 
-interface Contest {
-  id: string
-  title: string
-  description: string
-  startTime: string
-  endTime: string
-  status: "UPCOMING" | "ONGOING" | "FINISHED"
-  difficulty: "EASY" | "MEDIUM" | "HARD" | "EXPERT"
-  questions: Question[]
-  totalQuestions: number
+function ProblemsTab({ id }: { id: string }) {
+  const { data, error, loading, refresh } = useApi<ProblemSet>(`/contests/${id}/problems`, { revalidateOnFocus: false })
+  if (loading) return <LoadingState label="Loading problems…" />
+  if (error) return <ErrorState message={error.message} onRetry={refresh} />
+  return data ? <ProblemsView problems={data} /> : null
 }
 
-export default function TakeContestPage() {
-  const params = useParams()
+function AnnouncementsTab({ id }: { id: string }) {
+  const { data, error, loading, refresh } = useApi<{ announcements: Announcement[] }>(`/contests/${id}/announcements`, { refreshInterval: 60_000 })
+  if (loading) return <LoadingState />
+  if (error) return <ErrorState message={error.message} onRetry={refresh} />
+  return data ? <AnnouncementList announcements={data.announcements} /> : null
+}
+
+function ContestPage() {
+  const { id } = useParams<{ id: string }>()
+  const params = useSearchParams()
   const router = useRouter()
-  const { toast } = useToast()
-  const contestId = params.id as string
+  const pathname = usePathname()
+  const { user } = useUser()
+  const { data: contest, error, loading, refresh, mutate } = useApi<ContestDetail>(`/contests/${id}`, { refreshInterval: 30_000 })
+  const now = useNow(1000, contest?.serverNow)
 
-  const [contest, setContest] = useState<Contest | null>(null)
-  const [attempt, setAttempt] = useState<ContestAttempt | null>(null)
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0)
-  const [answers, setAnswers] = useState<Record<string, string>>({})
-  const [flaggedQuestions, setFlaggedQuestions] = useState<Set<number>>(new Set())
-  const [timeRemaining, setTimeRemaining] = useState(0)
-  const [showSubmitDialog, setShowSubmitDialog] = useState(false)
-  const [showTimeUpDialog, setShowTimeUpDialog] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-
+  // Refresh right when the contest starts or ends so the page switches state on time
   useEffect(() => {
-    fetchContestAndStartAttempt()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [contestId])
-
-  useEffect(() => {
-    if (timeRemaining > 0) {
-      const timer = setInterval(() => {
-        setTimeRemaining((prev) => {
-          if (prev <= 1) {
-            clearInterval(timer)
-            setShowTimeUpDialog(true)
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
-      return () => clearInterval(timer)
-    }
-  }, [timeRemaining])
-
-  const fetchContestAndStartAttempt = async () => {
-    try {
-      setLoading(true)
-      const token = localStorage.getItem("token")
-      // Start contest attempt (also provides contest details)
-      const attemptRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/${contestId}/start`, {
-        method: "POST",
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
-        },
-      })
-      if (!attemptRes.ok) throw new Error("Failed to start contest attempt")
-      const attemptData = await attemptRes.json()
-      setContest({
-        id: contestId,
-        title: attemptData.title || "",
-        description: attemptData.description || "",
-        startTime: attemptData.startTime,
-        endTime: attemptData.endTime,
-        status: (attemptData.status || "ONGOING").toUpperCase(),
-        difficulty: (attemptData.difficulty || "MEDIUM").toUpperCase(),
-        questions: Array.isArray(attemptData.questions)
-          ? attemptData.questions
-              .filter((q: any) => q && typeof q === 'object')
-              .map((q: any) => ({
-                id: q.id,
-                question: q.question,
-                options: q.options,
-                points: q.points,
-                number: q.number,
-                subject: q.subject || "",
-                topic: q.topic || "",
-              }))
-          : [],
-        totalQuestions: attemptData.totalQuestions,
-      })
-      setAttempt({
-        id: attemptData.attemptId,
-        contestId: contestId,
-        startTime: attemptData.startTime,
-        answers: {},
-        status: "in-progress"
-      })
-      setTimeRemaining(Math.floor((new Date(attemptData.endTime).getTime() - new Date(attemptData.startTime).getTime()) / 1000))
-      toast({ title: "Success", description: "Contest attempt started" })
-    } catch (error) {
-      console.error("Error starting contest attempt:", error)
-      toast({ title: "Error", description: "Failed to start contest attempt.", variant: "destructive" })
-      router.push("/contests")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleAnswer = async (value: string) => {
-    if (!contest || !attempt) return  
-    const currentQuestion = contest.questions[currentQuestionIndex]
-    const newAnswers = { ...answers, [currentQuestion.id]: value }
-    setAnswers(newAnswers)
-    try {
-      const token = localStorage.getItem("token")
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/attempt/${attempt.id}/answer`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ questionId: currentQuestion.id, answer: value }),
-      })
-      setAttempt(prev => prev ? { ...prev, answers: newAnswers } : null)
-    } catch (error) {
-      console.error("Error saving answer:", error)
-      toast({
-        title: "Warning",
-        description: "Answer saved locally but failed to sync with server. It will be saved when you submit the contest.",
-        variant: "destructive", 
-        // 
-      })
-    } 
-  }
-
-  const handleFlagQuestion = () => {
-    setFlaggedQuestions(prev => {
-      const newFlagged = new Set(prev)
-      if (newFlagged.has(currentQuestionIndex)) {
-        newFlagged.delete(currentQuestionIndex)
-      } else {
-        newFlagged.add(currentQuestionIndex)
-      }
-      return newFlagged
-    })
-  }
-
-  const handleNextQuestion = () => {
-    if (contest && currentQuestionIndex < contest.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1)
-    }
-  }
-
-  const handlePrevQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(currentQuestionIndex - 1)
-    }
-  }
-
-  const handleJumpToQuestion = (index: number) => {
-    setCurrentQuestionIndex(index)
-  }
-
-  const handleSubmitContest = async () => {
-    if (!attempt) return
-    setSubmitting(true)
-    try {
-      const token = localStorage.getItem("token")
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/attempt/${attempt.id}/submit`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          timeSpent: Math.floor((new Date().getTime() - new Date(attempt.startTime).getTime()) / (1000 * 60))
-        }),
-      })
-      toast({ title: "Success", description: "Contest submitted successfully!" })
-      router.push("/contests")
-    } catch (error) {
-      console.error("Error submitting contest:", error)
-      toast({ title: "Error", description: "Failed to submit contest. Please try again.", variant: "destructive" })
-    } finally {
-      setSubmitting(false)
-      setShowSubmitDialog(false)
-    }
-  }
-
-  const handleTimeUp = async () => {
-    if (!attempt) return
-    setSubmitting(true)
-    try {
-      const token = localStorage.getItem("token")
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests/attempt/${attempt.id}/submit`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          timeSpent: contest?.questions.length ? (contest.questions.length * 60) : 0
-        }),
-      })
-      toast({ title: "Time's Up", description: "Contest submitted automatically." })
-      router.push("/contests")
-    } catch (error) {
-      console.error("Error auto-submitting contest:", error)
-      toast({ title: "Error", description: "Failed to submit contest automatically.", variant: "destructive" })
-      router.push("/contests")
-    } finally {
-      setSubmitting(false)
-      setShowTimeUpDialog(false)
-    }
-  }
+    if (!contest) return
+    const boundaries = [contest.startsAt, contest.endsAt].map((t) => new Date(t).getTime() - Date.now() + 1500).filter((ms) => ms > 0 && ms < 2 ** 31 - 1)
+    const timers = boundaries.map((ms) => window.setTimeout(refresh, ms))
+    return () => timers.forEach(window.clearTimeout)
+  }, [contest?.startsAt, contest?.endsAt, refresh]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return (
-      <>
-        <Navbar />
-        <div className="container mx-auto py-8">
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-              <p>Loading contest...</p>
-            </div>
-          </div>
-        </div>
-      </>
+      <ContestShell>
+        <LoadingState label="Loading contest…" />
+      </ContestShell>
     )
   }
-
-  if (!contest || !attempt) {
+  if (error || !contest) {
     return (
-      <>
-        <Navbar />
-        <div className="container mx-auto py-8">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold mb-4">Contest not found</h1>
-            <button className="btn" onClick={() => router.push("/contests")}>Back to Contests</button>
-          </div>
-        </div>
-      </>
+      <ContestShell>
+        <ErrorState message={error?.status === 404 ? "This contest doesn't exist or isn't published yet." : error?.message ?? "Couldn't load the contest"} onRetry={refresh} backHref="/contests" />
+      </ContestShell>
     )
   }
 
-  const currentQuestion = contest.questions[currentQuestionIndex]
-  const totalQuestions = contest.questions.length
-  const answeredCount = Object.keys(answers).length
+  const participated = contest.me?.status === "SUBMITTED"
+  const tabs: { key: Tab; label: string; show: boolean; badge?: number }[] = [
+    { key: "overview", label: "Overview", show: true },
+    { key: "results", label: "My result", show: contest.phase === "RESULTS" && participated },
+    { key: "standings", label: "Standings", show: contest.phase !== "DRAFT" && contest.phase !== "CANCELLED" },
+    { key: "problems", label: "Problems & solutions", show: contest.phase === "RESULTS" },
+    { key: "announcements", label: "Announcements", show: contest.phase !== "DRAFT", badge: contest.announcementCount },
+  ]
+  const visible = tabs.filter((t) => t.show)
+  const requested = params.get("tab") as Tab | null
+  const tab: Tab = visible.some((t) => t.key === requested) ? (requested as Tab) : contest.phase === "RESULTS" && participated ? "results" : "overview"
+  const setTab = (next: Tab) => router.replace(`${pathname}?tab=${next}`, { scroll: false })
+  const timing = TIMING_META[contest.timing]
 
   return (
-    <>
-      <Navbar />
-      <div className="container mx-auto py-4">
-        <div className="flex justify-between items-center mb-4">
-          <h1 className="text-2xl font-bold flex items-center gap-3">
-            <Trophy className="h-7 w-7 text-yellow-500" />
-            {contest?.title || "Loading..."}
-          </h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center text-3xl">
-              <Clock className="h-10 w-10 mr-2 text-slate-700" />
-              <span className={`font-mono font-bold ${timeRemaining < 300 ? "text-red-500" : ""}`}>{formatTime(timeRemaining)}</span>
-            </div>
+    <ContestShell>
+      <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-sm text-slate-500">
+        <Link href="/contests" className="hover:text-slate-900">Contests</Link>
+        <ChevronRight className="h-3.5 w-3.5" />
+        <span className="truncate text-slate-700">{contest.title}</span>
+      </nav>
+
+      <motion.section initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }} className="mt-4 grid gap-4 lg:grid-cols-[1fr_340px]">
+        <Panel className="p-6">
+          <div className="flex flex-wrap items-center gap-2">
+            <PhaseBadge phase={contest.phase} />
+            <KindBadge kind={contest.kind} />
+            {contest.isRated && <RatedBadge />}
+            <AccessBadge visibility={contest.visibility} institution={contest.institution} />
           </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="md:col-span-3">
-            {currentQuestion ? (
-              <QuestionCard
-                question={{ ...currentQuestion, subject: currentQuestion.subject || "", topic: currentQuestion.topic || "" }}
-                questionIndex={currentQuestionIndex}
-                totalQuestions={totalQuestions}
-                answer={answers[currentQuestion.id]}
-                flagged={flaggedQuestions.has(currentQuestionIndex)}
-                onAnswer={handleAnswer}
-                onFlag={handleFlagQuestion}
-                onPrev={handlePrevQuestion}
-                onNext={handleNextQuestion}
-                disablePrev={currentQuestionIndex === 0}
-                disableNext={currentQuestionIndex === totalQuestions - 1}
-              />
-            ) : (
-              <div className="p-8 text-center text-gray-500">No questions available for this contest.</div>
-            )}
-          </div>
-          <div className="md:col-span-1">
-            <TestProgressSidebar
-              totalQuestions={totalQuestions}
-              answeredCount={Object.keys(answers).length}
-              currentQuestionIndex={currentQuestionIndex}
-              flaggedQuestions={flaggedQuestions}
-              answers={answers}
-              onJumpToQuestion={handleJumpToQuestion}
-              onSubmit={() => setShowSubmitDialog(true)}
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">{contest.title}</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            {contest.hostName ?? "Cognitia"}
+            {contest.createdBy && ` · organized by ${contest.createdBy.name}`}
+          </p>
+          <p className="mt-3 text-slate-700">{contest.summary}</p>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
+            <Fact icon={CalendarDays} label={timing.label} value={formatWindow(contest.startsAt, contest.endsAt)} />
+            <Fact
+              icon={Clock3}
+              label={contest.timing === "FLEXIBLE" ? "Your time limit" : "Duration"}
+              value={
+                <>
+                  {formatDuration(contest.durationMinutes)} · <DifficultyLabel difficulty={contest.difficulty} />
+                </>
+              }
+            />
+            <Fact icon={ListOrdered} label="Questions" value={`${contest.questionCount} questions · ${contest.totalPoints} marks`} />
+            <Fact icon={Scale} label="Marking" value={negativeMarkingLabel(contest.negativeMarking)} />
+            <Fact
+              icon={Users}
+              label="Participants"
+              value={
+                contest.phase === "LIVE"
+                  ? `${contest.activity.registered} registered · ${contest.activity.inProgress} answering now`
+                  : `${contest.activity.registered} registered${contest.capacity ? ` of ${contest.capacity}` : ""}`
+              }
             />
           </div>
+          {user?.role === "ADMIN" && (
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/contests/manage/${contest.id}`}>
+                  <Settings2 className="h-4 w-4" /> Manage in organizer console
+                </Link>
+              </Button>
+            </div>
+          )}
+        </Panel>
+        <div className="lg:sticky lg:top-20 lg:self-start">
+          <ActionPanel contest={contest} now={now} onUpdate={mutate} />
         </div>
+      </motion.section>
+
+      <div role="tablist" aria-label="Contest sections" className="mt-8 flex gap-1 overflow-x-auto border-b border-slate-200">
+        {visible.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            aria-selected={tab === t.key}
+            onClick={() => setTab(t.key)}
+            className={cn(
+              "relative whitespace-nowrap px-3 pb-3 pt-1 text-sm font-medium transition",
+              tab === t.key ? "text-slate-900" : "text-slate-500 hover:text-slate-800"
+            )}
+          >
+            {t.label}
+            {t.badge ? <span className="ml-1.5 rounded-full bg-slate-100 px-1.5 py-0.5 text-xs tabular-nums text-slate-600">{t.badge}</span> : null}
+            {tab === t.key && <motion.span layoutId="contest-detail-tab" className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-orange-600" />}
+          </button>
+        ))}
       </div>
-      <SubmitTestDialog
-        open={showSubmitDialog}
-        onOpenChange={setShowSubmitDialog}
-        answeredCount={Object.keys(answers).length}
-        totalQuestions={totalQuestions}
-        timeRemaining={timeRemaining}
-        submitting={submitting}
-        onSubmit={handleSubmitContest}
-      />
-      <TimeUpDialog
-        open={showTimeUpDialog}
-        onOpenChange={setShowTimeUpDialog}
-        answeredCount={Object.keys(answers).length}
-        totalQuestions={totalQuestions}
-        submitting={submitting}
-        onTimeUp={handleTimeUp}
-      />
-    </>
+
+      <div className="mt-6" role="tabpanel">
+        {tab === "overview" && (
+          <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
+            <Panel className="p-6">
+              {contest.description ? (
+                <div className="text-[15px] text-slate-700">
+                  <MarkdownRenderer content={contest.description} />
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">The organizer hasn't added a description.</p>
+              )}
+              {(contest.subjects.length > 0 || contest.topics.length > 0) && (
+                <div className="mt-6 flex flex-wrap gap-1.5 border-t border-slate-100 pt-4">
+                  {[...contest.subjects, ...contest.topics.filter((t) => !contest.subjects.includes(t))].map((tag) => (
+                    <span key={tag} className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-600">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </Panel>
+            <RulesCard contest={contest} />
+          </div>
+        )}
+        {tab === "standings" && <StandingsTable contestId={contest.id} live={contest.phase === "LIVE"} />}
+        {tab === "announcements" && <AnnouncementsTab id={contest.id} />}
+        {tab === "results" && <ResultsTab id={contest.id} />}
+        {tab === "problems" && <ProblemsTab id={contest.id} />}
+      </div>
+    </ContestShell>
+  )
+}
+
+export default function ContestDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContestPage />
+    </Suspense>
   )
 }

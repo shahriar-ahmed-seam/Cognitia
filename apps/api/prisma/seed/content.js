@@ -37,6 +37,25 @@ export const users = {
     { key: "tanvir", email: "tanvir@cognitia.test", name: "Tanvir Islam", bio: "Microprocessors and embedded systems.", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
     { key: "sadia", email: "sadia@cognitia.test", name: "Sadia Islam", bio: "EEE, taking CSE electives this term.", grade: "Level 3, Term 2", graduationYear: 2027, major: "Electrical and Electronic Engineering" },
   ],
+  // Students from other universities who take part in open contests
+  community: [
+    { key: "zarif", email: "zarif@cognitia.test", name: "Zarif Rahman", institution: "Chittagong University of Engineering and Technology", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
+    { key: "mahir", email: "mahir@cognitia.test", name: "Mahir Faisal", institution: "Khulna University of Engineering and Technology", grade: "Level 4, Term 1", graduationYear: 2026, major: CSE },
+    { key: "nabila", email: "nabila@cognitia.test", name: "Nabila Tabassum", institution: "Rajshahi University of Engineering and Technology", grade: "Level 3, Term 1", graduationYear: 2027, major: "Electrical and Electronic Engineering" },
+    { key: "shafin", email: "shafin@cognitia.test", name: "Shafin Kabir", institution: "Shahjalal University of Science and Technology", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
+    { key: "farzana", email: "farzana@cognitia.test", name: "Farzana Yasmin", institution: "University of Dhaka", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
+    { key: "rafid", email: "rafid@cognitia.test", name: "Rafid Hasan", institution: "Islamic University of Technology", grade: "Level 4, Term 1", graduationYear: 2026, major: CSE },
+    { key: "tahmid", email: "tahmid@cognitia.test", name: "Tahmid Chowdhury", institution: "Khulna University of Engineering and Technology", grade: "Level 2, Term 2", graduationYear: 2028, major: CSE },
+    { key: "samiha", email: "samiha@cognitia.test", name: "Samiha Noor", institution: BUET, grade: "Level 3, Term 1", graduationYear: 2027, major: "Electrical and Electronic Engineering" },
+    { key: "adnan", email: "adnan@cognitia.test", name: "Adnan Sami", institution: "Rajshahi University of Engineering and Technology", grade: "Level 4, Term 2", graduationYear: 2026, major: "Electrical and Electronic Engineering" },
+    { key: "lamia", email: "lamia@cognitia.test", name: "Lamia Haque", institution: "Shahjalal University of Science and Technology", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
+    { key: "mushfiq", email: "mushfiq@cognitia.test", name: "Mushfiq Alam", institution: "University of Dhaka", grade: "Level 3, Term 1", graduationYear: 2027, major: CSE },
+    { key: "raisa", email: "raisa@cognitia.test", name: "Raisa Anjum", institution: "Islamic University of Technology", grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
+    { key: "sabbir", email: "sabbir@cognitia.test", name: "Sabbir Hossain", institution: "Chittagong University of Engineering and Technology", grade: "Level 2, Term 1", graduationYear: 2028, major: CSE },
+    { key: "proma", email: "proma@cognitia.test", name: "Proma Das", institution: "Khulna University of Engineering and Technology", grade: "Level 3, Term 1", graduationYear: 2027, major: "Electrical and Electronic Engineering" },
+    { key: "ishrat", email: "ishrat@cognitia.test", name: "Ishrat Jahan", institution: "Chittagong University of Engineering and Technology", grade: "Level 4, Term 1", graduationYear: 2026, major: CSE },
+    { key: "tanzim", email: "tanzim@cognitia.test", name: "Tanzim Ahmed", institution: BUET, grade: "Level 3, Term 2", graduationYear: 2027, major: CSE },
+  ],
   // Registered but never verified the OTP
   pending: {
     email: "pending@cognitia.test",

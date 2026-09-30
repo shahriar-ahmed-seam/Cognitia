@@ -1,281 +1,356 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { ContestCard } from "@/components/contest-card"
-import { ContestFilters } from "@/components/contest-filters"
-import { PlusCircle, Trophy, Zap, Target, Award, Loader2, BookOpen } from "lucide-react"
 import Link from "next/link"
-import { Navbar } from "@/components/navbar"
-import { useToast } from "@/hooks/use-toast"
+import { Suspense, useEffect, useMemo, useState } from "react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
+import { motion } from "framer-motion"
+import { ArrowRight, BarChart3, CalendarClock, Crown, LayoutDashboard, Medal, Search, Sparkles, TrendingUp, Trophy } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useUser } from "@/contexts/user-context"
-import { CosmicBackground } from "@/components/cosmic-background"
+import { useApi } from "@/hooks/use-api"
+import { useNow } from "@/hooks/use-server-clock"
+import { cn } from "@/lib/utils"
+import { DIFFICULTY_META, KIND_META, formatDateTime, formatDuration, formatRelative, ordinal, ratingClass } from "@/lib/contests/format"
+import type { ContestCard as ContestCardData, ContestKind, ContestList, ContestOverview, Difficulty } from "@/lib/contests/types"
+import { ContestCard } from "@/components/contests/contest-card"
+import { Countdown } from "@/components/contests/countdown"
+import { ContestShell, EmptyState, ErrorState, KindBadge, LoadingState, Panel, PhaseBadge, RatedBadge, primaryButton } from "@/components/contests/primitives"
 
-interface Contest {
-  id: string
-  title: string
-  description: string
-  difficulty: "easy" | "medium" | "hard" | "expert"
-  status: "UPCOMING" | "ONGOING" | "FINISHED"
-  startTime: string
-  endTime: string
-  participants: number
-  topics: string[]
-  maxParticipants?: number
-  prizes: string[]
-  createdBy: string
-  organizer?: {
-    id?: string
-    name?: string
-    avatar?: string
-  }
-  createdAt: string
-}
+type Tab = "live" | "upcoming" | "past" | "mine"
+const TABS: { key: Tab; label: string }[] = [
+  { key: "live", label: "Live now" },
+  { key: "upcoming", label: "Upcoming" },
+  { key: "past", label: "Past" },
+  { key: "mine", label: "My contests" },
+]
 
-export default function ContestsPage() {
-  const router = useRouter()
-  const { toast } = useToast()
-  const { user, loading: userLoading } = useUser();
-
-  const [contests, setContests] = useState<Contest[]>([])
-  const [loading, setLoading] = useState(true)
-  const [status, setStatus] = useState<"UPCOMING" | "ONGOING" | "FINISHED" | "ALL">("ALL")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [selectedTopics, setSelectedTopics] = useState<string[]>([])
-  const [mounted, setMounted] = useState(false)
-
-  // Fetch contests from API
-  const fetchContests = async () => {
-    try {
-      setLoading(true)
-      const token = localStorage.getItem("token")
-
-      const params = new URLSearchParams({
-        search: searchQuery,
-        status: status === "ALL" ? "" : status,
-        topics: selectedTopics.join(","),
-        page: "1",
-        limit: "20",
-      })
-
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/contests?${params}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch contests")
-      }
-
-      const data = await response.json()
-      setContests(data.contests || [])
-    } catch (error) {
-      console.error("Error fetching contests:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load contests. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
-
-  useEffect(() => {
-    const token = localStorage.getItem("token")
-    if (!token) {
-      router.push("/login")
-      return
-    }
-
-    fetchContests()
-  }, [router, status, searchQuery, selectedTopics])
-
-  // Extract all unique topics from contests
-  const availableTopics = useMemo(() => {
-    const topics = new Set<string>()
-    contests.forEach((contest) => {
-      contest.topics.forEach((topic) => {
-        topics.add(topic)
-      })
-    })
-    return Array.from(topics).sort()
-  }, [contests])
-
-  // Filter contests based on selected filters
-  const filteredContests = useMemo(() => {
-    return contests.filter((contest) => {
-      // Filter by status
-      if (status !== "ALL" && contest.status !== status) {
-        return false
-      }
-
-      // Filter by search query
-      if (
-        searchQuery &&
-        !contest.title.toLowerCase().includes(searchQuery.toLowerCase()) &&
-        !contest.description.toLowerCase().includes(searchQuery.toLowerCase())
-      ) {
-        return false
-      }
-
-      // Filter by selected topics
-      if (selectedTopics.length > 0 && !selectedTopics.some((topic) => contest.topics.includes(topic))) {
-        return false
-      }
-
-      return true
-    })
-  }, [contests, status, searchQuery, selectedTopics])
-
+function FeaturedContest({ contest, now }: { contest: ContestCardData; now: number }) {
+  const live = contest.phase === "LIVE"
+  const target = live ? contest.endsAt : contest.startsAt
+  const Icon = KIND_META[contest.kind].icon
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-orange-50 to-red-50 relative overflow-hidden">
-      {/* Enhanced Live Animated Background */}
-      {mounted && (
-        <div className="absolute inset-0 overflow-hidden">
-          <CosmicBackground variant="light" />
-
-          {/* Enhanced Aurora Effects */}
-          <div className="absolute inset-0 bg-gradient-to-r from-transparent via-orange-500/3 to-transparent animate-aurora-enhanced"></div>
-          <div className="absolute inset-0 bg-gradient-to-b from-transparent via-red-500/3 to-transparent animate-aurora-vertical-enhanced delay-4000"></div>
-        </div>
-      )}
-
-      <Navbar />
-
-      <main className="container mx-auto py-8 relative z-10">
-        <div className="flex justify-between items-center mb-8 animate-fade-in">
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: "easeOut" }}>
+      <Panel className="relative overflow-hidden">
+        <div className={cn("pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-gradient-to-br opacity-20 blur-3xl", KIND_META[contest.kind].tint)} />
+        <div className="relative grid gap-6 p-6 md:grid-cols-[1fr_auto] md:items-center md:p-8">
           <div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-              Contests
-              <Trophy className="inline-block ml-3 h-10 w-10 text-orange-500 animate-bounce" />
-            </h1>
-            <p className="text-slate-600 mt-2 text-lg">Challenge yourself and compete with others</p>
-          </div>
-          {/* Only show My Contest and Create Contest button for admin users */}
-          {!userLoading && user && user.role === "ADMIN" && (
-            <div className="flex gap-4">
-              <Link href="/contests/my-contests">
-                <Button
-                  variant="outline"
-                  className="bg-white/70 backdrop-blur-sm border-orange-200 hover:bg-orange-50 shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-300"
-                >
-                  <BookOpen className="mr-2 h-5 w-5" />
-                  My Contests
-                </Button>
-              </Link>
-
-              <Link href="/contests/create">
-                <Button className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-xl hover:shadow-2xl transform hover:scale-110 transition-all duration-300 animate-pulse">
-                  <PlusCircle className="mr-2 h-5 w-5" />
-                  Create Contest
-                </Button>
-              </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-orange-700">
+                <Sparkles className="h-3.5 w-3.5" /> {live ? "Happening now" : "Next up"}
+              </span>
+              <PhaseBadge phase={contest.phase} />
+              <KindBadge kind={contest.kind} />
+              {contest.isRated && <RatedBadge />}
             </div>
-          )}
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          {[
-            {
-              title: "Active Contests",
-              value: contests.filter((c) => c.status === "ONGOING").length,
-              icon: Zap,
-              gradient: "from-green-500 to-emerald-500",
-              bgGradient: "from-green-50 to-emerald-50",
-            },
-            {
-              title: "Upcoming",
-              value: contests.filter((c) => c.status === "UPCOMING").length,
-              icon: Target,
-              gradient: "from-blue-500 to-cyan-500",
-              bgGradient: "from-blue-50 to-cyan-50",
-            },
-            {
-              title: "Total Contests",
-              value: contests.length,
-              icon: Trophy,
-              gradient: "from-orange-500 to-red-500",
-              bgGradient: "from-orange-50 to-red-50",
-            },
-            {
-              title: "Participants",
-              value: contests.reduce((sum, c) => sum + c.participants, 0),
-              icon: Award,
-              gradient: "from-purple-500 to-pink-500",
-              bgGradient: "from-purple-50 to-pink-50",
-            },
-          ].map((stat, index) => (
-            <div
-              key={stat.title}
-              className={`bg-gradient-to-br ${stat.bgGradient} p-6 rounded-2xl shadow-lg hover:shadow-2xl transform hover:scale-105 transition-all duration-500 animate-slide-in-from-bottom border-0`}
-              style={{ animationDelay: `${index * 100}ms` }}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-slate-600 text-sm font-medium">{stat.title}</p>
-                  <p className="text-3xl font-bold text-slate-900 mt-1">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-xl bg-gradient-to-r ${stat.gradient} shadow-lg`}>
-                  <stat.icon className="h-6 w-6 text-white animate-pulse" />
-                </div>
-              </div>
+            <h2 className="mt-3 flex items-start gap-3 text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl">
+              <Icon className="mt-1 hidden h-7 w-7 shrink-0 text-orange-600 sm:block" />
+              {contest.title}
+            </h2>
+            <p className="mt-2 max-w-2xl text-slate-600">{contest.summary}</p>
+            <p className="mt-3 text-sm text-slate-500">
+              {formatDateTime(contest.startsAt)} · {contest.timing === "FLEXIBLE" ? `${formatDuration(contest.durationMinutes)} timer, start any time before it closes` : formatDuration(contest.durationMinutes)}
+              {contest.hostName && ` · ${contest.hostName}`}
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              <Button asChild className={primaryButton}>
+                <Link href={`/contests/${contest.id}`}>
+                  {contest.me?.status === "IN_PROGRESS" ? "Resume contest" : live && contest.me ? "Go to contest" : contest.me ? "View details" : "View and register"}
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <span className="text-sm text-slate-500">{contest.registeredCount} registered</span>
             </div>
-          ))}
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-          <div className="md:col-span-1 animate-slide-in-from-left">
-            <ContestFilters
-              status={status}
-              setStatus={setStatus}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
-              selectedTopics={selectedTopics}
-              setSelectedTopics={setSelectedTopics}
-              availableTopics={availableTopics}
-              showAllStatusOption={true}
-            />
           </div>
-          <div className="md:col-span-3">
-            {loading ? (
-              <div className="flex justify-center items-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-              </div>
-            ) : filteredContests.length === 0 ? (
-              <div className="text-center py-12 bg-gradient-to-br from-orange-50 to-red-50 rounded-2xl border-2 border-dashed border-orange-300 animate-fade-in">
-                <Trophy className="h-16 w-16 text-orange-400 mx-auto mb-4 animate-bounce-enhanced" />
-                <h3 className="text-xl font-medium text-orange-900 mb-2">No contests found</h3>
-                <p className="text-orange-600">Try adjusting your filters or check back later for new contests.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {filteredContests.map((contest, index) => (
-                  <div
-                    key={contest.id}
-                    className="animate-slide-in-from-bottom"
-                    style={{ animationDelay: `${index * 100}ms` }}
-                  >
-                    <ContestCard
-                      contest={{
-                        ...contest,
-                      }}
-                    />                  </div>
-                ))}
-              </div>
-            )}
+          <div className="md:text-right">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-slate-500">{live ? "Ends in" : "Starts in"}</p>
+            <Countdown remainingMs={new Date(target).getTime() - now} size="lg" />
           </div>
         </div>
-      </main>
-    </div>
+      </Panel>
+    </motion.div>
   )
 }
 
+function MyStats({ overview, userId }: { overview: ContestOverview; userId?: string }) {
+  const { stats } = overview
+  return (
+    <Panel className="p-5">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-900">Your contest record</h2>
+        {userId && (
+          <Link href={`/contests/profile/${userId}`} className="text-xs font-medium text-orange-700 hover:underline">
+            Full history
+          </Link>
+        )}
+      </div>
+      <div className="mt-4 flex items-end gap-3">
+        <div>
+          <p className="text-xs text-slate-500">Rating</p>
+          <p className={cn("text-3xl font-semibold tabular-nums", ratingClass(stats.rating))}>{stats.rating ?? "Unrated"}</p>
+        </div>
+        {stats.globalRank && <p className="pb-1 text-sm text-slate-500">#{stats.globalRank} overall</p>}
+      </div>
+      <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-slate-100 pt-4 text-center">
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-slate-500">Taken</dt>
+          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{stats.contestsTaken}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-slate-500">Best</dt>
+          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{stats.bestRank ? ordinal(stats.bestRank) : "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-[11px] uppercase tracking-wide text-slate-500">Top 3</dt>
+          <dd className="mt-0.5 text-lg font-semibold tabular-nums text-slate-900">{stats.podiums}</dd>
+        </div>
+      </dl>
+      {stats.peakRating && stats.peakRating !== stats.rating && (
+        <p className="mt-3 text-xs text-slate-500">Peak rating {stats.peakRating}</p>
+      )}
+    </Panel>
+  )
+}
+
+function ComingUp({ contests, now }: { contests: ContestCardData[]; now: number }) {
+  return (
+    <Panel className="p-5">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+        <CalendarClock className="h-4 w-4 text-orange-600" /> Coming up for you
+      </h2>
+      {contests.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-500">You're not registered for anything upcoming.</p>
+      ) : (
+        <ul className="mt-3 space-y-2">
+          {contests.map((c) => (
+            <li key={c.id}>
+              <Link href={`/contests/${c.id}`} className="group flex items-start justify-between gap-3 rounded-xl px-2 py-2 -mx-2 hover:bg-slate-50">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-slate-800 group-hover:text-orange-700">{c.title}</p>
+                  <p className="text-xs text-slate-500">
+                    {c.phase === "LIVE" ? (c.me?.status === "IN_PROGRESS" ? "In progress" : `Live · ends ${formatRelative(c.endsAt, now)}`) : `Starts ${formatRelative(c.startsAt, now)}`}
+                  </p>
+                </div>
+                <PhaseBadge phase={c.phase} />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  )
+}
+
+function ContestsHub() {
+  const router = useRouter()
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const { user } = useUser()
+  const isOrganizer = user?.role === "ADMIN"
+
+  const [tab, setTab] = useState<Tab | null>((params.get("tab") as Tab) ?? null)
+  const [kind, setKind] = useState<ContestKind | "ALL">("ALL")
+  const [difficulty, setDifficulty] = useState<Difficulty | "ALL">("ALL")
+  const [search, setSearch] = useState("")
+  const [term, setTerm] = useState("")
+  const [page, setPage] = useState(1)
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setTerm(search.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [search])
+  useEffect(() => setPage(1), [tab, kind, difficulty, term])
+
+  const overview = useApi<ContestOverview>("/contests/overview", { refreshInterval: 60_000 })
+  // Open on "Live now" when something is live, otherwise "Upcoming"
+  useEffect(() => {
+    if (tab === null && overview.data) setTab(overview.data.featured?.phase === "LIVE" ? "live" : "upcoming")
+  }, [tab, overview.data])
+
+  const list = useApi<ContestList>(tab ? "/contests" : null, {
+    query: { tab: tab ?? undefined, kind: kind === "ALL" ? undefined : kind, difficulty: difficulty === "ALL" ? undefined : difficulty, search: term, page },
+    refreshInterval: 60_000,
+  })
+  const now = useNow(1000, overview.data?.serverNow)
+
+  const selectTab = (next: Tab) => {
+    setTab(next)
+    const query = new URLSearchParams(params.toString())
+    query.set("tab", next)
+    router.replace(`${pathname}?${query.toString()}`, { scroll: false })
+  }
+
+  const emptyCopy = useMemo(
+    () =>
+      ({
+        live: { title: "Nothing live right now", description: "Check the upcoming tab and register so you get a reminder before it starts." },
+        upcoming: { title: "No upcoming contests match", description: "Try a different filter, or check back later." },
+        past: { title: "No past contests match", description: "Finished contests and their solutions appear here." },
+        mine: { title: "You haven't joined any contests yet", description: "Register for an upcoming contest to see it here." },
+      })[tab ?? "upcoming"],
+    [tab]
+  )
+
+  return (
+    <ContestShell>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight text-slate-900">
+            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-orange-500 to-rose-500 text-white shadow-sm">
+              <Trophy className="h-5 w-5" />
+            </span>
+            Contests
+          </h1>
+          <p className="mt-2 text-slate-600">Quizzes, mock exams, weekly challenges and olympiad rounds for engineering students.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="bg-white/80">
+            <Link href="/contests/rankings">
+              <BarChart3 className="h-4 w-4" /> Rankings
+            </Link>
+          </Button>
+          {isOrganizer && (
+            <Button asChild className={primaryButton}>
+              <Link href="/contests/manage">
+                <LayoutDashboard className="h-4 w-4" /> Organizer console
+              </Link>
+            </Button>
+          )}
+        </div>
+      </header>
+
+      <section className="mt-6 grid gap-4 lg:grid-cols-[1fr_320px]">
+        {overview.loading ? (
+          <Panel className="lg:col-span-2">
+            <LoadingState />
+          </Panel>
+        ) : overview.error ? (
+          <div className="lg:col-span-2">
+            <ErrorState message={overview.error.message} onRetry={overview.refresh} />
+          </div>
+        ) : overview.data ? (
+          <>
+            {overview.data.featured ? (
+              <FeaturedContest contest={overview.data.featured} now={now} />
+            ) : (
+              <Panel className="flex items-center gap-4 p-8">
+                <Crown className="h-8 w-8 text-slate-300" />
+                <div>
+                  <p className="font-medium text-slate-900">No contests scheduled right now</p>
+                  <p className="text-sm text-slate-500">Past contests and their solutions are still open for practice.</p>
+                </div>
+              </Panel>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+              <MyStats overview={overview.data} userId={user?.id} />
+              <ComingUp contests={overview.data.myUpcoming} now={now} />
+            </div>
+          </>
+        ) : null}
+      </section>
+
+      <section className="mt-10" aria-labelledby="browse-heading">
+        <h2 id="browse-heading" className="sr-only">Browse contests</h2>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div role="tablist" aria-label="Contest lists" className="inline-flex w-fit rounded-xl bg-white/80 p-1 shadow-sm ring-1 ring-slate-200">
+            {TABS.map((t) => {
+              const active = tab === t.key
+              const count = list.data?.counts[t.key]
+              return (
+                <button
+                  key={t.key}
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => selectTab(t.key)}
+                  className={cn(
+                    "relative rounded-lg px-3.5 py-1.5 text-sm font-medium transition",
+                    active ? "text-white" : "text-slate-600 hover:text-slate-900"
+                  )}
+                >
+                  {active && <motion.span layoutId="contest-tab" className="absolute inset-0 rounded-lg bg-slate-900" transition={{ type: "spring", stiffness: 400, damping: 32 }} />}
+                  <span className="relative flex items-center gap-1.5">
+                    {t.key === "live" && (list.data?.counts.live ?? 0) > 0 && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />}
+                    {t.label}
+                    {count !== undefined && <span className={cn("tabular-nums text-xs", active ? "text-white/70" : "text-slate-400")}>{count}</span>}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="relative sm:w-64">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search contests or hosts" className="bg-white/90 pl-9" aria-label="Search contests" />
+            </div>
+            <Select value={kind} onValueChange={(v) => setKind(v as ContestKind | "ALL")}>
+              <SelectTrigger className="bg-white/90 sm:w-40" aria-label="Contest type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All types</SelectItem>
+                {Object.entries(KIND_META).map(([value, meta]) => (
+                  <SelectItem key={value} value={value}>
+                    {meta.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty | "ALL")}>
+              <SelectTrigger className="bg-white/90 sm:w-36" aria-label="Difficulty">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Any difficulty</SelectItem>
+                {Object.entries(DIFFICULTY_META).map(([value, meta]) => (
+                  <SelectItem key={value} value={value}>
+                    {meta.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          {!tab || list.loading ? (
+            <LoadingState label="Loading contests…" />
+          ) : list.error ? (
+            <ErrorState message={list.error.message} onRetry={list.refresh} />
+          ) : list.data && list.data.contests.length === 0 ? (
+            <EmptyState icon={tab === "mine" ? Medal : TrendingUp} title={emptyCopy.title} description={emptyCopy.description} />
+          ) : list.data ? (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                {list.data.contests.map((contest, index) => (
+                  <ContestCard key={contest.id} contest={contest} now={now} index={index} />
+                ))}
+              </div>
+              {list.data.pagination.pages > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-2 text-sm text-slate-600">
+                  <Button variant="outline" size="sm" disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+                    Previous
+                  </Button>
+                  <span className="tabular-nums">
+                    {page} / {list.data.pagination.pages}
+                  </span>
+                  <Button variant="outline" size="sm" disabled={page >= list.data.pagination.pages} onClick={() => setPage((p) => p + 1)}>
+                    Next
+                  </Button>
+                </div>
+              )}
+            </>
+          ) : null}
+        </div>
+      </section>
+    </ContestShell>
+  )
+}
+
+export default function ContestsPage() {
+  return (
+    <Suspense fallback={null}>
+      <ContestsHub />
+    </Suspense>
+  )
+}

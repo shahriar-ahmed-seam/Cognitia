@@ -1,5 +1,21 @@
+import { HttpError } from "../lib/httpError.js"
+
 // Global error handler middleware
 export default function errorHandler(err, req, res, next) {
+  // Expected client errors: return the message, code and details without logging a stack
+  if (err instanceof HttpError) {
+    return res.status(err.status).json({
+      error: err.message,
+      ...(err.code && { code: err.code }),
+      ...(err.details !== undefined && { details: err.details }),
+    })
+  }
+
+  // Malformed JSON body
+  if (err.type === "entity.parse.failed") {
+    return res.status(400).json({ error: "Request body isn't valid JSON" })
+  }
+
   console.error("Error:", err)
 
   // Prisma errors

@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Separator } from "@/components/ui/separator"
@@ -16,7 +17,8 @@ export type Notification = {
   isRead: boolean
   userId: string
   createdAt: string
-  // Optionally add more fields if needed
+  /** In-app path to open, e.g. /contests/abc?tab=results */
+  link?: string | null
 }
 
 // Helper to format relative time
@@ -68,20 +70,27 @@ export function NotificationDropdown() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
+  const router = useRouter()
 
-  // Load notifications from backend
+  // Load on mount (for the unread badge) and whenever the dropdown opens
   useEffect(() => {
-    if (isOpen) {
-      setIsLoading(true)
-      fetchNotifications()
-        .then((data) => {
-          setNotifications(data)
-          setUnreadCount(data.filter((n) => !n.isRead).length)
-        })
-        .catch(() => { })
-        .finally(() => setIsLoading(false))
-    }
+    if (isOpen) setIsLoading(true)
+    fetchNotifications()
+      .then((data) => {
+        setNotifications(data)
+        setUnreadCount(data.filter((n) => !n.isRead).length)
+      })
+      .catch(() => { })
+      .finally(() => setIsLoading(false))
   }, [isOpen])
+
+  const handleOpen = async (notification: Notification) => {
+    if (!notification.isRead) await handleMarkAsRead(notification.id)
+    if (notification.link) {
+      setIsOpen(false)
+      router.push(notification.link)
+    }
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -186,7 +195,7 @@ export function NotificationDropdown() {
                     <div
                       className={`block p-4 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 transition-all duration-200 ${!notification.isRead ? "bg-gradient-to-r from-blue-50/50 to-purple-50/50" : ""
                         }`}
-                      onClick={() => handleMarkAsRead(notification.id)}
+                      onClick={() => handleOpen(notification)}
                       style={{ cursor: "pointer" }}
                     >
                       <div className="flex gap-3">
