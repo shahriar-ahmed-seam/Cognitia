@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/database.js";
 import { HttpError, badRequest, conflict, forbidden, notFound } from "../../lib/httpError.js";
 import { createNotifications } from "../../utils/notification.js";
+import { detectMimeType } from "../../utils/fileUtils.js";
+import { effectiveRole, teamRole, teamUserIds } from "./access.js";
 import * as engine from "./engine.js";
 import * as view from "./serializers.js";
 
@@ -29,10 +31,12 @@ export async function loadContest(id, args = {}) {
   return contest;
 }
 
-const isOrganizer = (user) => user?.role === "ADMIN";
+const isAdmin = (user) => user?.role === "ADMIN";
 
-function assertVisible(contest, user) {
-  if (!contest.publishedAt && !isOrganizer(user)) throw notFound("Contest not found");
+/** Drafts are visible only to admins and the contest's team. */
+async function assertVisible(contest, user) {
+  if (contest.publishedAt) return;
+  if (!(await effectiveRole(contest.id, user))) throw notFound("Contest not found");
 }
 
 export function sameInstitution(a, b) {
@@ -41,7 +45,7 @@ export function sameInstitution(a, b) {
 
 /** Contests a user may discover in lists. Private contests only show up once you've joined. */
 function visibleWhere(user) {
-  if (isOrganizer(user)) return {};
+  if (isAdmin(user)) return {};
   const or = [{ visibility: "PUBLIC" }, { participants: { some: { userId: user.id } } }];
   if (user.institution) {
     or.push({ visibility: "INSTITUTION", institution: { equals: user.institution.trim(), mode: "insensitive" } });
@@ -49,7 +53,7 @@ function visibleWhere(user) {
   return { OR: or };
 }
 
-export function registrationState(contest, user, participant, registeredCount, at = now()) {
+export function registrationState(contest, user, participant, registeredCount, at = now(), onTeam = false) {
   const phase = engine.contestPhase(contest, at);
   const state = {
     open: false,
@@ -57,9 +61,11 @@ export function registrationState(contest, user, participant, registeredCount, a
     requiresCode: contest.visibility === "PRIVATE",
     registered: Boolean(participant),
     canUnregister: Boolean(participant) && participant.status === "REGISTERED" && (phase === "UPCOMING" || phase === "LIVE"),
+    onTeam,
   };
   if (participant) return state;
-  if (phase === "DRAFT") state.reason = "This contest isn't published yet";
+  if (onTeam) state.reason = "You're on the organizing team for this contest, so you can't take part";
+  else if (phase === "DRAFT") state.reason = "This contest isn't published yet";
   else if (phase === "CANCELLED") state.reason = "This contest was cancelled";
   else if (phase === "ENDED" || phase === "RESULTS") state.reason = "This contest has ended";
   else if (contest.registrationClosesAt && at >= contest.registrationClosesAt) state.reason = "Registration is closed";
@@ -224,26 +230,33 @@ export async function getOverview(user) {
 
 export async function getContest(id, user) {
   let contest = await loadContest(id, { include: { createdBy: { select: { id: true, name: true, institution: true } } } });
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const at = now();
   contest = await ensureFinalized(contest, at, { include: { createdBy: { select: { id: true, name: true, institution: true } } } });
 
   let participant = await findParticipant(id, user.id);
   if (participant && (await expireIfNeeded(participant, contest, at))) participant = await findParticipant(id, user.id);
 
-  const [counts, totals, announcementCount] = await Promise.all([
+  const [counts, totals, announcementCount, myTeamRole, writtenCount] = await Promise.all([
     participantCounts(id),
     questionTotals([id]),
     prisma.contestAnnouncement.count({ where: { contestId: id } }),
+    teamRole(id, user.id),
+    prisma.contestQuestion.count({ where: { contestId: id, type: "WRITTEN" } }),
   ]);
+  const phase = engine.contestPhase(contest, at);
+  const grading = writtenCount && (phase === "ENDED" || phase === "RESULTS") ? await gradingProgress(id) : null;
   return view.contestDetail(contest, {
     at,
     ...(totals.get(id) ?? {}),
     registeredCount: counts.registered,
     participant,
-    registration: registrationState(contest, user, participant, counts.registered, at),
+    registration: registrationState(contest, user, participant, counts.registered, at, Boolean(myTeamRole)),
     activity: counts,
     announcementCount,
+    teamRole: isAdmin(user) ? myTeamRole ?? "ADMIN" : myTeamRole,
+    writtenCount,
+    grading,
   });
 }
 
@@ -252,8 +265,11 @@ export async function getContest(id, user) {
 // ---------------------------------------------------------------------------
 
 async function registerInternal(contest, user, accessCode, at) {
-  const count = await prisma.contestParticipant.count({ where: { contestId: contest.id } });
-  const state = registrationState(contest, user, null, count, at);
+  const [count, onTeam] = await Promise.all([
+    prisma.contestParticipant.count({ where: { contestId: contest.id } }),
+    teamRole(contest.id, user.id),
+  ]);
+  const state = registrationState(contest, user, null, count, at, Boolean(onTeam));
   if (!state.open) throw conflict(state.reason, { code: "REGISTRATION_CLOSED" });
   if (contest.visibility === "PRIVATE" && (accessCode ?? "").trim().toUpperCase() !== contest.accessCode) {
     throw forbidden("That access code isn't right", { code: "ACCESS_CODE" });
@@ -280,7 +296,7 @@ async function registerInternal(contest, user, accessCode, at) {
 
 export async function register(id, user, { accessCode }) {
   const contest = await loadContest(id);
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const existing = await findParticipant(id, user.id);
   if (!existing) await registerInternal(contest, user, accessCode, now());
   return getContest(id, user);
@@ -316,14 +332,61 @@ export async function finalizeParticipant(participant, { at = now(), auto = fals
     where: { id: participant.id, status: "IN_PROGRESS" },
     data: { status: "SUBMITTED", submittedAt, autoSubmitted: auto, ...totals },
   });
-  return result.count > 0;
+  if (!result.count) return false;
+  await queueWrittenAnswers(participant, answers);
+  return true;
 }
 
-async function refreshTotals(participant) {
+/**
+ * Hand a submitted attempt's written answers to the graders: the AI queue, or straight to
+ * organizer review for MANUAL contests. Also drops uploaded photos the final answers don't use.
+ */
+async function queueWrittenAnswers(participant, answers) {
+  const written = answers.filter((a) => a.verdict === "PENDING");
+  const used = new Set(answers.flatMap((a) => (Array.isArray(a.response?.files) ? a.response.files : [])));
+  await prisma.contestAsset.deleteMany({
+    where: { participantId: participant.id, kind: "ANSWER", ...(used.size && { id: { notIn: [...used] } }) },
+  });
+  if (!written.length) return;
+  const contest = await prisma.contest.findUnique({ where: { id: participant.contestId }, select: { writtenGrading: true } });
+  await prisma.contestAnswer.updateMany({
+    where: { id: { in: written.map((a) => a.id) }, gradingStatus: "NONE" },
+    data: { gradingStatus: contest?.writtenGrading === "MANUAL" ? "NEEDS_REVIEW" : "QUEUED" },
+  });
+}
+
+export async function refreshTotals(participant) {
   const answers = await prisma.contestAnswer.findMany({ where: { participantId: participant.id } });
   const totals = engine.summarizeAnswers(answers, participant.startedAt);
   await prisma.contestParticipant.update({ where: { id: participant.id }, data: totals });
   return totals;
+}
+
+/**
+ * Written-answer grading progress across submitted, non-disqualified attempts.
+ * `pending` counts every written answer without a final grade.
+ */
+export async function gradingProgress(contestId) {
+  const groups = await prisma.contestAnswer.groupBy({
+    by: ["gradingStatus"],
+    where: {
+      question: { contestId, type: "WRITTEN" },
+      verdict: { not: "UNANSWERED" },
+      participant: { status: "SUBMITTED", disqualifiedAt: null },
+    },
+    _count: { _all: true },
+  });
+  const progress = { total: 0, graded: 0, needsReview: 0, queued: 0, running: 0, pending: 0 };
+  for (const group of groups) {
+    const n = group._count._all;
+    progress.total += n;
+    if (group.gradingStatus === "GRADED") progress.graded += n;
+    else if (group.gradingStatus === "NEEDS_REVIEW") progress.needsReview += n;
+    else if (group.gradingStatus === "RUNNING") progress.running += n;
+    else progress.queued += n; // QUEUED, or NONE for an attempt that is still being closed
+  }
+  progress.pending = progress.total - progress.graded;
+  return progress;
 }
 
 function attemptError(participant) {
@@ -336,7 +399,7 @@ function attemptError(participant) {
 
 export async function startAttempt(id, user, { accessCode } = {}) {
   const contest = await loadContest(id);
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const at = now();
   const phase = engine.contestPhase(contest, at);
   if (phase !== "LIVE") {
@@ -422,6 +485,7 @@ export async function saveAnswer(id, questionId, user, { response, flagged }) {
   else {
     nextResponse = engine.normalizeResponse(question, response);
     if (!nextResponse) throw badRequest("That answer isn't valid for this question", { code: "INVALID_RESPONSE" });
+    if (question.type === "WRITTEN") await checkWrittenResponse(question, participant, nextResponse);
   }
   const nextFlagged = flagged ?? existing?.flagged ?? false;
   const changed = JSON.stringify(nextResponse) !== JSON.stringify(existing?.response ?? null);
@@ -445,6 +509,99 @@ export async function saveAnswer(id, questionId, user, { response, flagged }) {
   }
   const totals = await refreshTotals(participant);
   return { questionId, response: nextResponse, flagged: nextFlagged, savedAt: at.toISOString(), answeredCount: totals.answeredCount };
+}
+
+/** Word limit, and every attached photo must be this participant's upload for this question. */
+async function checkWrittenResponse(question, participant, response) {
+  const config = engine.writtenConfig(question);
+  if (config.maxWords && engine.wordCount(response.text) > config.maxWords) {
+    throw badRequest(`Keep your answer within ${config.maxWords} words`, { code: "WORD_LIMIT" });
+  }
+  if (!response.files?.length) return;
+  const owned = await prisma.contestAsset.count({
+    where: { id: { in: response.files }, kind: "ANSWER", participantId: participant.id, questionId: question.id },
+  });
+  if (owned !== response.files.length) {
+    throw badRequest("One of the attached photos is missing. Upload it again.", { code: "INVALID_FILE" });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Answer photos (handwritten work) and question images
+// ---------------------------------------------------------------------------
+
+export const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+export const MAX_IMAGE_BYTES = 6 * 1024 * 1024;
+
+/** Sniff the real type of an uploaded image; rejects anything that isn't a raster image. */
+export async function assertImage(file) {
+  if (!file?.buffer?.length) throw badRequest("Choose an image to upload", { code: "NO_FILE" });
+  if (file.buffer.length > MAX_IMAGE_BYTES) throw badRequest("Images can be at most 6 MB", { code: "FILE_TOO_LARGE" });
+  const mimeType = await detectMimeType(file.buffer);
+  if (!IMAGE_TYPES.has(mimeType)) throw badRequest("Upload a JPEG, PNG, WebP or GIF image", { code: "FILE_TYPE" });
+  return mimeType;
+}
+
+export async function uploadAnswerFile(id, questionId, user, file) {
+  const at = now();
+  const participant = await prisma.contestParticipant.findUnique({
+    where: { contestId_userId: { contestId: id, userId: user.id } },
+    include: { contest: true },
+  });
+  const problem = attemptError(participant);
+  if (problem) throw problem;
+  if (await expireIfNeeded(participant, participant.contest, at)) {
+    throw conflict("Time's up. Your answers were submitted.", { code: "TIME_UP" });
+  }
+  const question = await prisma.contestQuestion.findFirst({ where: { id: questionId, contestId: id } });
+  if (!question) throw notFound("Question not found");
+  const config = question.type === "WRITTEN" ? engine.writtenConfig(question) : null;
+  if (!config?.allowImages) throw badRequest("This question doesn't take photo answers", { code: "NO_IMAGES" });
+  const mimeType = await assertImage(file);
+
+  // Uploads that never made it into the saved answer are cleaned up at submission. Cap them
+  // meanwhile, clearing older unused ones first.
+  const cap = config.maxImages + 4;
+  const scope = { participantId: participant.id, questionId, kind: "ANSWER" };
+  if ((await prisma.contestAsset.count({ where: scope })) >= cap) {
+    const saved = await prisma.contestAnswer.findUnique({
+      where: { participantId_questionId: { participantId: participant.id, questionId } },
+      select: { response: true },
+    });
+    const used = Array.isArray(saved?.response?.files) ? saved.response.files : [];
+    await prisma.contestAsset.deleteMany({
+      where: { ...scope, id: { notIn: used }, createdAt: { lt: new Date(at.getTime() - 60_000) } },
+    });
+    if ((await prisma.contestAsset.count({ where: scope })) >= cap) {
+      throw conflict(`You can attach up to ${config.maxImages} photos. Remove one first.`, { code: "TOO_MANY_FILES" });
+    }
+  }
+  const asset = await prisma.contestAsset.create({
+    data: { contestId: id, kind: "ANSWER", uploaderId: user.id, ...scope, mimeType, size: file.buffer.length, data: file.buffer },
+    select: { id: true, mimeType: true, size: true },
+  });
+  return { ...asset, url: `/api/contests/answer-files/${asset.id}` };
+}
+
+/** A participant's photo, for its author and the contest team. */
+export async function getAnswerFile(assetId, user) {
+  const asset = await prisma.contestAsset.findUnique({
+    where: { id: assetId },
+    include: { participant: { select: { userId: true } } },
+  });
+  if (!asset || asset.kind !== "ANSWER") throw notFound("File not found");
+  if (asset.participant?.userId !== user.id) {
+    const role = await effectiveRole(asset.contestId, user);
+    if (!role) throw notFound("File not found");
+  }
+  return asset;
+}
+
+/** Question images are public by id: ids are unguessable and questions reference them in Markdown. */
+export async function getPublicAsset(assetId) {
+  const asset = await prisma.contestAsset.findUnique({ where: { id: assetId } });
+  if (!asset || asset.kind !== "QUESTION") throw notFound("Image not found");
+  return asset;
 }
 
 export async function recordEvent(id, user, { type }) {
@@ -482,7 +639,7 @@ function visibleClarifications(contestId, userId) {
 
 export async function listAnnouncements(id, user) {
   const contest = await loadContest(id);
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const announcements = await prisma.contestAnnouncement.findMany({
     where: { contestId: id },
     include: { author: { select: { id: true, name: true } } },
@@ -493,7 +650,7 @@ export async function listAnnouncements(id, user) {
 
 export async function listClarifications(id, user) {
   const contest = await loadContest(id);
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const clarifications = await visibleClarifications(id, user.id);
   return { clarifications: clarifications.map((c) => view.clarificationView(c, { viewerId: user.id })) };
 }
@@ -514,17 +671,15 @@ export async function askClarification(id, user, { questionId, question }) {
   await prisma.contestClarification.create({
     data: { contestId: id, questionId: questionId ?? null, askedById: user.id, question },
   });
-  if (contest.createdById) {
-    await createNotifications([
-      {
-        userId: contest.createdById,
-        type: "CONTEST_CLARIFICATION",
-        title: "Clarification requested",
-        message: `${user.name} asked about ${contest.title}.`,
-        link: `/contests/manage/${id}?tab=communication`,
-      },
-    ]);
-  }
+  await createNotifications(
+    (await teamUserIds(id)).map((userId) => ({
+      userId,
+      type: "CONTEST_CLARIFICATION",
+      title: "Clarification requested",
+      message: `${user.name} asked about ${contest.title}.`,
+      link: `/contests/manage/${id}?tab=communication`,
+    }))
+  );
   return listClarifications(id, user);
 }
 
@@ -546,22 +701,31 @@ async function rankedParticipants(contestId, { useStoredRank }) {
 
 export async function getStandings(id, user, { page, limit, search }) {
   let contest = await loadContest(id);
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const at = now();
   contest = await ensureFinalized(contest, at);
   const phase = engine.contestPhase(contest, at);
-  const counts = await participantCounts(id);
+  const [counts, writtenCount] = await Promise.all([
+    participantCounts(id),
+    prisma.contestQuestion.count({ where: { contestId: id, type: "WRITTEN" } }),
+  ]);
 
   let mode = "hidden";
   let reason = null;
+  let grading = null;
   if (phase === "RESULTS") mode = "final";
   else if (phase === "LIVE" && view.scoreVisibleDuringContest(contest)) mode = "live";
   else {
+    if (phase === "ENDED" && writtenCount) grading = await gradingProgress(id);
     reason = {
       DRAFT: "Standings appear once the contest starts.",
       UPCOMING: "Standings appear once the contest starts.",
       LIVE: "The organizer is keeping standings hidden until results are published.",
-      ENDED: contest.resultsMode === "MANUAL" ? "Results are being reviewed by the organizer." : "Results are being finalized.",
+      ENDED: grading?.pending
+        ? "Written answers are being graded. Standings appear when results are published."
+        : contest.resultsMode === "MANUAL"
+          ? "Results are being reviewed by the organizer."
+          : "Results are being finalized.",
       CANCELLED: "This contest was cancelled.",
     }[phase];
   }
@@ -570,8 +734,18 @@ export async function getStandings(id, user, { page, limit, search }) {
   const base = {
     mode,
     reason,
-    contest: { id, title: contest.title, phase, isRated: contest.isRated, totalPoints: totals.totalPoints, questionCount: totals.questionCount },
+    contest: {
+      id,
+      title: contest.title,
+      phase,
+      isRated: contest.isRated,
+      totalPoints: totals.totalPoints,
+      questionCount: totals.questionCount,
+      // Live scores leave out written answers until they're graded
+      hasWritten: writtenCount > 0,
+    },
     counts,
+    grading,
     updatedAt: at.toISOString(),
   };
   if (mode === "hidden") return { ...base, standings: [], total: 0, me: null, page, limit };
@@ -610,7 +784,7 @@ async function statsByQuestion(contestId, questions) {
   const answers = ids.length
     ? await prisma.contestAnswer.findMany({
         where: { participantId: { in: ids } },
-        select: { questionId: true, verdict: true, response: true },
+        select: { questionId: true, verdict: true, response: true, score: true },
       })
     : [];
   const byQuestion = new Map(questions.map((q) => [q.id, []]));
@@ -629,7 +803,7 @@ function assertResultsPublic(contest, at) {
 
 export async function getMyResult(id, user) {
   let contest = await loadContest(id, { include: { questions: true } });
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const at = now();
   contest = await ensureFinalized(contest, at, { include: { questions: true } });
   assertResultsPublic(contest, at);
@@ -691,6 +865,7 @@ export async function getMyResult(id, user) {
         response: answer?.response ?? null,
         verdict: answer?.verdict ?? "UNANSWERED",
         score: answer?.score ?? 0,
+        ...(question.type === "WRITTEN" && { grading: view.writtenGradeView(answer) }),
       };
     }),
   };
@@ -699,7 +874,7 @@ export async function getMyResult(id, user) {
 /** Full problem set with solutions, available to everyone once results are public. */
 export async function getProblems(id, user) {
   let contest = await loadContest(id, { include: { questions: { orderBy: { order: "asc" } } } });
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const at = now();
   contest = await ensureFinalized(contest, at, { include: { questions: { orderBy: { order: "asc" } } } });
   assertResultsPublic(contest, at);
@@ -712,7 +887,7 @@ export async function getProblems(id, user) {
 
 export async function getCertificate(id, user) {
   let contest = await loadContest(id, { include: { createdBy: { select: { name: true } } } });
-  assertVisible(contest, user);
+  await assertVisible(contest, user);
   const at = now();
   contest = await ensureFinalized(contest, at, { include: { createdBy: { select: { name: true } } } });
   assertResultsPublic(contest, at);
@@ -909,20 +1084,37 @@ export async function finalizeContest(contestId, { at = now(), notify = true, au
 
   const contest = await loadContest(contestId);
   if (!autoPublish) return true;
-  if (contest.resultsMode === "AUTO") {
+  const { pending } = await gradingProgress(contestId);
+  if (contest.resultsMode === "AUTO" && !pending) {
     await publishResults(contestId, { at, notify });
-  } else if (notify && contest.createdById) {
-    await createNotifications([
-      {
-        userId: contest.createdById,
+  } else if (notify) {
+    const recipients = await teamUserIds(contestId, pending ? undefined : ["OWNER", "EDITOR"]);
+    const aiFirst = contest.writtenGrading !== "MANUAL";
+    const message = pending
+      ? aiFirst
+        ? `${contest.title} has ended. The AI is grading ${pending} written answer${pending === 1 ? "" : "s"}; check the grading desk for any it flags.`
+        : `${contest.title} has ended. ${pending} written answer${pending === 1 ? " is" : "s are"} waiting to be graded.`
+      : `${contest.title} has ended. Review the results and publish them when ready.`;
+    await createNotifications(
+      recipients.map((userId) => ({
+        userId,
         type: "CONTEST_ENDED",
-        title: "Results waiting for review",
-        message: `${contest.title} has ended. Review the results and publish them when ready.`,
-        link: `/contests/manage/${contestId}?tab=results`,
-      },
-    ]);
+        title: pending ? "Grading needed" : "Results waiting for review",
+        message,
+        link: `/contests/manage/${contestId}?tab=${pending ? "grading" : "results"}`,
+      }))
+    );
   }
   return true;
+}
+
+/** AUTO contests publish on their own once every written answer has a grade. */
+export async function maybeAutoPublish(contestId, at = now()) {
+  const contest = await prisma.contest.findUnique({ where: { id: contestId } });
+  if (!contest?.finalizedAt || contest.resultsPublishedAt || contest.resultsMode !== "AUTO") return false;
+  if (engine.contestPhase(contest, at) !== "ENDED") return false;
+  if ((await gradingProgress(contestId)).pending) return false;
+  return publishResults(contestId, { at });
 }
 
 export async function publishResults(contestId, { at = now(), notify = true } = {}) {
@@ -930,6 +1122,15 @@ export async function publishResults(contestId, { at = now(), notify = true } = 
   const phase = engine.contestPhase(contest, at);
   if (phase !== "ENDED" && phase !== "RESULTS") throw conflict("Results can be published after the contest ends");
   if (!contest.finalizedAt) await finalizeContest(contestId, { at, notify: false, autoPublish: false });
+  if (phase === "ENDED") {
+    const { pending } = await gradingProgress(contestId);
+    if (pending) {
+      throw conflict(`Grade the remaining ${pending} written answer${pending === 1 ? "" : "s"} before publishing results`, {
+        code: "GRADING_PENDING",
+        details: { pending },
+      });
+    }
+  }
 
   const claimed = await prisma.contest.updateMany({
     where: { id: contestId, resultsPublishedAt: null },
@@ -1032,6 +1233,8 @@ export async function rejudge(contestId) {
   for (const participant of participants) {
     const regraded = participant.answers.map((answer) => {
       const question = questions.get(answer.questionId);
+      // Written answers keep their human or AI grade; re-run the AI from the grading desk instead
+      if (question?.type === "WRITTEN") return answer;
       const grade = question
         ? engine.gradeResponse(question, answer.response, { negativeMarking: contest.negativeMarking })
         : { verdict: "UNANSWERED", score: 0 };
@@ -1118,6 +1321,13 @@ export async function runContestLifecycle(at = now()) {
       select: { id: true },
     });
     for (const { id } of ended) await finalizeContest(id, { at });
+
+    // AUTO contests that were waiting on written-answer grading
+    const waiting = await prisma.contest.findMany({
+      where: { ...active, finalizedAt: { not: null }, resultsPublishedAt: null, resultsMode: "AUTO" },
+      select: { id: true },
+    });
+    for (const { id } of waiting) await maybeAutoPublish(id, at);
   } finally {
     lifecycleRunning = false;
   }

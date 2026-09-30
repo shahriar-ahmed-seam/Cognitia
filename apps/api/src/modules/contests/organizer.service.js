@@ -1,18 +1,26 @@
-// Organizer (admin) operations: authoring, publishing, moderation and results.
+// Organizer operations: authoring, publishing, team, grading, moderation and results.
+// Routes check the caller's team role first (see access.js); `role` here is that role.
 import crypto from "node:crypto";
 import { prisma } from "../../lib/database.js";
-import { badRequest, conflict, notFound } from "../../lib/httpError.js";
+import { badRequest, conflict, forbidden, notFound } from "../../lib/httpError.js";
 import { createNotifications } from "../../utils/notification.js";
+import { assertUsableCredential, contestAiSummary } from "../ai/credentials.js";
+import { can, permissionsFor } from "./access.js";
 import * as engine from "./engine.js";
+import { gradingDetails, rescaleWrittenGrades } from "./grading.service.js";
 import * as view from "./serializers.js";
 import { normalizeAnswerKey } from "./validation.js";
-import { computeRanks, loadContest, publishResults, rejudge } from "./service.js";
+import { assertImage, computeRanks, gradingProgress, loadContest, publishResults, rejudge } from "./service.js";
 
 const now = () => new Date();
 const MAX_WINDOW_MINUTES = 14 * 24 * 60;
 const DIFFICULTY_POINTS = { EASY: 1, MEDIUM: 2, HARD: 3, EXPERT: 4 };
+const MAX_QUESTION_ASSETS = 300;
 
-const ALWAYS_EDITABLE = ["title", "summary", "description", "rules", "hostName", "subjects", "topics", "kind", "difficulty"];
+// Grading settings can change at any time (e.g. switch to AI after the contest ends)
+const GRADING_FIELDS = ["writtenGrading", "aiSource", "aiCredentialId", "aiInstructions", "blindGrading"];
+const AI_KEY_FIELDS = ["aiSource", "aiCredentialId"];
+const ALWAYS_EDITABLE = ["title", "summary", "description", "rules", "hostName", "subjects", "topics", "kind", "difficulty", ...GRADING_FIELDS];
 const SETTING_FIELDS = [
   ...ALWAYS_EDITABLE,
   "timing", "startsAt", "endsAt", "durationMinutes", "registrationClosesAt", "visibility", "institution",
@@ -71,8 +79,8 @@ function resolveSettings(settings, creator) {
   return s;
 }
 
-function publishChecklist(contest, questionCount, at = now()) {
-  return [
+function publishChecklist(contest, questionCount, at = now(), { writtenCount = 0, ai = null } = {}) {
+  const items = [
     { key: "details", label: "Title and summary are filled in", ok: contest.title.length >= 3 && contest.summary.length >= 10 },
     { key: "questions", label: "At least one question", ok: questionCount > 0 },
     { key: "schedule", label: "Starts in the future", ok: contest.startsAt > at },
@@ -82,6 +90,15 @@ function publishChecklist(contest, questionCount, at = now()) {
       ok: contest.visibility === "PRIVATE" ? Boolean(contest.accessCode) : contest.visibility === "INSTITUTION" ? Boolean(contest.institution) : true,
     },
   ];
+  if (writtenCount && contest.writtenGrading !== "MANUAL") {
+    items.push({ key: "ai", label: ai?.problem ?? "AI grading is ready", ok: Boolean(ai?.ready) });
+  }
+  return items;
+}
+
+async function checklistContext(contest) {
+  const writtenCount = await prisma.contestQuestion.count({ where: { contestId: contest.id, type: "WRITTEN" } });
+  return { writtenCount, ai: writtenCount ? await contestAiSummary(contest) : null };
 }
 
 async function organizerCounts(contestId) {
@@ -115,12 +132,13 @@ function organizerQuestion(question) {
     subject: question.subject,
     topics: question.topics,
     difficulty: question.difficulty,
+    section: question.section ?? null,
     sourceQuestionId: question.sourceQuestionId,
   };
 }
 
 function organizerContest(contest, phase) {
-  const { createdBy, questions, ...fields } = contest;
+  const { createdBy, questions, aiCredential, organizers, ...fields } = contest;
   return {
     ...fields,
     phase,
@@ -128,20 +146,34 @@ function organizerContest(contest, phase) {
   };
 }
 
+/** Contest ids the user works on, or null for admins (all contests). */
+async function teamContestRoles(user) {
+  const rows = await prisma.contestOrganizer.findMany({ where: { userId: user.id }, select: { contestId: true, role: true } });
+  return new Map(rows.map((r) => [r.contestId, r.role]));
+}
+
 // ---------------------------------------------------------------------------
 // Contests
 // ---------------------------------------------------------------------------
 
-export async function listOrganizerContests({ search, phase }) {
+export async function listOrganizerContests(user, { search, phase }) {
   const at = now();
+  const roles = await teamContestRoles(user);
+  const admin = user.role === "ADMIN";
+  const filters = [];
+  if (!admin) filters.push({ id: { in: [...roles.keys()] } });
+  if (search) {
+    filters.push({ OR: [{ title: { contains: search, mode: "insensitive" } }, { summary: { contains: search, mode: "insensitive" } }] });
+  }
   const contests = await prisma.contest.findMany({
-    where: search
-      ? { OR: [{ title: { contains: search, mode: "insensitive" } }, { summary: { contains: search, mode: "insensitive" } }] }
-      : {},
+    where: { AND: filters },
     orderBy: { startsAt: "desc" },
     include: { createdBy: { select: { id: true, name: true } } },
   });
   const ids = contests.map((c) => c.id);
+  // Grading backlog for contests that ended and have written questions
+  const endedIds = contests.filter((c) => engine.contestPhase(c, at) === "ENDED").map((c) => c.id);
+  const backlog = new Map(await Promise.all(endedIds.map(async (cid) => [cid, (await gradingProgress(cid)).pending])));
   const [questionGroups, participantGroups, openClarifications] = await Promise.all([
     prisma.contestQuestion.groupBy({ by: ["contestId"], where: { contestId: { in: ids } }, _count: { _all: true }, _sum: { points: true } }),
     prisma.contestParticipant.groupBy({ by: ["contestId", "status"], where: { contestId: { in: ids } }, _count: { _all: true } }),
@@ -176,37 +208,51 @@ export async function listOrganizerContests({ search, phase }) {
       totalPoints: questionMap.get(contest.id)?._sum.points ?? 0,
       participants: participantMap.get(contest.id) ?? { registered: 0, submitted: 0, inProgress: 0 },
       openClarifications: clarificationMap.get(contest.id) ?? 0,
-      needsAttention: p === "ENDED" && contest.resultsMode === "MANUAL" && Boolean(contest.finalizedAt),
+      pendingGrading: backlog.get(contest.id) ?? 0,
+      myRole: roles.get(contest.id) ?? (admin ? "ADMIN" : null),
+      needsAttention:
+        p === "ENDED" && Boolean(contest.finalizedAt) && (contest.resultsMode === "MANUAL" || (backlog.get(contest.id) ?? 0) > 0),
     };
   });
   const phaseCounts = rows.reduce((acc, row) => ({ ...acc, [row.phase]: (acc[row.phase] ?? 0) + 1 }), {});
-  return { contests: phase ? rows.filter((r) => r.phase === phase) : rows, phaseCounts };
+  return { contests: phase ? rows.filter((r) => r.phase === phase) : rows, phaseCounts, canHost: ["ORGANIZER", "ADMIN"].includes(user.role) };
 }
 
-export async function getOrganizerContest(id) {
+export async function getOrganizerContest(id, role = "ADMIN") {
   const contest = await loadContest(id, {
     include: { createdBy: { select: { id: true, name: true } }, questions: { orderBy: { order: "asc" } } },
   });
   const at = now();
   const phase = engine.contestPhase(contest, at);
-  const counts = await organizerCounts(id);
+  const writtenCount = contest.questions.filter((q) => q.type === "WRITTEN").length;
+  const [counts, ai, grading] = await Promise.all([
+    organizerCounts(id),
+    contestAiSummary(contest),
+    writtenCount ? gradingProgress(id) : null,
+  ]);
   const locked = structureLocked(phase);
+  const team = permissionsFor(role);
+  const editable = team.canEdit ? editableFields(contest, phase).filter((f) => team.canManageTeam || !AI_KEY_FIELDS.includes(f)) : [];
   return {
     contest: organizerContest(contest, phase),
     questions: contest.questions.map(organizerQuestion),
-    totals: { questionCount: contest.questions.length, totalPoints: engine.maxScore(contest.questions) },
+    totals: { questionCount: contest.questions.length, totalPoints: engine.maxScore(contest.questions), writtenCount },
     counts,
-    checklist: phase === "DRAFT" ? publishChecklist(contest, contest.questions.length, at) : [],
+    grading,
+    ai,
+    checklist: phase === "DRAFT" ? publishChecklist(contest, contest.questions.length, at, { writtenCount, ai }) : [],
     permissions: {
-      editableFields: editableFields(contest, phase),
+      ...team,
+      editableFields: editable,
       structureLocked: locked,
-      canEditAnswerKeys: phase !== "CANCELLED",
-      canPublish: phase === "DRAFT",
-      canUnpublish: phase === "UPCOMING" && counts.registered === 0,
-      canCancel: phase === "UPCOMING" || phase === "LIVE",
-      canDelete: phase === "DRAFT" || phase === "CANCELLED" || (phase === "UPCOMING" && counts.registered === 0),
-      canPublishResults: phase === "ENDED",
-      canRejudge: ["LIVE", "ENDED", "RESULTS"].includes(phase),
+      canEditAnswerKeys: team.canEdit && phase !== "CANCELLED",
+      canPublish: team.canEdit && phase === "DRAFT",
+      canUnpublish: team.canEdit && phase === "UPCOMING" && counts.registered === 0,
+      canCancel: team.canEdit && (phase === "UPCOMING" || phase === "LIVE"),
+      canDelete: team.canManageTeam && (phase === "DRAFT" || phase === "CANCELLED" || (phase === "UPCOMING" && counts.registered === 0)),
+      canPublishResults: team.canEdit && phase === "ENDED" && !grading?.pending,
+      canRejudge: team.canEdit && ["LIVE", "ENDED", "RESULTS"].includes(phase),
+      canChooseAiKey: team.canManageTeam,
       ratingsFinal: Boolean(contest.ratingsAppliedAt),
     },
     serverNow: at.toISOString(),
@@ -215,11 +261,16 @@ export async function getOrganizerContest(id) {
 
 export async function createContest(user, input) {
   const settings = resolveSettings(input, user);
-  const contest = await prisma.contest.create({ data: { ...settings, createdById: user.id } });
-  return getOrganizerContest(contest.id);
+  if (settings.aiCredentialId) await assertUsableCredential(user, settings.aiCredentialId);
+  const contest = await prisma.$transaction(async (tx) => {
+    const created = await tx.contest.create({ data: { ...settings, createdById: user.id } });
+    await tx.contestOrganizer.create({ data: { contestId: created.id, userId: user.id, role: "OWNER", addedById: user.id } });
+    return created;
+  });
+  return getOrganizerContest(contest.id, "OWNER");
 }
 
-export async function updateContest(id, user, rawInput) {
+export async function updateContest(id, user, rawInput, role = "ADMIN") {
   const contest = await loadContest(id);
   const at = now();
   // Derived fields are recomputed, so ignore whatever the client sent for them
@@ -232,7 +283,12 @@ export async function updateContest(id, user, rawInput) {
 
   const same = (a, b) => (a instanceof Date || b instanceof Date ? String(a && new Date(a).getTime()) === String(b && new Date(b).getTime()) : JSON.stringify(a ?? null) === JSON.stringify(b ?? null));
   const changed = Object.keys(input).filter((key) => !same(input[key], contest[key]));
-  if (!changed.length) return getOrganizerContest(id);
+  if (!changed.length) return getOrganizerContest(id, role);
+  if (changed.some((key) => AI_KEY_FIELDS.includes(key))) {
+    // Choosing whose AI (and whose money) grades the contest is the owner's call
+    if (!can(role, "OWN")) throw forbidden("Only the contest owner can change which AI grades this contest", { code: "TEAM_ROLE" });
+    if (changed.includes("aiCredentialId") && input.aiCredentialId) await assertUsableCredential(user, input.aiCredentialId);
+  }
 
   const allowed = new Set(editableFields(contest, phase));
   const blocked = changed.filter((key) => !allowed.has(key));
@@ -279,7 +335,7 @@ export async function updateContest(id, user, rawInput) {
       }))
     );
   }
-  return getOrganizerContest(id);
+  return getOrganizerContest(id, role);
 }
 
 export async function deleteContest(id) {
@@ -292,7 +348,7 @@ export async function deleteContest(id) {
   return { deleted: true };
 }
 
-export async function publishContest(id) {
+export async function publishContest(id, role) {
   const contest = await loadContest(id);
   const at = now();
   if (contest.publishedAt) throw conflict("This contest is already published");
@@ -302,10 +358,10 @@ export async function publishContest(id) {
     throw badRequest("Finish the checklist before publishing", { code: "CHECKLIST", details: checklist });
   }
   await prisma.contest.update({ where: { id }, data: { publishedAt: at } });
-  return getOrganizerContest(id);
+  return getOrganizerContest(id, role);
 }
 
-export async function unpublishContest(id) {
+export async function unpublishContest(id, role) {
   const contest = await loadContest(id);
   const phase = engine.contestPhase(contest, now());
   const registered = await prisma.contestParticipant.count({ where: { contestId: id } });
@@ -313,10 +369,10 @@ export async function unpublishContest(id) {
     throw conflict("Only upcoming contests with no registrations can go back to draft. Cancel it instead.");
   }
   await prisma.contest.update({ where: { id }, data: { publishedAt: null, reminderSentAt: null } });
-  return getOrganizerContest(id);
+  return getOrganizerContest(id, role);
 }
 
-export async function cancelContest(id, { reason }) {
+export async function cancelContest(id, { reason }, role) {
   const contest = await loadContest(id);
   const at = now();
   const phase = engine.contestPhase(contest, at);
@@ -332,7 +388,7 @@ export async function cancelContest(id, { reason }) {
       link: `/contests/${id}`,
     }))
   );
-  return getOrganizerContest(id);
+  return getOrganizerContest(id, role);
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +406,7 @@ async function assertStructureEditable(contest) {
 }
 
 function questionData(input) {
-  const options = input.type === "TRUE_FALSE" || input.type === "NUMERIC" || input.type === "SHORT_TEXT" ? null : input.options ?? [];
+  const options = ["SINGLE_CHOICE", "MULTIPLE_CHOICE"].includes(input.type) ? input.options ?? [] : null;
   return {
     type: input.type,
     prompt: input.prompt,
@@ -362,6 +418,7 @@ function questionData(input) {
     subject: input.subject ?? null,
     topics: input.topics ?? [],
     difficulty: input.difficulty ?? "MEDIUM",
+    section: input.section ?? null,
   };
 }
 
@@ -391,14 +448,41 @@ export async function updateQuestion(id, questionId, input) {
     if (before !== after) throw conflict("Options can be reworded but not added or removed after the contest starts", { code: "LOCKED" });
   }
   const data = questionData(merged);
+  if (structureLocked(phase) && existing.type === "WRITTEN") {
+    const was = engine.writtenConfig(existing);
+    const next = engine.writtenConfig({ answer: data.answer });
+    if (JSON.stringify(was) !== JSON.stringify(next)) {
+      throw conflict("Answer limits can't change after the contest starts. You can still edit the rubric and model answer.", {
+        code: "LOCKED",
+      });
+    }
+  }
   const question = await prisma.contestQuestion.update({ where: { id: questionId }, data });
 
+  if (existing.type === "WRITTEN") {
+    // Written grades are never recomputed from the key; only a points change rescales them
+    const rescaled = existing.points !== data.points ? await rescaleWrittenGrades(id, question, existing.points) : 0;
+    return { question: organizerQuestion(question), rejudged: null, rescaled };
+  }
   const gradingChanged =
     JSON.stringify(existing.answer) !== JSON.stringify(data.answer) ||
     existing.points !== data.points ||
     existing.partialCredit !== data.partialCredit;
   const rejudged = structureLocked(phase) && gradingChanged ? await rejudge(id) : null;
   return { question: organizerQuestion(question), rejudged };
+}
+
+export async function uploadQuestionAsset(id, user, file) {
+  await loadContest(id);
+  const mimeType = await assertImage(file);
+  const count = await prisma.contestAsset.count({ where: { contestId: id, kind: "QUESTION" } });
+  if (count >= MAX_QUESTION_ASSETS) throw conflict(`A contest can have at most ${MAX_QUESTION_ASSETS} images`);
+  const asset = await prisma.contestAsset.create({
+    data: { contestId: id, kind: "QUESTION", uploaderId: user.id, mimeType, size: file.buffer.length, data: file.buffer },
+    select: { id: true, mimeType: true, size: true },
+  });
+  const url = `/api/public/contest-assets/${asset.id}`;
+  return { ...asset, url, markdown: `![figure](${url})` };
 }
 
 export async function deleteQuestion(id, questionId) {
@@ -417,7 +501,7 @@ async function renumber(contestId, orderedIds) {
   await prisma.$transaction(ids.map((qid, index) => prisma.contestQuestion.update({ where: { id: qid }, data: { order: index + 1 } })));
 }
 
-export async function reorderQuestions(id, { questionIds }) {
+export async function reorderQuestions(id, { questionIds }, role) {
   const contest = await loadContest(id);
   await assertStructureEditable(contest);
   const current = await prisma.contestQuestion.findMany({ where: { contestId: id }, select: { id: true } });
@@ -426,7 +510,7 @@ export async function reorderQuestions(id, { questionIds }) {
     throw badRequest("Send every question id exactly once");
   }
   await renumber(id, questionIds);
-  return getOrganizerContest(id);
+  return getOrganizerContest(id, role);
 }
 
 export async function importQuestions(id, { questionBankIds, points }) {
@@ -532,6 +616,7 @@ export async function listParticipants(id, { search }) {
       partialCount: p.partialCount,
       wrongCount: p.wrongCount,
       answeredCount: p.answeredCount,
+      pendingCount: p.pendingCount,
       timeTakenSec: p.timeTakenSec,
       registeredAt: p.registeredAt.toISOString(),
       startedAt: p.startedAt?.toISOString() ?? null,
@@ -555,21 +640,33 @@ export async function listParticipants(id, { search }) {
 export async function getParticipantAttempt(id, participantId) {
   const participant = await prisma.contestParticipant.findFirst({
     where: { id: participantId, contestId: id },
-    include: { user: { select: { id: true, name: true, email: true, institution: true } }, answers: true },
+    include: {
+      user: { select: { id: true, name: true, email: true, institution: true } },
+      answers: { include: { gradedBy: { select: { id: true, name: true } } } },
+    },
   });
   if (!participant) throw notFound("Participant not found");
   const questions = await prisma.contestQuestion.findMany({ where: { contestId: id }, orderBy: { order: "asc" } });
   const answers = new Map(participant.answers.map((a) => [a.questionId, a]));
   return {
-    participant: { id: participant.id, user: participant.user, status: participant.status, score: participant.score, focusLossCount: participant.focusLossCount },
+    participant: {
+      id: participant.id,
+      user: participant.user,
+      status: participant.status,
+      score: participant.score,
+      pendingCount: participant.pendingCount,
+      focusLossCount: participant.focusLossCount,
+    },
     answers: questions.map((q, index) => {
       const answer = answers.get(q.id);
       return {
         ...view.solvedQuestion(q, index + 1),
+        answerId: answer?.id ?? null,
         response: answer?.response ?? null,
         verdict: answer?.verdict ?? "UNANSWERED",
         score: answer?.score ?? 0,
         answeredAt: answer?.answeredAt?.toISOString() ?? null,
+        ...(q.type === "WRITTEN" && { grading: answer && answer.verdict !== "UNANSWERED" ? gradingDetails(answer) : null }),
       };
     }),
   };
@@ -686,13 +783,13 @@ export async function answerClarification(id, clarificationId, user, { answer, i
 // Results
 // ---------------------------------------------------------------------------
 
-export async function publishResultsNow(id) {
+export async function publishResultsNow(id, role) {
   const contest = await loadContest(id);
   const phase = engine.contestPhase(contest, now());
   if (phase === "RESULTS") throw conflict("Results are already published");
   if (phase !== "ENDED") throw conflict("Results can be published after the contest ends");
   await publishResults(id);
-  return getOrganizerContest(id);
+  return getOrganizerContest(id, role);
 }
 
 export async function rejudgeContest(id) {
@@ -706,7 +803,7 @@ export async function contestStats(id) {
   const contest = await loadContest(id, { include: { questions: { orderBy: { order: "asc" } } } });
   const finishers = await prisma.contestParticipant.findMany({
     where: { contestId: id, status: "SUBMITTED", disqualifiedAt: null },
-    include: { answers: { select: { questionId: true, verdict: true, response: true } } },
+    include: { answers: { select: { questionId: true, verdict: true, response: true, score: true } } },
   });
   const maxScore = engine.maxScore(contest.questions);
   const scores = finishers.map((p) => p.score).sort((a, b) => a - b);
@@ -721,8 +818,10 @@ export async function contestStats(id) {
   const times = finishers.map((p) => p.timeTakenSec).filter((t) => t !== null);
   const round = (n) => (n === null ? null : Math.round(n * 100) / 100);
 
+  const hasWritten = contest.questions.some((q) => q.type === "WRITTEN");
   return {
     counts: await organizerCounts(id),
+    grading: hasWritten ? await gradingProgress(id) : null,
     scores: {
       maxScore,
       average: scores.length ? round(scores.reduce((s, x) => s + x, 0) / scores.length) : null,
@@ -756,9 +855,9 @@ export async function exportCsv(id) {
     listParticipants(id, {}),
     prisma.contestQuestion.aggregate({ where: { contestId: id }, _sum: { points: true } }).then((r) => r._sum.points ?? 0),
   ]);
-  const header = ["Rank", "Name", "Email", "Institution", "Status", "Score", "Max score", "Correct", "Partial", "Wrong", "Answered", "Time to last answer (s)", "Started at", "Submitted at", "Auto-submitted", "Tab switches", "Disqualified", "Disqualify reason"];
+  const header = ["Rank", "Name", "Email", "Institution", "Status", "Score", "Max score", "Correct", "Partial", "Wrong", "Answered", "Awaiting grading", "Time to last answer (s)", "Started at", "Submitted at", "Auto-submitted", "Tab switches", "Disqualified", "Disqualify reason"];
   const lines = participants.map((p) =>
-    [p.rank, p.user.name, p.user.email, p.user.institution, p.status, p.score, maxScore, p.correctCount, p.partialCount, p.wrongCount, p.answeredCount, p.timeTakenSec, p.startedAt, p.submittedAt, p.autoSubmitted ? "yes" : "no", p.focusLossCount, p.disqualifiedAt ? "yes" : "no", p.disqualifyReason]
+    [p.rank, p.user.name, p.user.email, p.user.institution, p.status, p.score, maxScore, p.correctCount, p.partialCount, p.wrongCount, p.answeredCount, p.pendingCount, p.timeTakenSec, p.startedAt, p.submittedAt, p.autoSubmitted ? "yes" : "no", p.focusLossCount, p.disqualifiedAt ? "yes" : "no", p.disqualifyReason]
       .map(csvCell)
       .join(",")
   );
