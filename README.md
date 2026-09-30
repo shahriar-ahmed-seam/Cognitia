@@ -27,7 +27,7 @@ Share notes, ask and answer questions, practice with timed model tests, compete 
 | **Notes** | Upload PDF notes into groups, keep them private or make them public, browse and read classmates' public notes in the app |
 | **Q&A** | Ask course questions, answer, upvote and downvote, filter by subject |
 | **Model tests** | Take timed MCQ tests from a shared question bank, resume unfinished attempts, review answers with explanations, track history |
-| **Contests** | Register for scheduled contests, compete live, see rankings. Admins create and manage contests from the question bank |
+| **Contests** | Quizzes, mock CTs, weekly challenges, aptitude and olympiad rounds with five question types, negative marking and partial credit. Fixed or flexible time windows; public, institution-only or invite-only access. Autosaving contest arena, live and final standings, answer review with explanations, practice mode, certificates, and Elo-style contest ratings with university rankings. Admins get an organizer console for authoring, clarifications, announcements, integrity checks, rejudging and CSV export ([design](docs/product/contests.md)) |
 | **Study plan** | Track tasks with priorities and due dates, and plan study sessions. AI scheduling is being rebuilt as part of the Study Engine |
 | **Notifications** | Get updates on answers, votes, contests, deadlines and sign-ins |
 | **Profiles** | Manage academic profile details (institution, level and term, major) and avatar |
@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 - **`apps/web`**: Next.js App Router frontend with Tailwind CSS, shadcn/ui (Radix) and Framer Motion.
-- **`apps/api`**: Express REST API, Prisma ORM on PostgreSQL, JWT auth with Google OAuth, email OTP verification, a notification WebSocket endpoint and a cron job that auto-submits expired tests.
+- **`apps/api`**: Express REST API, Prisma ORM on PostgreSQL, JWT auth with Google OAuth, email OTP verification, a notification WebSocket endpoint and a per-minute job that auto-submits expired tests and runs the contest lifecycle (reminders, auto-submit, finalizing, ratings). Endpoint references are in [`apps/api/docs/api/`](apps/api/docs/api/).
 - **`apps/ai`**: Flask service that builds study schedules with DeepSeek. It falls back to a local heuristic when no API key is set.
 
 ## Repository layout
@@ -58,7 +58,7 @@ Cognitia/
 │   │   └── prisma/     # schema, migrations, seed data
 │   └── ai/             # Flask + DeepSeek scheduling service
 ├── docs/
-│   └── product/        # product specs (Study Engine)
+│   └── product/        # product and design docs (Study Engine, Contests)
 ├── scripts/            # cross-platform dev helpers
 ├── docker-compose.yml  # optional local PostgreSQL
 └── package.json        # one-command scripts for the whole stack
@@ -124,8 +124,18 @@ The seed creates a realistic dataset for a Level 3 CSE section. It includes cour
 | Admin (contest organizer) | `admin@cognitia.test` |
 | Student | `student@cognitia.test` |
 | Classmates | `tasnim@`, `arif@`, `mehjabin@`, `rakib@`, `anika@`, `fahim@`, `nusrat@`, `tanvir@`, `sadia@cognitia.test` |
+| Students at other universities | `zarif@` (CUET), `mahir@` (KUET), `farzana@` (DU), `shafin@` (SUST) and 12 more `@cognitia.test` accounts |
 
 These accounts exist only in your local database.
+
+The seed has contests in every state, with times relative to when you seed:
+- two live contests: a fixed 3-hour challenge, and a flexible mock CT with a 30-minute personal timer
+- upcoming contests, including an invite-only one (access code `SECA-2025`) and a BUET-only one
+- a finished contest waiting for the organizer to review and publish results
+- four rated contests with published results and ratings
+- one cancelled contest and one draft
+
+Re-run `npm run db:seed` to reset them.
 
 ## Scripts
 
