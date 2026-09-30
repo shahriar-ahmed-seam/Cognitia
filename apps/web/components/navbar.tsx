@@ -26,6 +26,8 @@ const navigation = [
   { name: "Study Plan", href: "/study-plan", icon: Target },
 ]
 
+const isSection = (pathname: string, href: string) => pathname === href || pathname.startsWith(`${href}/`)
+
 export function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
@@ -65,7 +67,7 @@ export function Navbar() {
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-1">
             {navigation.map((item) => {
-              const isActive = pathname === item.href
+              const isActive = isSection(pathname, item.href)
               return (
                 <Link key={item.name} href={item.href}>
                   <Button
@@ -181,7 +183,7 @@ export function Navbar() {
           <div className="md:hidden">
             <div className="px-2 pt-2 pb-3 space-y-1 border-t border-gray-200">
               {navigation.map((item) => {
-                const isActive = pathname === item.href
+                const isActive = isSection(pathname, item.href)
                 return (
                   <Link key={item.name} href={item.href}>
                     <Button

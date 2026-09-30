@@ -58,11 +58,14 @@ export function MarkdownRenderer({ content, className }: MarkdownRendererProps) 
           blockquote: ({ node, ...props }) => (
             <blockquote className="border-l-4 border-slate-300 pl-4 italic my-4" {...props} />
           ),
-          code: ({ node, inline, className, children, ...props }) => {
+          // react-markdown 10 no longer passes `inline`; the code renderer below draws its own <pre>
+          pre: ({ children }) => <>{children}</>,
+          code: ({ node, className, children, ...props }) => {
             const match = /language-(\w+)/.exec(className || "")
-            return !inline && match ? (
-              <pre className={`language-${match[1]} rounded-md p-4 my-4 overflow-auto`}>
-                <code className={`language-${match[1]}`} {...props}>
+            const isBlock = Boolean(match) || String(children).includes("\n")
+            return isBlock ? (
+              <pre className={`language-${match?.[1] ?? "text"} rounded-md p-4 my-4 overflow-auto bg-slate-50 text-sm`}>
+                <code className={`language-${match?.[1] ?? "text"}`} {...props}>
                   {children}
                 </code>
               </pre>
