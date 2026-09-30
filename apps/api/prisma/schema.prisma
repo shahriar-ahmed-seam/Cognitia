@@ -26,8 +26,16 @@ model User {
   graduationYear         Int?
   major                  String?
   avatar                 Bytes?
-  answerVotes            AnswerVote[]
-  answers                Answer[]
+  // Set whenever the avatar changes; also means "has an avatar" without loading the bytes
+  avatarUpdatedAt        DateTime?
+  // Community profile
+  username               String?                @unique
+  headline               String?
+  // { github?, linkedin?, website?, ... }
+  links                  Json?
+  skills                 String[]               @default([])
+  coverId                String?
+  reputation             Int                    @default(0)
   availabilities         Availability[]
   contestsCreated        Contest[]              @relation("ContestCreator")
   contestParticipations  ContestParticipant[]
@@ -45,71 +53,28 @@ model User {
   notes                  Note[]
   notesGroups            NotesGroup[]
   notifications          Notification[]
-  questionVotes          QuestionVote[]
-  questions              Question[]
   sessionFeedbacks       SessionFeedback[]
   sessions               StudySession[]
   tasks                  Task[]
   testAttempts           TestAttempt[]
+  spacesCreated          Space[]                @relation("SpaceCreator")
+  spaceMemberships       SpaceMember[]
+  posts                  Post[]                 @relation("PostAuthor")
+  replies                Reply[]
+  postVotes              PostVote[]
+  replyVotes             ReplyVote[]
+  savedPosts             SavedPost[]
+  pollVotes              PollVote[]
+  eventRsvps             EventRsvp[]
+  following              Follow[]               @relation("Follower")
+  followers              Follow[]               @relation("Following")
+  contentReports         ContentReport[]        @relation("Reporter")
+  postViews              PostView[]
+  interests              UserInterest[]
+  mediaFiles             MediaFile[]
+  aiFeedback             PostAiFeedback[]
 
   @@map("users")
-}
-
-model Question {
-  id        String         @id @default(cuid())
-  title     String
-  body      String
-  tags      String[]
-  views     Int            @default(0)
-  subject   String?
-  authorId  String
-  createdAt DateTime       @default(now())
-  updatedAt DateTime       @updatedAt
-  answers   Answer[]
-  votes     QuestionVote[]
-  author    User           @relation(fields: [authorId], references: [id], onDelete: Cascade)
-
-  @@map("questions")
-}
-
-model Answer {
-  id         String       @id @default(cuid())
-  content    String
-  questionId String
-  authorId   String
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @default(now())
-  votes      AnswerVote[]
-  author     User         @relation(fields: [authorId], references: [id], onDelete: Cascade)
-  question   Question     @relation(fields: [questionId], references: [id], onDelete: Cascade)
-
-  @@map("answers")
-}
-
-model QuestionVote {
-  id         String   @id @default(cuid())
-  voteType   VoteType
-  questionId String
-  userId     String
-  createdAt  DateTime @default(now())
-  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([questionId, userId])
-  @@map("question_votes")
-}
-
-model AnswerVote {
-  id        String   @id @default(cuid())
-  voteType  VoteType
-  answerId  String
-  userId    String
-  createdAt DateTime @default(now())
-  answer    Answer   @relation(fields: [answerId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([answerId, userId])
-  @@map("answer_votes")
 }
 
 model NotesGroup {
@@ -156,6 +121,9 @@ model Task {
   updatedAt     DateTime       @default(now())
   tags          String[]       @default([])
   file          Bytes?
+  // Set for tasks added from a community event ("Add to my plan")
+  sourcePostId  String?
+  sourcePost    Post?          @relation(fields: [sourcePostId], references: [id], onDelete: SetNull)
   sessions      StudySession[]
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -205,16 +173,16 @@ model SessionFeedback {
 // A practice paper (class test, term final mock, drill...). Owned by one student; can be
 // shared by link so classmates take it privately.
 model ModelTest {
-  id           String               @id @default(cuid())
+  id           String     @id @default(cuid())
   title        String
   description  String
   // Minutes; 0 = untimed
   timeLimit    Int
-  subjects     String[]             @default([])
-  topics       String[]             @default([])
-  difficulty   Difficulty           @default(MEDIUM)
+  subjects     String[]   @default([])
+  topics       String[]   @default([])
+  difficulty   Difficulty @default(MEDIUM)
   // Legacy, unused since v2
-  isCustom     Boolean              @default(false)
+  isCustom     Boolean    @default(false)
   passingScore Int
   // Highest possible score (sections with "answer any N" count their best N)
   totalPoints  Int
@@ -235,12 +203,12 @@ model ModelTest {
   // What the paper was built from (topics, mix, notes excerpt), for "make another like this"
   spec             Json?
 
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
-  userId       String
-  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  assignments  QuestionAssignment[]
-  attempts     TestAttempt[]
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  userId      String
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignments QuestionAssignment[]
+  attempts    TestAttempt[]
 
   @@index([userId, createdAt])
   @@map("model_tests")
@@ -779,11 +747,6 @@ enum Difficulty {
   EXPERT
 }
 
-enum VoteType {
-  UP
-  DOWN
-}
-
 enum Visibility {
   PRIVATE
   PUBLIC
@@ -967,4 +930,515 @@ enum NotificationType {
   QUESTION_REPLIED
   LOGIN
   PASSWORD_CHANGED
+  COMMUNITY_REPLY
+  COMMUNITY_ANSWER
+  COMMUNITY_ACCEPTED
+  COMMUNITY_MENTION
+  COMMUNITY_FOLLOW
+  COMMUNITY_SPACE
+  COMMUNITY_POST
+  COMMUNITY_EVENT
+  COMMUNITY_VOTE
+  COMMUNITY_AI
+  COMMUNITY_MODERATION
+}
+
+// ---------------------------------------------------------------------------
+// Community: spaces, posts, replies, feed signals
+// ---------------------------------------------------------------------------
+
+// A place to post: a course, department, batch, club, topic or private group
+model Space {
+  id             String          @id @default(cuid())
+  slug           String          @unique
+  name           String
+  tagline        String          @default("")
+  description    String          @default("")
+  rules          String          @default("")
+  kind           SpaceKind       @default(TOPIC)
+  visibility     SpaceVisibility @default(PUBLIC)
+  joinPolicy     SpaceJoinPolicy @default(OPEN)
+  // Required for INSTITUTION visibility; shown as a badge otherwise
+  institution    String?
+  // Course spaces, e.g. "CSE 313"
+  courseCode     String?
+  // Who may post each type: { "QUESTION": "MEMBERS" | "MODERATORS" | "NONE", ... }
+  postPolicy     Json
+  allowImages    Boolean         @default(true)
+  allowVideo     Boolean         @default(true)
+  allowDocuments Boolean         @default(true)
+  allowAnonymous Boolean         @default(true)
+  // Verified by an admin (department, official club)
+  isOfficial     Boolean         @default(false)
+  // Gradient preset for the icon and cover when no image is uploaded
+  color          String          @default("violet")
+  iconId         String?
+  coverId        String?
+  memberCount    Int             @default(0)
+  postCount      Int             @default(0)
+  createdById    String?
+  archivedAt     DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  createdBy User?         @relation("SpaceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  members   SpaceMember[]
+  posts     Post[]
+
+  @@index([kind])
+  @@index([visibility, memberCount])
+  @@map("spaces")
+}
+
+model SpaceMember {
+  spaceId     String
+  userId      String
+  role        SpaceRole    @default(MEMBER)
+  status      MemberStatus @default(ACTIVE)
+  notify      NotifyLevel  @default(HIGHLIGHTS)
+  invitedById String?
+  // Why a member was banned (shown to moderators)
+  note        String?
+  joinedAt    DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([spaceId, userId])
+  @@index([userId, status])
+  @@index([spaceId, status, role])
+  @@map("space_members")
+}
+
+// Every post type shares this table; event and poll fields are null for other types
+model Post {
+  id              String     @id @default(cuid())
+  type            PostType
+  status          PostStatus @default(PUBLISHED)
+  // null = posted to the author's profile (seen by followers and the feed)
+  spaceId         String?
+  authorId        String
+  // Hidden from other students (moderators and admins still see the author)
+  isAnonymous     Boolean    @default(false)
+  title           String     @default("")
+  body            String     @default("")
+  tags            String[]   @default([])
+  // Card for a Cognitia page: { kind: "CONTEST" | "PAPER" | "NOTE", id }
+  embed           Json?
+  score           Int        @default(0)
+  upvotes         Int        @default(0)
+  downvotes       Int        @default(0)
+  // All replies, and top-level answers on questions
+  replyCount      Int        @default(0)
+  answerCount     Int        @default(0)
+  viewCount       Int        @default(0)
+  saveCount       Int        @default(0)
+  acceptedReplyId String?    @unique
+  pinnedAt        DateTime?
+  lockedAt        DateTime?
+  removedAt       DateTime?
+  removedReason   String?
+  removedById     String?
+  editedAt        DateTime?
+  lastActivityAt  DateTime   @default(now())
+
+  eventKind       EventKind?
+  eventStartsAt   DateTime?
+  eventEndsAt     DateTime?
+  eventLocation   String?
+  // Online meeting or registration link
+  eventUrl        String?
+  eventHost       String?
+  goingCount      Int        @default(0)
+  interestedCount Int        @default(0)
+
+  pollClosesAt   DateTime?
+  pollMultiple   Boolean   @default(false)
+  pollVoterCount Int       @default(0)
+
+  // AI draft answer (questions) and thread summary
+  aiAnswerStatus   AiJobStatus @default(NONE)
+  aiAnswer         String?
+  aiAnswerModel    String?
+  aiAnswerAt       DateTime?
+  aiAnswerError    String?
+  aiRequestedById  String?
+  aiHelpful        Int         @default(0)
+  aiUnhelpful      Int         @default(0)
+  aiSummary        String?
+  aiSummaryAt      DateTime?
+  // Reply count when the summary was written (to tell when it's out of date)
+  aiSummaryReplies Int         @default(0)
+
+  // Full-text search, generated by the database from title, body and tags
+  search Unsupported("tsvector")? @default(dbgenerated())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  space         Space?           @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  author        User             @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  acceptedReply Reply?           @relation("AcceptedReply", fields: [acceptedReplyId], references: [id], onDelete: SetNull)
+  replies       Reply[]          @relation("PostReplies")
+  votes         PostVote[]
+  saves         SavedPost[]
+  media         MediaFile[]
+  pollOptions   PollOption[]
+  pollVotes     PollVote[]
+  rsvps         EventRsvp[]
+  views         PostView[]
+  aiFeedback    PostAiFeedback[]
+  plannedTasks  Task[]
+
+  @@index([spaceId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([status, createdAt])
+  @@index([type, eventStartsAt])
+  @@index([lastActivityAt])
+  @@index([search], type: Gin)
+  @@map("posts")
+}
+
+// Answers on questions and comments elsewhere; one level of nesting (parentId)
+model Reply {
+  id            String     @id @default(cuid())
+  postId        String
+  parentId      String?
+  authorId      String
+  body          String
+  // Top-level reply on a question
+  isAnswer      Boolean    @default(false)
+  score         Int        @default(0)
+  upvotes       Int        @default(0)
+  downvotes     Int        @default(0)
+  childCount    Int        @default(0)
+  acceptedAt    DateTime?
+  status        PostStatus @default(PUBLISHED)
+  removedReason String?
+  editedAt      DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  post        Post        @relation("PostReplies", fields: [postId], references: [id], onDelete: Cascade)
+  parent      Reply?      @relation("ReplyThread", fields: [parentId], references: [id], onDelete: Cascade)
+  children    Reply[]     @relation("ReplyThread")
+  author      User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  votes       ReplyVote[]
+  media       MediaFile[]
+  acceptedFor Post?       @relation("AcceptedReply")
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([parentId])
+  @@map("replies")
+}
+
+model PostVote {
+  postId    String
+  userId    String
+  // +1 or -1
+  value     Int
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+  @@map("post_votes")
+}
+
+model ReplyVote {
+  replyId   String
+  userId    String
+  value     Int
+  createdAt DateTime @default(now())
+
+  reply Reply @relation(fields: [replyId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([replyId, userId])
+  @@index([userId, createdAt])
+  @@map("reply_votes")
+}
+
+model SavedPost {
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([userId, createdAt])
+  @@map("saved_posts")
+}
+
+model PollOption {
+  id        String @id @default(cuid())
+  postId    String
+  text      String
+  order     Int    @default(0)
+  voteCount Int    @default(0)
+
+  post  Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  votes PollVote[]
+
+  @@index([postId])
+  @@map("poll_options")
+}
+
+model PollVote {
+  optionId  String
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  option PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  post   Post       @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user   User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([optionId, userId])
+  @@index([postId, userId])
+  @@map("poll_votes")
+}
+
+model EventRsvp {
+  postId         String
+  userId         String
+  status         RsvpStatus
+  remindedDayAt  DateTime?
+  remindedHourAt DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@index([userId, status])
+  @@map("event_rsvps")
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model ContentReport {
+  id           String       @id @default(cuid())
+  // "post:<id>" or "reply:<id>", so each student reports a thing once
+  targetKey    String
+  postId       String
+  replyId      String?
+  spaceId      String?
+  reporterId   String
+  reason       ReportReason
+  details      String       @default("")
+  status       ReportStatus @default(OPEN)
+  resolvedById String?
+  resolvedAt   DateTime?
+  resolution   String?
+  createdAt    DateTime     @default(now())
+
+  reporter User @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@unique([reporterId, targetKey])
+  @@index([spaceId, status])
+  @@index([status, createdAt])
+  @@map("content_reports")
+}
+
+// Last time a student opened a post (feed "seen" signal and view counts)
+model PostView {
+  userId   String
+  postId   String
+  viewedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@id([userId, postId])
+  @@index([userId, viewedAt])
+  @@map("post_views")
+}
+
+// Interest profile for recommendations: "tag:paging", "space:<id>", "author:<id>"
+model UserInterest {
+  userId    String
+  key       String
+  weight    Float
+  updatedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, key])
+  @@map("user_interests")
+}
+
+// Uploaded images, videos and documents. Files live on disk (UPLOAD_DIR), not in the database.
+model MediaFile {
+  // Random, unguessable id set by the app
+  id          String       @id
+  ownerId     String
+  kind        MediaKind
+  purpose     MediaPurpose
+  mimeType    String
+  size        Int
+  storageKey  String
+  fileName    String?
+  width       Int?
+  height      Int?
+  durationSec Int?
+  // Poster image of a video
+  posterId    String?
+  postId      String?
+  replyId     String?
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now())
+
+  owner User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  post  Post?  @relation(fields: [postId], references: [id], onDelete: SetNull)
+  reply Reply? @relation(fields: [replyId], references: [id], onDelete: SetNull)
+
+  @@index([postId])
+  @@index([replyId])
+  @@index([ownerId, createdAt])
+  @@index([purpose, createdAt])
+  @@map("media_files")
+}
+
+model PostAiFeedback {
+  postId    String
+  userId    String
+  helpful   Boolean
+  createdAt DateTime @default(now())
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([postId, userId])
+  @@map("post_ai_feedback")
+}
+
+enum SpaceKind {
+  COURSE
+  DEPARTMENT
+  BATCH
+  CLUB
+  TOPIC
+  GROUP
+}
+
+enum SpaceVisibility {
+  PUBLIC
+  // Students of the space's institution only
+  INSTITUTION
+  // Members only; hidden from search
+  PRIVATE
+}
+
+enum SpaceJoinPolicy {
+  OPEN
+  // Moderators approve join requests
+  REQUEST
+  INVITE
+}
+
+enum SpaceRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum MemberStatus {
+  ACTIVE
+  PENDING
+  INVITED
+  BANNED
+}
+
+enum NotifyLevel {
+  // Every new post
+  ALL
+  // Announcements and events
+  HIGHLIGHTS
+  NONE
+}
+
+enum PostType {
+  QUESTION
+  DISCUSSION
+  ANNOUNCEMENT
+  EVENT
+  RESOURCE
+  POLL
+}
+
+enum PostStatus {
+  PUBLISHED
+  REMOVED
+}
+
+enum EventKind {
+  SEMINAR
+  WORKSHOP
+  COMPETITION
+  CAREER
+  CLUB
+  DEADLINE
+  CLASS
+  OTHER
+}
+
+enum RsvpStatus {
+  GOING
+  INTERESTED
+}
+
+enum ReportReason {
+  SPAM
+  HARASSMENT
+  MISINFORMATION
+  OFF_TOPIC
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum MediaKind {
+  IMAGE
+  VIDEO
+  DOCUMENT
+}
+
+enum MediaPurpose {
+  POST
+  REPLY
+  POSTER
+  COVER
+  SPACE_ICON
+  SPACE_COVER
+}
+
+enum AiJobStatus {
+  NONE
+  QUEUED
+  RUNNING
+  READY
+  FAILED
 }

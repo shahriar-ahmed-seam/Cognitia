@@ -38,6 +38,8 @@ router.get("/generate", async (req, res, next) => {
         status: {
           in: ["NOT_STARTED", "IN_PROGRESS"],
         },
+        // Events added from the community are appointments, not work to schedule
+        NOT: { tags: { has: "event" } },
       },
       select: {
         id: true,

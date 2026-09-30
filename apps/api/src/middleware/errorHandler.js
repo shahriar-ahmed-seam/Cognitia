@@ -18,7 +18,14 @@ export default function errorHandler(err, req, res, next) {
 
   // Upload problems (multer): too large, too many files, unexpected field
   if (err.name === "MulterError") {
-    const message = err.code === "LIMIT_FILE_SIZE" ? "Images can be at most 6 MB" : "That upload wasn't accepted. Send one image as \"file\".";
+    const message =
+      err.code === "LIMIT_FILE_SIZE"
+        ? req.originalUrl.startsWith("/api/community")
+          ? "This file is too large. Videos can be up to 60 MB, documents 25 MB and images 8 MB."
+          : req.originalUrl.startsWith("/api/profile")
+            ? "Profile photos can be at most 2 MB"
+            : "Images can be at most 6 MB"
+        : "That upload wasn't accepted. Send one file as \"file\".";
     return res.status(400).json({ error: message, code: err.code })
   }
 

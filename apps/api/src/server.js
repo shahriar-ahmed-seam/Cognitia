@@ -9,6 +9,7 @@ import { processGradingQueue } from "./modules/ai/queue.js";
 import { runContestLifecycle } from "./modules/contests/service.js";
 import { processPracticeQueue } from "./modules/practice/checker.js";
 import { runPracticeLifecycle } from "./modules/practice/service.js";
+import { runCommunityLifecycle } from "./modules/community/lifecycle.js";
 import wss from "./notificationSocket.js";
 
 const PORT = process.env.PORT;
@@ -25,6 +26,12 @@ cron.schedule("* * * * *", async () => {
     await runContestLifecycle();
   } catch (err) {
     console.error("Contest lifecycle job failed:", err);
+  }
+  try {
+    // Community: event reminders, abandoned uploads, AI draft answers
+    await runCommunityLifecycle();
+  } catch (err) {
+    console.error("Community lifecycle job failed:", err);
   }
   // AI grading can take most of a minute, so it runs on its own without blocking the next tick
   processGradingQueue().catch((err) => console.error("AI grading queue failed:", err));

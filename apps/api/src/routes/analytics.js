@@ -39,8 +39,8 @@ router.get("/dashboard/analytics", authenticateToken, async (req, res) => {
 
     // Q&A statistics
     const [userQuestions, userAnswers] = await Promise.all([
-      prisma.question.findMany({ where: { authorId: userId } }),
-      prisma.answer.findMany({ where: { authorId: userId } }),
+      prisma.post.findMany({ where: { authorId: userId, type: "QUESTION" }, select: { id: true, score: true } }),
+      prisma.reply.findMany({ where: { authorId: userId, isAnswer: true }, select: { id: true, score: true, acceptedAt: true } }),
     ])
 
     // Notes statistics
@@ -73,9 +73,10 @@ router.get("/dashboard/analytics", authenticateToken, async (req, res) => {
               completedAt: { gte: start, lte: end },
             },
           }),
-          prisma.answer.count({
+          prisma.reply.count({
             where: {
               authorId: userId,
+              isAnswer: true,
               createdAt: { gte: start, lte: end },
             },
           }),
@@ -100,10 +101,10 @@ router.get("/dashboard/analytics", authenticateToken, async (req, res) => {
     }))
 
     // Q&A stats
-    const acceptedAnswers = userAnswers.filter((a) => a.isAccepted).length
+    const acceptedAnswers = userAnswers.filter((a) => a.acceptedAt).length
     const totalVotes =
-      userQuestions.reduce((sum, q) => sum + (q.voteCount || 0), 0) +
-      userAnswers.reduce((sum, a) => sum + (a.voteCount || 0), 0)
+      userQuestions.reduce((sum, q) => sum + (q.score || 0), 0) +
+      userAnswers.reduce((sum, a) => sum + (a.score || 0), 0)
 
     const analytics = {
       tasks: taskStats,
