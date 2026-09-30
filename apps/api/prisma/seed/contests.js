@@ -185,6 +185,165 @@ const q = {
     answer: { correct: 0 },
     explanation: "True. LL(1) grammars are a proper subset of LR(1) grammars.",
   },
+
+  // ---------- synchronization and deadlocks (objective part) ----------
+  semaphoreValue: {
+    type: "NUMERIC", subject: "Computer Science", topics: ["Operating Systems", "Synchronization"], difficulty: "EASY", points: 2,
+    section: "Part A: Objective",
+    prompt: "A counting semaphore starts at **3**. Processes perform 5 `wait()` and 2 `signal()` operations, and nobody stays blocked. What is the semaphore's value afterwards?",
+    answer: { value: 0, tolerance: 0, toleranceType: "ABSOLUTE", unit: null },
+    explanation: "Each wait decrements and each signal increments: 3 − 5 + 2 = 0.",
+  },
+  spinlock: {
+    type: "TRUE_FALSE", subject: "Computer Science", topics: ["Operating Systems", "Synchronization"], difficulty: "MEDIUM", points: 1,
+    section: "Part A: Objective",
+    prompt: "On a **single-core** CPU, a spinlock is a good way to protect a critical section that is held for a long time.",
+    answer: { correct: 1 },
+    explanation: "False. The waiting thread burns its whole time slice spinning, and the lock holder can't run until it's preempted.",
+  },
+  interrupts: {
+    type: "SINGLE_CHOICE", subject: "Computer Science", topics: ["Operating Systems", "Synchronization"], difficulty: "MEDIUM", points: 2,
+    section: "Part A: Objective",
+    prompt: "Disabling interrupts is used to protect a critical section. On a **multiprocessor**, which requirement does it fail?",
+    options: ["Mutual exclusion", "Progress", "Bounded waiting", "None, it works on multiprocessors too"],
+    answer: { correct: 0 },
+    explanation: "Disabling interrupts only affects the current core, so a thread on another core can still enter the critical section.",
+  },
+  prevention: {
+    type: "MULTIPLE_CHOICE", subject: "Computer Science", topics: ["Operating Systems", "Deadlocks"], difficulty: "MEDIUM", points: 3,
+    section: "Part A: Objective", partialCredit: true,
+    prompt: "Which of these are deadlock **prevention** techniques? Select all that apply.",
+    options: [
+      "Number the resources and always request them in increasing order",
+      "Request every resource a process needs before it starts",
+      "Run the Banker's algorithm before granting each request",
+      "Abort one process in the cycle",
+    ],
+    answer: { correct: [0, 1] },
+    explanation: "Ordering resources breaks circular wait and all-at-once requests break hold and wait. The Banker's algorithm is **avoidance**; aborting a process is **recovery**.",
+  },
+  ragCycle: {
+    type: "TRUE_FALSE", subject: "Computer Science", topics: ["Operating Systems", "Deadlocks"], difficulty: "EASY", points: 1,
+    section: "Part A: Objective",
+    prompt: "If every resource type has a **single instance**, a cycle in the resource-allocation graph means the system is deadlocked.",
+    answer: { correct: 0 },
+    explanation: "True. With single-instance resources a cycle is both necessary and sufficient for deadlock.",
+  },
+
+  // ---------- written questions ----------
+  // `samples` are typed answers at three quality levels with the grade a careful examiner gives;
+  // breakdown rows are [criterion, awarded, max]. The seed uses them to simulate grading.
+  raceCondition: {
+    type: "WRITTEN", subject: "Computer Science", topics: ["Operating Systems", "Synchronization"], difficulty: "MEDIUM", points: 5,
+    section: "Part B: Written",
+    prompt: "Two threads each run `count = count + 1` **1000 times** on a shared variable that starts at 0.\n\n1. Explain why the final value can be **less than 2000**.\n2. Show how a **mutex** fixes it, and why the fix works.\n\nType your answer, or attach a photo of your working.",
+    answer: {
+      rubric: "- 2 marks: count = count + 1 is not atomic (load, add, store); a concrete interleaving where an update is lost.\n- 2 marks: a mutex acquired before the read and released after the write.\n- 1 mark: why it works: mutual exclusion, only one thread in the read-modify-write at a time, so the result is exactly 2000.",
+      modelAnswer: "`count = count + 1` is three machine steps: load count into a register, add 1, store it back. If thread A loads 5 and thread B also loads 5 before A stores, both store 6 and one increment is lost. That can happen many times, so the result can be anything up to 2000.\n\n```\nlock(m)\ncount = count + 1\nunlock(m)\n```\n\nThe mutex turns the read-modify-write into a critical section. Only one thread can hold `m`, so increments can't interleave and the final value is exactly 2000.",
+      allowText: true, allowImages: true, maxWords: 300, maxImages: 3,
+    },
+    explanation: "The increment is a read-modify-write race. Wrapping it in lock/unlock makes it mutually exclusive.",
+    samples: [
+      {
+        text: "count = count + 1 is not atomic. It compiles to three steps: load count into a register, add 1, and store it back. If thread A loads 5, then thread B also loads 5 before A stores, both store 6 and one increment is lost. This can happen many times, so the result can be anywhere below 2000.\n\nFix:\nlock(m)\ncount = count + 1\nunlock(m)\n\nThe mutex makes the read-modify-write a critical section. Only one thread can hold m at a time, so no increment can interleave with another and the final value is exactly 2000.",
+        feedback: "Clear explanation of the lost update with a concrete interleaving, and a correct mutex fix with the reason it works.",
+        breakdown: [["Explains the lost update", 2, 2], ["Correct mutex fix", 2, 2], ["Why the fix works", 1, 1]],
+      },
+      {
+        text: "Both threads use the same variable at the same time so the value gets overwritten. This is a race condition. We can use a mutex lock so only one thread changes count at a time:\nmutex.lock(); count++; mutex.unlock();",
+        feedback: "The fix is right, but show why updates are lost: count = count + 1 is a load, an add and a store, and two threads can interleave between them. Also say why the lock guarantees exactly 2000.",
+        breakdown: [["Explains the lost update", 1, 2], ["Correct mutex fix", 2, 2], ["Why the fix works", 0, 1]],
+      },
+      {
+        text: "Because the threads run in parallel the CPU might skip some increments. Making the variable volatile or using a mutex will fix it.",
+        feedback: "You spotted the race, but not why increments are lost, and volatile doesn't make count++ atomic. Put the increment between lock and unlock.",
+        breakdown: [["Explains the lost update", 0.5, 2], ["Correct mutex fix", 0.5, 2], ["Why the fix works", 0, 1]],
+      },
+    ],
+  },
+  coffman: {
+    type: "WRITTEN", subject: "Computer Science", topics: ["Operating Systems", "Deadlocks"], difficulty: "EASY", points: 4,
+    section: "Part B: Written",
+    prompt: "State and briefly explain the **four necessary conditions** for a deadlock.",
+    answer: {
+      rubric: "1 mark for each condition, named and explained correctly:\n\n- Mutual exclusion\n- Hold and wait\n- No preemption\n- Circular wait\n\nA condition that is only named, with no explanation, gets 0.25.",
+      modelAnswer: "1. **Mutual exclusion**: at least one resource is non-shareable.\n2. **Hold and wait**: a process holds a resource while waiting for another.\n3. **No preemption**: resources are released only voluntarily by their holder.\n4. **Circular wait**: a cycle of processes, each waiting for a resource the next one holds.",
+      allowText: true, allowImages: true, maxWords: 250, maxImages: 2,
+    },
+    explanation: "Mutual exclusion, hold and wait, no preemption and circular wait must all hold at once.",
+    samples: [
+      {
+        text: "1. Mutual exclusion: at least one resource is non-shareable, so only one process can use it at a time.\n2. Hold and wait: a process holds at least one resource while waiting to acquire others.\n3. No preemption: a resource can only be released voluntarily by the process holding it.\n4. Circular wait: there is a cycle P0 -> P1 -> ... -> Pn -> P0 where each process waits for a resource held by the next.\nAll four must hold at the same time for a deadlock to occur.",
+        feedback: "All four conditions named and explained precisely.",
+        breakdown: [["Mutual exclusion", 1, 1], ["Hold and wait", 1, 1], ["No preemption", 1, 1], ["Circular wait", 1, 1]],
+      },
+      {
+        text: "Mutual exclusion, hold and wait, no preemption and circular wait. Mutual exclusion means resources can't be shared. Circular wait means processes wait for each other in a loop.",
+        feedback: "All four are named, but hold and wait and no preemption need an explanation: a process holding resources while requesting more, and resources that can't be taken away from their holder.",
+        breakdown: [["Mutual exclusion", 1, 1], ["Hold and wait", 0.25, 1], ["No preemption", 0.25, 1], ["Circular wait", 1, 1]],
+      },
+      {
+        text: "Deadlock happens when two processes wait for each other forever. For example P1 has the printer and wants the scanner, and P2 has the scanner and wants the printer. This is circular wait.",
+        feedback: "A good example of circular wait, but the question asks for all four conditions. Mutual exclusion, hold and wait and no preemption are missing.",
+        breakdown: [["Mutual exclusion", 0, 1], ["Hold and wait", 0, 1], ["No preemption", 0, 1], ["Circular wait", 1, 1]],
+      },
+    ],
+  },
+  bankers: {
+    type: "WRITTEN", subject: "Computer Science", topics: ["Operating Systems", "Deadlocks", "Banker's Algorithm"], difficulty: "HARD", points: 6,
+    section: "Part B: Written",
+    prompt: "A system has three resource types A, B and C. **Available = (3, 3, 2)**.\n\n| Process | Allocation (A B C) | Max (A B C) |\n|---|---|---|\n| P0 | 0 1 0 | 7 5 3 |\n| P1 | 2 0 0 | 3 2 2 |\n| P2 | 3 0 2 | 9 0 2 |\n| P3 | 2 1 1 | 2 2 2 |\n| P4 | 0 0 2 | 4 3 3 |\n\nUsing the **Banker's safety algorithm**, is this state safe? Show the Need matrix and each step. A photo of handwritten working is fine.",
+    answer: {
+      rubric: "- 2 marks: correct Need = Max − Allocation for all five processes.\n- 3 marks: runs the safety algorithm step by step, updating Work = Work + Allocation after each process.\n- 1 mark: concludes the state is safe with a valid safe sequence. Any valid sequence (e.g. <P1, P3, P4, P2, P0> or <P1, P3, P4, P0, P2>) gets full marks.",
+      modelAnswer: "Need: P0 (7,4,3), P1 (1,2,2), P2 (6,0,0), P3 (0,1,1), P4 (4,3,1).\n\nWork = (3,3,2) → P1 → (5,3,2) → P3 → (7,4,3) → P4 → (7,4,5) → P2 → (10,4,7) → P0 → (10,5,7).\n\nEvery process can finish, so the state is **safe**: <P1, P3, P4, P2, P0>.",
+      allowText: true, allowImages: true, maxWords: 400, maxImages: 4,
+    },
+    explanation: "Need = Max − Allocation, then repeatedly pick a process whose Need fits in Work. <P1, P3, P4, P2, P0> is one safe sequence.",
+    samples: [
+      {
+        text: "Need = Max - Allocation:\nP0 (7,4,3), P1 (1,2,2), P2 (6,0,0), P3 (0,1,1), P4 (4,3,1)\n\nWork = (3,3,2)\nP1: Need (1,2,2) <= Work, so Work = (3,3,2) + (2,0,0) = (5,3,2)\nP3: (0,1,1) <= (5,3,2), Work = (7,4,3)\nP4: (4,3,1) <= (7,4,3), Work = (7,4,5)\nP2: (6,0,0) <= (7,4,5), Work = (10,4,7)\nP0: (7,4,3) <= (10,4,7), Work = (10,5,7)\n\nAll processes can finish, so the state is safe. Safe sequence: <P1, P3, P4, P2, P0>.",
+        feedback: "Correct Need matrix, every Work update is right, and the safe sequence is valid.",
+        breakdown: [["Need matrix", 2, 2], ["Safety algorithm steps", 3, 3], ["Conclusion and safe sequence", 1, 1]],
+      },
+      {
+        text: "Need: P0 = 743, P1 = 122, P2 = 600, P3 = 011, P4 = 431.\nWork = 332. P1 can run, Work = 532. P3 can run, Work = 543. P4 needs 431, ok, Work = 545. P0 needs 743, not possible. P2 needs 600, not possible. So the system is unsafe.",
+        feedback: "The Need matrix is right. After P3 finishes, Work should be (5,3,2) + (2,1,1) = (7,4,3), not (5,4,3); that slip made P0 and P2 look blocked. The state is actually safe, for example <P1, P3, P4, P2, P0>.",
+        breakdown: [["Need matrix", 2, 2], ["Safety algorithm steps", 1.5, 3], ["Conclusion and safe sequence", 0, 1]],
+      },
+      {
+        text: "P0 needs 7,4,3 which is more than available 3,3,2 so P0 has to wait. The other processes are also holding resources, so this will lead to a deadlock. The state is unsafe.",
+        feedback: "The safety algorithm tries every process, not only P0. P1's Need (1,2,2) fits in Work (3,3,2), and continuing from there gives the safe sequence <P1, P3, P4, P2, P0>.",
+        breakdown: [["Need matrix", 0.5, 2], ["Safety algorithm steps", 0.5, 3], ["Conclusion and safe sequence", 0, 1]],
+      },
+    ],
+  },
+  thrashingExplain: {
+    type: "WRITTEN", subject: "Computer Science", topics: ["Operating Systems", "Virtual Memory"], difficulty: "MEDIUM", points: 4,
+    prompt: "What is **thrashing**? Describe **two** ways an operating system can prevent it.",
+    answer: {
+      rubric: "- 2 marks: processes have fewer frames than their working sets, so they page-fault constantly; the system spends its time paging and CPU utilization collapses.\n- 2 marks: two valid OS techniques, 1 mark each: working-set model, page-fault frequency (PFF) control, lowering the degree of multiprogramming (suspending processes), local page replacement. More RAM or a faster CPU isn't an OS technique.",
+      modelAnswer: "Thrashing happens when processes don't have enough frames for their working sets: they fault on almost every access, the paging device is saturated and CPU utilization drops. Prevention: the **working-set model** (allocate frames for each working set, suspend a process when total demand exceeds memory) and **page-fault frequency control** (add frames when a process faults too often, take them away when it faults rarely).",
+      allowText: true, allowImages: false, maxWords: 200,
+    },
+    explanation: "Thrashing is paging overload. The working-set model and page-fault frequency control keep it in check.",
+    samples: [
+      {
+        text: "Thrashing is when a process doesn't have enough frames for its working set, so it page-faults constantly. The system spends most of its time swapping pages in and out and CPU utilization collapses; the scheduler may make it worse by admitting more processes. Prevention: (1) the working-set model: give each process enough frames for its working set and suspend a process if total demand exceeds the frames. (2) Page-fault frequency control: keep each process's fault rate between an upper and lower bound by adding or removing frames.",
+        feedback: "Precise definition, including why CPU use drops, and two correct techniques explained well.",
+        breakdown: [["Definition of thrashing", 2, 2], ["Two prevention techniques", 2, 2]],
+      },
+      {
+        text: "Thrashing means there are too many page faults so the system becomes very slow. We can prevent it by adding more RAM or by using a better page replacement algorithm like LRU.",
+        feedback: "Right idea, but explain the cause: processes have fewer frames than their working sets, so paging dominates and CPU use drops. More RAM isn't an OS technique and LRU alone doesn't stop thrashing; use the working-set model or page-fault frequency control.",
+        breakdown: [["Definition of thrashing", 1.5, 2], ["Two prevention techniques", 0.5, 2]],
+      },
+      {
+        text: "Thrashing is when the CPU is overloaded because too many processes are running. We can prevent it with a faster CPU.",
+        feedback: "Thrashing is about memory, not CPU load: processes keep page-faulting because they lack frames. Look at the working-set model and page-fault frequency control.",
+        breakdown: [["Definition of thrashing", 0.5, 2], ["Two prevention techniques", 0, 2]],
+      },
+    ],
+  },
 };
 
 export const contestQuestions = q;
@@ -197,8 +356,11 @@ const standardRules = `- Use only a calculator and blank paper. Notes and websit
 
 /**
  * @typedef {object} SeedContest
- * `state`: results | review | live | upcoming | draft | cancelled
+ * `state`: results | review | grading | live | upcoming | draft | cancelled
+ *   (grading: ended and finalized, results wait until every written answer is graded)
  * `participants`: [key, status, extra] where status is registered | submitted | in_progress
+ * `owner` (default admin) and `team`: [key, "EDITOR" | "GRADER"] form the organizing team
+ * `writtenState`: how submitted written answers were graded: graded | mixed | review
  */
 export function contestDefinitions({ atDay, later, now, MINUTE, DAY }) {
   return [
@@ -278,7 +440,8 @@ export function contestDefinitions({ atDay, later, now, MINUTE, DAY }) {
       description: "A timed mock that mirrors the real **CT-3** syllabus: paging, TLBs, page tables and page replacement.\n\n- The window stays open for three days. Your 30-minute timer starts when you press **Start**.\n- Numeric answers accept small rounding differences where noted.\n- Standings and solutions are published when the window closes.",
       hostName: "CSE 313, Section A", subjects: ["Computer Science"], topics: ["Operating Systems", "Paging", "Page Replacement"],
       start: atDay(-1, 18), end: atDay(2, 23, 59), rules: standardRules,
-      custom: [q.offsetBits, q.pageTableSize, q.eat, q.lruFaults, q.stackAlgorithms, q.beladyTrueFalse, q.thrashing, q.pteFields, q.virtualMemory],
+      custom: [q.offsetBits, q.pageTableSize, q.eat, q.lruFaults, q.stackAlgorithms, q.beladyTrueFalse, q.thrashing, q.pteFields, q.virtualMemory, q.thrashingExplain],
+      writtenGrading: "AI_ASSISTED", writtenState: "review",
       announcements: [{ at: 30 * MINUTE, title: "Calculators are fine", body: "Use a calculator freely. Round numeric answers to whole numbers unless the question says otherwise." }],
       participants: [["student", "registered"], ["mehjabin", "registered"], ["tasnim", "submitted", { startAt: atDay(-1, 20, 10), used: 26 * MINUTE }], ["anika", "submitted", { startAt: atDay(0, 7, 30), used: 29 * MINUTE }], ["rakib", "in_progress", { startAt: later(now, -10 * MINUTE), answered: 4 }]],
     },
@@ -300,7 +463,9 @@ export function contestDefinitions({ atDay, later, now, MINUTE, DAY }) {
       hostName: "CSE 3-2 Section A", subjects: ["Computer Science"], topics: ["Computer Networks"],
       start: atDay(1, 21), minutes: 30,
       bank: [{ topics: ["Computer Networks"], count: 5 }],
-      participants: [["tasnim", "registered"], ["rakib", "registered"]],
+      // Run by the class representative, with a classmate helping
+      owner: "tasnim", team: [["mehjabin", "EDITOR"]],
+      participants: [["rakib", "registered"], ["nusrat", "registered"]],
     },
     {
       key: "aptitude", state: "upcoming",
@@ -344,7 +509,30 @@ export function contestDefinitions({ atDay, later, now, MINUTE, DAY }) {
       hostName: "CSE 309", subjects: ["Computer Science"], topics: ["Compilers"],
       start: atDay(10, 20), minutes: 30,
       custom: [q.parseTree, q.symbolTable, q.ll1],
+      team: [["tasnim", "EDITOR"]],
       participants: [],
+    },
+    {
+      key: "syncCt", state: "results",
+      title: "CSE 313 Written CT-2: Process Synchronization", kind: "MOCK_EXAM", difficulty: "MEDIUM",
+      writtenGrading: "AI_ASSISTED", writtenState: "graded", team: [["rakib", "GRADER"]],
+      summary: "Objective questions plus a written race-condition problem, graded against a rubric.",
+      description: "A class test in the real **CT format**: a short objective part, then a written problem you answer in your own words or on paper.\n\n- Part A is graded automatically.\n- Part B is graded against the rubric by the AI grader, and every grade is checked by a teacher before results go out.",
+      hostName: "CSE 313, Section A", subjects: ["Computer Science"], topics: ["Operating Systems", "Synchronization"],
+      start: atDay(-4, 10), minutes: 45, rules: standardRules,
+      custom: [q.semaphoreValue, q.spinlock, q.interrupts, q.raceCondition],
+      participants: [["student", "submitted"], ["arif", "submitted"], ["anika", "submitted"], ["fahim", "submitted"], ["nusrat", "submitted"], ["mehjabin", "submitted"], ["tanzim", "submitted"], ["sadia", "submitted"], ["tanvir", "submitted"]],
+    },
+    {
+      key: "deadlockCt", state: "grading",
+      title: "CSE 313 Written Quiz: Deadlocks", kind: "MOCK_EXAM", difficulty: "HARD",
+      writtenGrading: "AI_ASSISTED", writtenState: "mixed", team: [["rakib", "GRADER"]],
+      summary: "Deadlock conditions and the Banker's algorithm. Written answers are being graded.",
+      description: "Two objective questions and two written problems. Show every step of the Banker's algorithm: working earns marks even if the conclusion is wrong.\n\nResults are published once every written answer is graded.",
+      hostName: "CSE 313, Section A", subjects: ["Computer Science"], topics: ["Operating Systems", "Deadlocks"],
+      start: later(now, -150 * MINUTE), minutes: 60, rules: standardRules,
+      custom: [q.prevention, q.ragCycle, q.coffman, q.bankers],
+      participants: [["student", "submitted"], ["arif", "submitted"], ["anika", "submitted"], ["fahim", "submitted"], ["nusrat", "submitted"], ["mehjabin", "submitted"], ["tanzim", "submitted"], ["sadia", "submitted"], ["tanvir", "submitted"], ["samiha", "submitted"]],
     },
   ];
 }
