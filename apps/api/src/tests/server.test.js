@@ -207,8 +207,8 @@ describe("API Route Structure", () => {
     expect(response.status).not.toBe(404);
   });
 
-  it("should have model test routes available", async () => {
-    const response = await request(app).get("/api/model-test");
+  it("should have practice (model test) routes available", async () => {
+    const response = await request(app).get("/api/practice/overview");
     // Should require authentication, not be 404
     expect(response.status).not.toBe(404);
   });

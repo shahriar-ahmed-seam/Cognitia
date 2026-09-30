@@ -43,7 +43,8 @@ interface Timer {
  *   Answers the server rejects (400) are reported in `rejected` until a later save goes through.
  */
 export function useAnswerSync(
-  contestId: string,
+  /** Answers are saved with PUT `${basePath}/answers/:questionId`, e.g. /contests/:id or /practice/attempts/:id */
+  basePath: string,
   initial: Record<string, SavedAnswer>,
   onClosed: (error: ApiError) => void,
   questions: ArenaQuestion[] = []
@@ -122,7 +123,7 @@ export function useAnswerSync(
         return
       }
 
-      const request = api(`/contests/${contestId}/answers/${id}`, { method: "PUT", body })
+      const request = api(`${basePath}/answers/${id}`, { method: "PUT", body })
         .then(() => {
           retryDelay.current.delete(id)
           if (sentKey !== null) saved.current?.set(id, sentKey)
@@ -158,7 +159,7 @@ export function useAnswerSync(
       inflight.current.set(id, request)
       await request
     },
-    [contestId] // eslint-disable-line react-hooks/exhaustive-deps
+    [basePath] // eslint-disable-line react-hooks/exhaustive-deps
   )
 
   const schedule = useCallback(

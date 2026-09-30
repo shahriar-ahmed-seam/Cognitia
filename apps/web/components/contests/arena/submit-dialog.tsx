@@ -85,7 +85,8 @@ export function SubmitDialog({
   pendingCount: number
   offline: boolean
   rejected: Record<string, string>
-  deadline: string
+  /** Null for untimed papers */
+  deadline: string | null
   serverNow: string
 }) {
   const indexed = questions.map((question, index) => ({ question, index }))
@@ -105,7 +106,13 @@ export function SubmitDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Submit your answers?</AlertDialogTitle>
           <AlertDialogDescription>
-            You can't change anything after submitting. You have <TimeLeft deadline={deadline} serverNow={serverNow} /> left.
+            You can't change anything after submitting.
+            {deadline && (
+              <>
+                {" "}
+                You have <TimeLeft deadline={deadline} serverNow={serverNow} /> left.
+              </>
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
 

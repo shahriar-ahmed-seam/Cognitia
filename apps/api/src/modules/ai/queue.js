@@ -57,7 +57,7 @@ async function gradeOne(answerId, contest, ai) {
   const claimed = { id: answerId, gradingStatus: "RUNNING" };
   let result = null;
   try {
-    result = await chatCompletion({ ...ai.endpoint, messages, json: true, maxTokens: 2000 });
+    result = await chatCompletion({ ...ai.endpoint, messages, json: true, maxTokens: 6000 });
     const grade = parseGrade(result.content, answer.question.points);
     const status = aiDecision(contest.writtenGrading, grade);
     const at = new Date();

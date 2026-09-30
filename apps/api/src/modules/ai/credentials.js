@@ -124,7 +124,8 @@ export async function testCredential(user, id) {
       apiKey,
       model: credential.model,
       messages: [{ role: "user", content: "Reply with the single word OK." }],
-      maxTokens: 64,
+      // Reasoning models think first, so leave room for that
+      maxTokens: 512,
       timeoutMs: 30_000,
     });
     usage = result.usage;

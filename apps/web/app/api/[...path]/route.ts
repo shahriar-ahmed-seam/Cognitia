@@ -244,20 +244,6 @@ export async function GET(
   if (fullPath.startsWith("qa") || fullPath.startsWith("questions")) {
     return NextResponse.json({ questions: MOCK_QUESTIONS })
   }
-  if (fullPath.startsWith("model-test")) {
-    return NextResponse.json({
-      tests: [
-        {
-          id: "test-1",
-          title: "Computer Networks & Protocols Comprehensive Test",
-          duration: 45,
-          difficulty: "medium",
-          questions: 30,
-          subjects: ["Networking", "TCP/IP", "HTTP"],
-        },
-      ],
-    })
-  }
 
   return NextResponse.json({ success: true, data: [] })
 }

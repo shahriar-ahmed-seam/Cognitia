@@ -1,5 +1,6 @@
 // Prompt and output parsing for AI grading of written answers. No I/O here.
 import { z } from "zod";
+import { parseJsonLoose } from "./json.js";
 import { clampWrittenScore } from "../contests/engine.js";
 
 export const AI_FLAGS = ["ILLEGIBLE", "BLANK", "OFF_TOPIC", "PROMPT_INJECTION", "IMAGE_UNRELATED", "UNSURE"];
@@ -93,15 +94,8 @@ const outputSchema = z.object({
 
 /** Parse and sanitize the model's JSON. Throws if it isn't usable. */
 export function parseGrade(content, points) {
-  const cleaned = String(content).trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  let json;
-  try {
-    json = JSON.parse(cleaned);
-  } catch {
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("The AI didn't return JSON");
-    json = JSON.parse(match[0]);
-  }
+  const json = parseJsonLoose(content);
+  if (json === undefined) throw new Error("The AI didn't return JSON");
   const parsed = outputSchema.safeParse(json);
   if (!parsed.success || !Number.isFinite(parsed.data.score)) throw new Error("The AI's grade was incomplete");
   const out = parsed.data;

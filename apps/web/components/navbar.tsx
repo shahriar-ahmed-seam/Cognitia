@@ -21,7 +21,7 @@ const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: Home },
   { name: "Notes", href: "/notes", icon: BookOpen },
   { name: "Q&A", href: "/qa", icon: MessageSquare },
-  { name: "Model Test", href: "/model-test", icon: Brain },
+  { name: "Exam Practice", href: "/model-test", icon: Brain },
   { name: "Contests", href: "/contests", icon: Trophy },
   { name: "Study Plan", href: "/study-plan", icon: Target },
 ]

@@ -4,10 +4,12 @@ import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { prisma } from "../src/lib/database.js";
 import * as engine from "../src/modules/contests/engine.js";
+import * as practice from "../src/modules/practice/engine.js";
 import { applyRatings, computeRanks } from "../src/modules/contests/service.js";
 import { createPdf } from "./seed/pdf.js";
 import { questionBank } from "./seed/questions.js";
 import { contestDefinitions, contestQuestions } from "./seed/contests.js";
+import { aiPaperRows, practiceBankRows } from "./seed/practice.js";
 import {
   DEMO_PASSWORD,
   users,
@@ -54,24 +56,6 @@ function atDay(dayOffset, hour, minute = 0) {
   return date;
 }
 
-// Build an answers map { questionId: optionIndex } with roughly the given accuracy
-function answerSheet(questions, accuracy, answeredCount = questions.length) {
-  const answers = {};
-  let correct = 0;
-  let score = 0;
-  questions.slice(0, answeredCount).forEach(({ question, points }) => {
-    if (random() < accuracy) {
-      answers[question.id] = question.correctAnswer;
-      correct++;
-      score += points;
-    } else {
-      const wrong = question.options.map((_, i) => i).filter((i) => i !== question.correctAnswer);
-      answers[question.id] = wrong[randomInt(0, wrong.length - 1)];
-    }
-  });
-  return { answers, correct, score };
-}
-
 async function clearDatabase() {
   // Children first
   await prisma.sessionFeedback.deleteMany();
@@ -80,6 +64,9 @@ async function clearDatabase() {
   await prisma.answer.deleteMany();
   await prisma.question.deleteMany();
   await prisma.availability.deleteMany();
+  await prisma.questionReport.deleteMany();
+  await prisma.practiceAsset.deleteMany();
+  await prisma.testAnswer.deleteMany();
   await prisma.testAttempt.deleteMany();
   await prisma.questionAssignment.deleteMany();
   // Contest children cascade from contests; ratings cascade from users
@@ -138,88 +125,26 @@ async function seedUsers(passwordHash) {
 }
 
 async function seedQuestionBank() {
-  const rows = [];
+  const mcq = [];
   for (const [index, question] of questionBank.entries()) {
-    const createdAt = ago((90 - index) * HOUR);
-    rows.push(await prisma.questionBank.create({ data: { ...question, createdAt, updatedAt: createdAt } }));
+    const createdAt = ago((120 - index) * HOUR);
+    mcq.push(
+      await prisma.questionBank.create({
+        data: { ...question, type: "SINGLE_CHOICE", answer: { correct: question.correctAnswer }, createdAt, updatedAt: createdAt },
+      })
+    );
   }
-  return rows;
-}
-
-const byTopic = (bank, ...topics) => bank.filter((q) => q.topics.some((t) => topics.includes(t)));
-const bySubject = (bank, subject) => bank.filter((q) => q.subject === subject);
-
-async function seedModelTests(bank, people) {
-  const classmates = Object.keys(people).filter((key) => !["admin", "student"].includes(key));
-  const definitions = [
-    { title: "OS CT-3 Practice: Memory Management", description: "Paging, TLB, page replacement and process basics. Mirrors the CT-3 syllabus.", timeLimit: 30, difficulty: "MEDIUM", pool: byTopic(bank, "Operating Systems"), count: 8, createdDaysAgo: 14, studentRuns: [{ accuracy: 0.5, daysAgo: 10 }, { accuracy: 0.8, daysAgo: 4 }] },
-    { title: "Computer Networks Midterm Mock", description: "Layers, subnetting, TCP and routing in midterm format.", timeLimit: 45, difficulty: "MEDIUM", pool: byTopic(bank, "Computer Networks"), count: 9, createdDaysAgo: 21, studentRuns: [{ accuracy: 0.75, daysAgo: 8 }] },
-    { title: "Algorithms and Data Structures Drill", description: "Complexity, graphs, DP and core data structures. Harder than the CT.", timeLimit: 40, difficulty: "HARD", pool: byTopic(bank, "Algorithms", "Data Structures"), count: 12, createdDaysAgo: 30, studentRuns: [] },
-    { title: "Database Systems Quick Check", description: "Ten-minute warm-up on SQL, normalization and transactions.", timeLimit: 20, difficulty: "EASY", pool: byTopic(bank, "Database Systems"), count: 7, createdDaysAgo: 18, studentRuns: [] },
-    { title: "Engineering Mathematics Mixed Set", description: "Linear algebra, probability, discrete math and numerical methods.", timeLimit: 35, difficulty: "MEDIUM", pool: bySubject(bank, "Mathematics"), count: 12, createdDaysAgo: 25, studentRuns: [{ accuracy: 0.6, daysAgo: 11 }] },
-    { title: "Circuits and Electronics Basics", description: "DC/AC circuits, semiconductors and electromagnetism for CSE students.", timeLimit: 30, difficulty: "EASY", pool: bySubject(bank, "Physics"), count: 10, createdDaysAgo: 28, studentRuns: [{ accuracy: 0.9, daysAgo: 13 }] },
-    { title: "My DBMS and SQL Revision Set", description: "Personal revision set before the DBMS quiz.", timeLimit: 15, difficulty: "MEDIUM", pool: byTopic(bank, "Database Systems"), count: 6, createdDaysAgo: 2, owner: "student", isCustom: true, studentRuns: [{ accuracy: 0.5, daysAgo: 1 }] },
-  ];
-
-  let attempts = 0;
-  const tests = [];
-  for (const def of definitions) {
-    const questions = shuffle(def.pool).slice(0, def.count).map((question) => ({ question, points: 5 }));
-    const totalPoints = questions.length * 5;
-    const createdAt = ago(def.createdDaysAgo * DAY);
-    const test = await prisma.modelTest.create({
-      data: {
-        title: def.title,
-        description: def.description,
-        timeLimit: def.timeLimit,
-        subjects: [...new Set(questions.map(({ question }) => question.subject))],
-        topics: [...new Set(questions.map(({ question }) => question.topics[0]))],
-        difficulty: def.difficulty,
-        isCustom: def.isCustom ?? false,
-        passingScore: Math.ceil(totalPoints * 0.6),
-        totalPoints,
-        userId: people[def.owner ?? "admin"].id,
-        createdAt,
-        assignments: { create: questions.map(({ question, points }) => ({ questionId: question.id, points })) },
-      },
-    });
-    tests.push(test);
-
-    const runs = [
-      ...def.studentRuns.map((run) => ({ user: people.student, ...run })),
-      // A few classmates attempt the public tests
-      ...(def.isCustom
-        ? []
-        : shuffle(classmates)
-            .slice(0, randomInt(2, 5))
-            .map((key) => ({ user: people[key], accuracy: 0.4 + random() * 0.55, daysAgo: randomInt(1, def.createdDaysAgo) }))),
-    ];
-    for (const run of runs) {
-      const { answers, correct, score } = answerSheet(questions, run.accuracy);
-      const timeSpent = Math.round(def.timeLimit * 60 * (0.55 + random() * 0.4));
-      const startTime = ago(run.daysAgo * DAY + randomInt(1, 10) * HOUR);
-      const endTime = later(startTime, timeSpent * 1000);
-      await prisma.testAttempt.create({
-        data: {
-          status: "COMPLETED",
-          startTime,
-          endTime,
-          timeSpent,
-          score,
-          correctAnswers: correct,
-          totalQuestions: questions.length,
-          answers,
-          userId: run.user.id,
-          testId: test.id,
-          lastActivity: endTime,
-          createdAt: startTime,
-          updatedAt: endTime,
-        },
-      });
-      attempts++;
-    }
+  // Every other question type, including written questions with rubrics. Practice papers use
+  // them all; contests only import public single-choice rows.
+  const extras = new Map();
+  const more = [];
+  for (const [index, { row, extras: extra }] of practiceBankRows().entries()) {
+    const createdAt = ago((36 - index / 2) * HOUR);
+    const created = await prisma.questionBank.create({ data: { ...row, options: row.options ?? undefined, createdAt, updatedAt: createdAt } });
+    more.push(created);
+    extras.set(created.question, extra);
   }
-  return { tests, attempts };
+  return { bank: [...mcq, ...more], mcq, extras };
 }
 
 // Contest skill per person: rough probability of answering a medium question correctly
@@ -550,6 +475,309 @@ async function seedContests(bank, people) {
   return { contests, counts };
 }
 
+// ---------- practice papers ----------
+
+function paperDescription(objective, written, answerAny) {
+  const parts = [];
+  if (objective) parts.push(`${objective} objective`);
+  if (written) parts.push(`${written} written${answerAny && answerAny < written ? ` (answer any ${answerAny})` : ""}`);
+  return `${parts.join(" and ")} question${objective + written === 1 ? "" : "s"}.`;
+}
+
+/** A paper as the practice service builds it: objective questions first, then written ones. */
+async function createPaper(owner, def) {
+  const { objective = [], written = [], answerAny = null, createdAt } = def;
+  const sections = practice.buildSections({ objectiveCount: objective.length, writtenCount: written.length, answerAny });
+  const ordered = [...practice.orderForPaper(objective, randomInt(1, 2 ** 30)), ...written];
+  const sectionOf = (q) => (sections ? (q.type === "WRITTEN" ? sections[sections.length - 1].name : sections[0].name) : null);
+  const assignments = ordered.map((q, i) => ({ questionId: q.id, points: practice.defaultPoints(q), order: i + 1, section: sectionOf(q), createdAt }));
+  const questions = ordered.map((q, i) => practice.toEngineQuestion(q, assignments[i]));
+  const totalPoints = practice.paperMaxScore(questions, sections);
+  const format = def.format;
+  const paper = await prisma.modelTest.create({
+    data: {
+      userId: owner.id,
+      title: def.title,
+      description: def.description ?? paperDescription(objective.length, written.length, answerAny),
+      timeLimit: def.timeLimit ?? practice.FORMAT_PRESETS[format].timeLimit,
+      subjects: def.subjects ?? [...new Set(ordered.map(practice.courseOf))],
+      topics: def.topics ?? [...new Set(ordered.map(practice.topicOf))],
+      difficulty: def.difficulty ?? "MEDIUM",
+      format,
+      mode: def.mode ?? practice.FORMAT_PRESETS[format].mode,
+      source: def.source ?? "BANK",
+      status: def.status ?? "READY",
+      statusNote: def.statusNote ?? null,
+      visibility: def.visibility ?? "PRIVATE",
+      negativeMarking: def.negativeMarking ?? 0,
+      sections: sections ?? undefined,
+      instructions: def.instructions ?? "",
+      spec: def.spec,
+      totalPoints,
+      passingScore: Math.ceil(totalPoints * 0.4),
+      createdAt,
+      updatedAt: createdAt,
+      assignments: { create: assignments },
+    },
+  });
+  return { paper, questions, sections };
+}
+
+/**
+ * Written answer state after checking, by `state`:
+ * ai: the AI checked it; self: the AI was unsure and the student marked it; review: the AI was
+ * unsure and the student hasn't marked it yet; failed: the AI couldn't check it.
+ */
+function checkWritten(row, question, extras, { state, at }) {
+  const samples = extras.get(question.prompt)?.samples ?? [];
+  const sample = samples.find((s) => s.text === row.response?.text) ?? samples[samples.length - 1];
+  if (state === "failed" || !sample) return { ...row, gradingStatus: "NEEDS_REVIEW", aiError: "The AI took too long to respond", aiAttempts: 3 };
+  const score = sampleScore(sample);
+  const unsure = state === "self" || state === "review";
+  const aiAt = later(at, randomInt(8, 40) * 1000);
+  const ai = {
+    aiScore: score,
+    aiFeedback: sample.feedback,
+    aiConfidence: unsure ? 0.3 : Math.round((0.74 + random() * 0.22) * 100) / 100,
+    aiBreakdown: sample.breakdown.map(([criterion, awarded, max]) => ({ criterion, awarded, max, comment: "" })),
+    aiFlags: unsure ? ["UNSURE"] : [],
+    aiModel: "deepseek-flash",
+    aiGradedAt: aiAt,
+    aiAttempts: 1,
+  };
+  if (state === "review") return { ...row, ...ai, gradingStatus: "NEEDS_REVIEW" };
+  // A student marking their own answer tends to be half a mark kinder than the AI
+  const final = state === "self" ? engine.clampWrittenScore(score + 0.5, question.points) : score;
+  return {
+    ...row,
+    ...ai,
+    gradingStatus: "GRADED",
+    score: final,
+    verdict: engine.writtenVerdict(final, question.points),
+    feedback: sample.feedback,
+    gradeSource: state === "self" ? "SELF" : "AI",
+    gradedAt: state === "self" ? later(aiAt, randomInt(2, 20) * MINUTE) : aiAt,
+  };
+}
+
+/** One attempt at a paper, with answers simulated for `skill` and totals from the practice engine. */
+async function seedAttempt({ paper, questions, sections }, person, opts, extras) {
+  const { skill, startedAt, status = "COMPLETED", skipWritten = 0, writtenStates = [] } = opts;
+  const done = status === "COMPLETED";
+  const seed = randomInt(1, 2 ** 30);
+  const ordered = engine.orderQuestions(questions, { seed, shuffle: paper.shuffleQuestions });
+  const deadlineAt = paper.timeLimit > 0 ? later(startedAt, paper.timeLimit * MINUTE) : null;
+  const available = paper.timeLimit > 0 ? paper.timeLimit * MINUTE : ordered.length * 2 * MINUTE;
+  const autoSubmitted = done && Boolean(opts.autoSubmitted && deadlineAt);
+  const finishedAt = !done ? later(now, -MINUTE) : autoSubmitted ? deadlineAt : later(startedAt, Math.round(available * (opts.used ?? 0.6 + random() * 0.3)));
+
+  let rows = simulateAnswers({
+    questions: ordered, skill, negativeMarking: paper.negativeMarking, startedAt, finishedAt,
+    answeredCount: done ? ordered.length : Math.min(opts.answered ?? 3, ordered.length), decoysByPrompt: extras,
+  });
+  const byId = new Map(ordered.map((q) => [q.id, q]));
+  if (skipWritten) {
+    // "Answer any N": leave the last written question(s) out
+    const drop = new Set(rows.filter((r) => byId.get(r.questionId).type === "WRITTEN").slice(-skipWritten).map((r) => r.questionId));
+    rows = rows.filter((r) => !drop.has(r.questionId));
+  }
+
+  const practiceMode = paper.mode === "PRACTICE";
+  let writtenIndex = 0;
+  rows = rows.map((row) => {
+    const checkedAt = practiceMode && row.verdict !== "UNANSWERED" ? later(row.answeredAt, randomInt(15, 90) * 1000) : null;
+    const base = { ...row, checkedAt };
+    if (row.verdict !== "PENDING" || (!done && !checkedAt)) return base;
+    const state = writtenStates[writtenIndex++] ?? "ai";
+    return checkWritten(base, byId.get(row.questionId), extras, { state, at: checkedAt ?? finishedAt });
+  });
+
+  const totals = practice.summarizeAttempt(questions, rows, sections);
+  const attempt = await prisma.testAttempt.create({
+    data: {
+      testId: paper.id,
+      userId: person.id,
+      status: done ? "COMPLETED" : "IN_PROGRESS",
+      startTime: startedAt,
+      endTime: done ? finishedAt : null,
+      timeSpent: done ? Math.round((finishedAt - startedAt) / 1000) : null,
+      autoSubmitted,
+      deadlineAt,
+      seed,
+      totalQuestions: questions.length,
+      maxScore: practice.paperMaxScore(questions, sections),
+      score: totals.score,
+      correctAnswers: totals.correctAnswers,
+      partialCount: totals.partialCount,
+      wrongCount: totals.wrongCount,
+      answeredCount: totals.answeredCount,
+      pendingCount: totals.pendingCount,
+      lastActivity: totals.lastAnswerAt ?? startedAt,
+      createdAt: startedAt,
+      updatedAt: done ? finishedAt : now,
+    },
+  });
+  if (rows.length) {
+    await prisma.testAnswer.createMany({ data: rows.map((r) => ({ ...r, attemptId: attempt.id, response: r.response ?? undefined })) });
+  }
+  return rows.length;
+}
+
+async function seedPractice(bank, people, extras) {
+  const { student, tasnim } = people;
+  const has = (...topics) => (q) => q.topics.some((t) => topics.includes(t));
+  const objective = (filter, count, difficulty = "MIXED") => {
+    const pool = bank.filter((q) => q.type !== "WRITTEN" && q.isPublic && filter(q));
+    const picked = practice.pickQuestions(pool, count, { difficulty, seed: randomInt(1, 2 ** 30) });
+    if (picked.length < count) throw new Error(`Practice seed wants ${count} objective questions but the bank has ${pool.length}`);
+    return picked;
+  };
+  const written = (filter) => bank.filter((q) => q.type === "WRITTEN" && q.isPublic && filter(q));
+  const counts = { papers: 0, attempts: 0, answers: 0 };
+  const make = async (owner, def) => {
+    counts.papers++;
+    return createPaper(owner, def);
+  };
+  const take = async (paper, person, opts) => {
+    counts.attempts++;
+    counts.answers += await seedAttempt(paper, person, opts, extras);
+  };
+  const objectiveTypes = ["SINGLE_CHOICE", "MULTIPLE_CHOICE", "TRUE_FALSE", "NUMERIC", "SHORT_TEXT"];
+
+  // Class test on memory management, taken twice (the second time much better)
+  const memory = ["Paging", "Virtual Memory", "Page Replacement"];
+  const osCt = await make(student, {
+    title: "OS CT-3: Memory management",
+    format: "CLASS_TEST",
+    objective: objective(has(...memory), 10),
+    written: written(has("Virtual Memory")).slice(0, 1),
+    instructions: "Answer every question. Use a calculator for the numeric ones.",
+    spec: { format: "CLASS_TEST", subject: "Computer Science", topics: memory, difficulty: "MIXED", objectiveCount: 10, writtenCount: 1, objectiveTypes },
+    createdAt: ago(13 * DAY),
+  });
+  await take(osCt, student, { skill: 0.42, startedAt: atDay(-12, 21, 5), used: 0.93 });
+  await take(osCt, student, { skill: 0.84, startedAt: atDay(-4, 20, 30), used: 0.7 });
+
+  // Term final mock with "answer any 3 of 4" in the written section
+  const osWritten = written(has("Operating Systems"));
+  const osFinal = await make(student, {
+    title: "CSE 313 term final mock: Operating Systems",
+    format: "TERM_FINAL",
+    objective: objective(has("Operating Systems"), 15),
+    written: osWritten.slice(0, 4),
+    answerAny: 3,
+    difficulty: "HARD",
+    instructions: "Section A is compulsory. In Section B, answer any three questions; if you answer all four, your best three count.",
+    spec: { format: "TERM_FINAL", subject: "Computer Science", topics: ["Operating Systems"], difficulty: "MIXED", objectiveCount: 15, writtenCount: 4, answerAny: 3, objectiveTypes },
+    createdAt: ago(3 * DAY),
+  });
+  await take(osFinal, student, { skill: 0.74, startedAt: atDay(-2, 19, 0), used: 0.9, skipWritten: 1, writtenStates: ["ai", "self", "review"] });
+
+  // Topic drill in practice mode: every answer checked as the student went
+  const netTopics = ["Subnetting", "TCP", "Transport Layer", "Congestion Control", "Delay", "Performance"];
+  const netDrill = await make(student, {
+    title: "Topic drill: TCP, subnetting and delay",
+    format: "TOPIC_DRILL",
+    objective: objective(has(...netTopics), 8),
+    written: written(has("Transport Layer")).slice(0, 1),
+    spec: { format: "TOPIC_DRILL", subject: "Computer Science", topics: netTopics, difficulty: "MIXED", objectiveCount: 8, writtenCount: 1, objectiveTypes },
+    createdAt: ago(1 * DAY + 3 * HOUR),
+  });
+  await take(netDrill, student, { skill: 0.66, startedAt: atDay(-1, 22, 15) });
+
+  // A paper the AI wrote from the student's lecture notes (its questions are private to the student)
+  const aiCreated = ago(3 * DAY + 5 * HOUR);
+  const aiRows = [];
+  for (const { row, extras: extra } of aiPaperRows()) {
+    const created = await prisma.questionBank.create({
+      data: { ...row, options: row.options ?? undefined, createdById: student.id, createdAt: aiCreated, updatedAt: aiCreated },
+    });
+    aiRows.push(created);
+    extras.set(created.question, extra);
+  }
+  const dbAi = await make(student, {
+    title: "Class test: Transactions and indexing",
+    format: "CLASS_TEST",
+    source: "AI",
+    timeLimit: 25,
+    objective: aiRows.filter((q) => q.type !== "WRITTEN"),
+    written: aiRows.filter((q) => q.type === "WRITTEN"),
+    spec: {
+      format: "CLASS_TEST", subject: "Database Systems", topics: ["Transactions", "Isolation Levels", "Indexing"], difficulty: "MEDIUM",
+      objectiveCount: 5, writtenCount: 1, objectiveTypes, timeLimit: 25,
+      notes: "Lectures 9 and 10: two-phase locking and strict 2PL, conflict and view serializability, isolation levels, B+ tree indexes, write-ahead logging.",
+    },
+    createdAt: aiCreated,
+  });
+  await take(dbAi, student, { skill: 0.7, startedAt: atDay(-3, 21, 40), used: 0.8 });
+
+  // An AI paper that didn't come through, so the retry flow has something to show
+  await make(student, {
+    title: "Term final mock: Compilers",
+    format: "TERM_FINAL",
+    source: "AI",
+    status: "FAILED",
+    statusNote: "The AI's reply couldn't be read. Try again.",
+    description: paperDescription(15, 4, 3),
+    subjects: ["Compilers"],
+    topics: ["Parsing", "Semantic Analysis"],
+    spec: { format: "TERM_FINAL", subject: "Compilers", topics: ["Parsing", "Semantic Analysis"], difficulty: "MIXED", objectiveCount: 15, writtenCount: 4, answerAny: 3, objectiveTypes },
+    createdAt: ago(5 * DAY + 2 * HOUR),
+  });
+
+  const math = await make(student, {
+    title: "Engineering maths revision",
+    format: "CUSTOM",
+    timeLimit: 40,
+    objective: objective((q) => q.subject === "Mathematics", 10),
+    written: written(has("Linear Algebra")).slice(0, 1),
+    spec: { format: "CUSTOM", subject: "Mathematics", topics: [], difficulty: "MIXED", objectiveCount: 10, writtenCount: 1, objectiveTypes, timeLimit: 40 },
+    createdAt: ago(9 * DAY),
+  });
+  await take(math, student, { skill: 0.56, startedAt: atDay(-8, 16, 20), autoSubmitted: true });
+
+  const circuits = await make(student, {
+    title: "Topic drill: Electric circuits",
+    format: "TOPIC_DRILL",
+    objective: objective(has("Electric Circuits"), 6),
+    written: written(has("Electric Circuits")).slice(0, 1),
+    spec: { format: "TOPIC_DRILL", subject: "Physics", topics: ["Electric Circuits"], difficulty: "MIXED", objectiveCount: 6, writtenCount: 1, objectiveTypes },
+    createdAt: ago(7 * DAY),
+  });
+  await take(circuits, student, { skill: 0.95, startedAt: atDay(-6, 18, 45) });
+
+  // Started a few minutes ago and still open, so "Continue" shows on the practice home
+  const algo = await make(student, {
+    title: "Algorithms CT-2 practice",
+    format: "CLASS_TEST",
+    timeLimit: 40,
+    objective: objective(has("Algorithms", "Data Structures"), 10),
+    written: written(has("Graphs")).slice(0, 1),
+    spec: { format: "CLASS_TEST", subject: "Computer Science", topics: ["Algorithms", "Data Structures"], difficulty: "MIXED", objectiveCount: 10, writtenCount: 1, objectiveTypes, timeLimit: 40 },
+    createdAt: ago(20 * MINUTE),
+  });
+  await take(algo, student, { skill: 0.8, startedAt: ago(6 * MINUTE), status: "IN_PROGRESS", answered: 3 });
+
+  // A classmate's paper shared by link, taken by several people from the section
+  const shared = await make(tasnim, {
+    title: "Section A practice set: Networks CT-2",
+    format: "CLASS_TEST",
+    timeLimit: 20,
+    negativeMarking: 0.25,
+    visibility: "LINK",
+    objective: objective(has("Computer Networks"), 12),
+    instructions: "Twelve objective questions in 20 minutes. Wrong answers lose a quarter of the question's marks, so skip what you don't know.",
+    spec: { format: "CLASS_TEST", subject: "Computer Science", topics: ["Computer Networks"], difficulty: "MIXED", objectiveCount: 12, writtenCount: 0, objectiveTypes, timeLimit: 20, negativeMarking: 0.25 },
+    createdAt: ago(9 * DAY + 6 * HOUR),
+  });
+  await take(shared, student, { skill: 0.76, startedAt: atDay(-5, 20, 10) });
+  for (const [key, day] of [["arif", -8], ["anika", -7], ["rakib", -7], ["nusrat", -4]]) {
+    await take(shared, people[key], { skill: SKILL[key], startedAt: atDay(day, randomInt(17, 23), randomInt(0, 59)) });
+  }
+
+  return counts;
+}
+
 async function seedNotes(people) {
   let noteCount = 0;
   for (const group of noteGroups) {
@@ -820,9 +1048,9 @@ async function main() {
 
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
   const { people } = await seedUsers(passwordHash);
-  const bank = await seedQuestionBank();
-  const modelTests = await seedModelTests(bank, people);
-  const { contests, counts: contestCounts } = await seedContests(bank, people);
+  const { bank, mcq, extras } = await seedQuestionBank();
+  const practiceCounts = await seedPractice(bank, people, extras);
+  const { contests, counts: contestCounts } = await seedContests(mcq, people);
   const notes = await seedNotes(people);
   const qa = await seedQa(people);
   const studyPlan = await seedStudyPlan(people);
@@ -830,9 +1058,10 @@ async function main() {
 
   console.table({
     users: Object.keys(people).length + 1,
-    questionBank: bank.length,
-    modelTests: modelTests.tests.length,
-    testAttempts: modelTests.attempts,
+    questionBank: await prisma.questionBank.count(),
+    practicePapers: practiceCounts.papers,
+    practiceAttempts: practiceCounts.attempts,
+    practiceAnswers: practiceCounts.answers,
     contests: contestCounts.contests,
     contestQuestions: contestCounts.questions,
     contestParticipants: contestCounts.participants,
