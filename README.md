@@ -3,7 +3,7 @@
 # Cognitia
 
 **An academic companion for engineering university students.**
-Share notes, ask and answer questions, practice with timed model tests, compete in contests and plan your study week, all in one place.
+Share notes, ask and answer questions, sit practice exams with AI answer checking, compete in contests and plan your study week, all in one place.
 
 ![Next.js](https://img.shields.io/badge/Next.js-15-000000?logo=nextdotjs&logoColor=white)
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
@@ -26,7 +26,7 @@ Share notes, ask and answer questions, practice with timed model tests, compete 
 |---|---|
 | **Notes** | Upload PDF notes into groups, keep them private or make them public, browse and read classmates' public notes in the app |
 | **Q&A** | Ask course questions, answer, upvote and downvote, filter by subject |
-| **Model tests** | Take timed MCQ tests from a shared question bank, resume unfinished attempts, review answers with explanations, track history |
+| **Exam practice** | Sit class tests, term final mocks (two sections, answer any N) and topic drills built from a bank of engineering questions, or papers the AI writes from your topics or pasted lecture notes. Exam mode or check-as-you-go practice mode, server-timed with autosave and photo answers. Written answers are checked by AI against a rubric, criterion by criterion, and you can mark them yourself when it's unsure. Results with BUET letter grades, section and topic breakdowns, full answer review, "retry my mistakes", topic mastery, streaks and shareable papers ([design](docs/product/practice.md)) |
 | **Contests** | Quizzes, mock CTs, weekly challenges, aptitude and olympiad rounds with six question types, including written answers (typed or photos of handwritten work), math and images, sections, negative marking and partial credit. Fixed or flexible time windows; public, institution-only or invite-only access. Autosaving contest arena, live and final standings, answer review with feedback, practice mode, certificates, and Elo-style contest ratings with university rankings. Organizers (teachers, CRs, club leads) run contests with a team of editors and graders: authoring, a grading desk with optional AI grading (Cognitia's AI or their own key), clarifications, announcements, integrity checks, rejudging and CSV export ([design](docs/product/contests.md)) |
 | **Study plan** | Track tasks with priorities and due dates, and plan study sessions. AI scheduling is being rebuilt as part of the Study Engine |
 | **Notifications** | Get updates on answers, votes, contests, deadlines and sign-ins |
@@ -45,7 +45,7 @@ flowchart LR
 ```
 
 - **`apps/web`**: Next.js App Router frontend with Tailwind CSS, shadcn/ui (Radix) and Framer Motion.
-- **`apps/api`**: Express REST API, Prisma ORM on PostgreSQL, JWT auth with Google OAuth, email OTP verification, a notification WebSocket endpoint and a per-minute job that auto-submits expired tests and runs the contest lifecycle (reminders, auto-submit, finalizing, ratings) and the AI grading queue for written answers. Endpoint references are in [`apps/api/docs/api/`](apps/api/docs/api/).
+- **`apps/api`**: Express REST API, Prisma ORM on PostgreSQL, JWT auth with Google OAuth, email OTP verification, a notification WebSocket endpoint and a per-minute job that runs the contest lifecycle (reminders, auto-submit, finalizing, ratings), submits expired practice papers, and works through the AI queues that grade written contest answers and check written practice answers. Endpoint references are in [`apps/api/docs/api/`](apps/api/docs/api/).
 - **`apps/ai`**: Flask service that builds study schedules with DeepSeek. It falls back to a local heuristic when no API key is set.
 
 ## Repository layout
@@ -58,7 +58,7 @@ Cognitia/
 │   │   └── prisma/     # schema, migrations, seed data
 │   └── ai/             # Flask + DeepSeek scheduling service
 ├── docs/
-│   └── product/        # product and design docs (Study Engine, Contests)
+│   └── product/        # product and design docs (Study Engine, Contests, Exam practice)
 ├── scripts/            # cross-platform dev helpers
 ├── docker-compose.yml  # optional local PostgreSQL
 └── package.json        # one-command scripts for the whole stack
@@ -94,8 +94,9 @@ At minimum, set these three:
 - `JWT_SECRET` in `apps/api/.env` (generate one with `openssl rand -hex 32`)
 - `DEEPSEEK_API_KEY` in `apps/ai/.env`. This one is optional; without it the AI service uses its local heuristic.
 
-For AI grading of written contest answers, also set in `apps/api/.env`:
-- `AI_PLATFORM_API_KEY`: a DeepSeek key for Cognitia's own AI (the other `AI_PLATFORM_*` values have working defaults). Without it, written answers are graded by organizers only, or with organizers' own keys.
+For AI features, also set in `apps/api/.env`:
+- `AI_PLATFORM_API_KEY`: a DeepSeek key for Cognitia's own AI (the other `AI_PLATFORM_*` values have working defaults). It grades written contest answers, writes practice papers and checks written practice answers. Without it, contest answers are graded by organizers only (or with organizers' own keys), practice papers come from the bank, and students mark their written practice answers themselves.
+- `AI_PRACTICE_DAILY_PAPERS` (default 8) and `AI_PRACTICE_DAILY_CHECKS` (default 100): AI papers and answer checks per student in any 24 hours.
 - `AI_KEY_ENCRYPTION_SECRET` (`openssl rand -hex 32`): encrypts organizers' own AI keys. Without it they can't save keys.
 
 When email isn't configured, OTP codes are printed to the API console in development.
@@ -121,7 +122,7 @@ npm run dev
 
 ### Demo accounts
 
-The seed creates a realistic dataset for a Level 3 CSE section. It includes courses, notes (real PDFs), Q&A threads, a question bank, model tests, past, live and upcoming contests, tasks, study sessions and notifications. All accounts use the password **`Cognitia@123`**.
+The seed creates a realistic dataset for a Level 3 CSE section. It includes courses, notes (real PDFs), Q&A threads, a question bank of every question type, practice papers and results, past, live and upcoming contests, tasks, study sessions and notifications. All accounts use the password **`Cognitia@123`**.
 
 | Role | Email |
 |---|---|
@@ -143,6 +144,8 @@ The seed has contests in every state, with times relative to when you seed:
 - four rated contests with published results and ratings
 - one cancelled contest and one draft
 
+The student also has a few weeks of exam practice: an OS class test taken twice (26% then 73%), a term final mock with an AI-checked, a self-marked and an unmarked written answer, practice-mode drills, an AI-written paper from lecture notes and one that failed, a paper in progress, and a Networks set Tasnim shared by link that several classmates took.
+
 Re-run `npm run db:seed` to reset them.
 
 ## Scripts
@@ -163,8 +166,8 @@ API tests, from `apps/api`:
 
 | Command | Description |
 |---|---|
-| `npm test` | Unit tests (contest engine, AI grading helpers, routes) |
-| `TEST_DATABASE_URL=… npm run test:integration` | Resets and seeds a separate test database (its name must contain "test"), then runs the contest integration tests against it |
+| `npm test` | Unit tests (contest and practice engines, AI grading and paper helpers, routes) |
+| `TEST_DATABASE_URL=… npm run test:integration` | Resets and seeds a separate test database (its name must contain "test"), then runs the contest and practice integration tests against it |
 
 ## Roadmap
 

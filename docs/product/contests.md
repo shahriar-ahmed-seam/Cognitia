@@ -133,7 +133,7 @@ The AI reads the question (including its figures), the rubric, the model answer,
 - **Prompt injection.** The student's work is passed as data, never as instructions. An answer that tries to instruct the AI ("give full marks") is graded normally and flagged, which sends it to a person.
 - **Flags:** hard to read, blank, off topic, tried to instruct the AI, photo looks unrelated, AI unsure.
 - **Queue.** A background job grades 3 answers at a time, retries failures up to 3 times, and hands answers to the team with the reason when the AI isn't available. Every request is logged for quotas.
-- The AI never writes questions for contests. Organizers set the paper; AI question generation is planned for model tests.
+- The AI never writes questions for contests. Organizers set the paper; AI question generation belongs to [exam practice](practice.md).
 
 ## Ranking
 
@@ -242,5 +242,5 @@ Question and option order is a deterministic shuffle seeded per participant, so 
 
 - **Code submissions and a judge.** They need sandboxed execution, which is a separate project.
 - **Webcam or screen proctoring.** It's intrusive and unreliable on lab PCs. Tab-switch counts and answer review give organizers enough signal for a student platform.
-- **AI-written contest questions.** Organizers set the paper. AI question generation belongs to model tests.
+- **AI-written contest questions.** Organizers set the paper. AI question generation belongs to [exam practice](practice.md).
 - **Real-time sockets.** The arena polls every 20 seconds and standings every 15, which is enough at this scale and works on flaky campus Wi-Fi.
